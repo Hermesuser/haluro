@@ -212,7 +212,7 @@ def configure_macos_application_identity(window: object | None = None) -> None:
             "conversión cromática de negativos y virados químicos de cuarto oscuro.\n\n"
             "100% No destructivo · 100% Local y Privado\n"
             "Licencia MIT (Distribución libre y gratuita)\n"
-            "https://github.com/cesarfernandez/haluro"
+            "https://github.com/Hermesuser/haluro"
         )
         attr_credits = AppKit.NSAttributedString.alloc().initWithString_(credits_text)
 

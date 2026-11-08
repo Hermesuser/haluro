@@ -106,3 +106,30 @@ jobs:
             dist/Haluro-Setup-*.exe
             dist/Haluro-Portable-*.zip
             dist/SHA256SUMS-Windows11.txt
+
+  publish-release:
+    name: Publish Official GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-macos, build-windows11]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/*.dmg
+            release-artifacts/*.exe
+            release-artifacts/*.zip
+            release-artifacts/*.txt
+          name: Haluro ${{ github.ref_name }} — Laboratorio Analógico Digital
+          generate_release_notes: true
+          draft: false
+          prerelease: false
