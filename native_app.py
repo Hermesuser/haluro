@@ -43,7 +43,6 @@ logger = logging.getLogger("haluro.native")
 
 WINDOW_TITLE = "Haluro — Laboratorio Analógico Digital"
 
-_ACTIVE_WINDOW: object | None = None
 _MACOS_ABOUT_OPTIONS: dict[object, object] | None = None
 
 
@@ -227,29 +226,19 @@ def configure_macos_application_identity(window: object | None = None) -> None:
         if icon_img:
             about_options[AppKit.NSAboutPanelOptionApplicationIcon] = icon_img
 
-        global _ACTIVE_WINDOW, _MACOS_ABOUT_OPTIONS
+        global _MACOS_ABOUT_OPTIONS
         _MACOS_ABOUT_OPTIONS = about_options
 
-        # 4. Intercept Cocoa standard About action to show custom About panel & in-app modal
+        # 4. Intercept Cocoa standard About action to show custom About panel safely on main thread
         def _haluro_order_front_about_panel(self: object, sender: object) -> None:
             try:
+                app_inst = AppKit.NSApplication.sharedApplication()
+                app_inst.activateIgnoringOtherApps_(True)
                 self.orderFrontStandardAboutPanelWithOptions_(about_options)  # type: ignore[attr-defined]
             except Exception as exc:  # pragma: no cover
                 logger.warning("Error displaying Cocoa native About panel with options: %s", exc)
 
-            # Trigger in-app modal in webview window as well
-            if _ACTIVE_WINDOW is not None:
-                try:
-                    _ACTIVE_WINDOW.evaluate_js(
-                        "document.getElementById('aboutModal')?.classList.add('active');"
-                    )
-                except Exception as exc:  # pragma: no cover
-                    logger.debug("Could not trigger in-app about modal from Cocoa menu: %s", exc)
-
         AppKit.NSApplication.orderFrontStandardAboutPanel_ = _haluro_order_front_about_panel
-
-        if window is not None:
-            _ACTIVE_WINDOW = window
 
     except Exception as exc:  # pragma: no cover
         logger.warning("Error configuring macOS application identity: %s", exc)
