@@ -11,7 +11,9 @@ cd "${REPO_ROOT}"
 VERSION="2.4.0"
 ARCH="$(uname -m)"
 
-if command -v /opt/anaconda3/bin/python3 >/dev/null 2>&1 && [[ -z "${VIRTUAL_ENV:-}" ]]; then
+if [[ -x "${REPO_ROOT}/.venv/bin/python3" ]]; then
+  PYTHON_BIN="${REPO_ROOT}/.venv/bin/python3"
+elif command -v /opt/anaconda3/bin/python3 >/dev/null 2>&1 && [[ -z "${VIRTUAL_ENV:-}" ]]; then
   PYTHON_BIN="/opt/anaconda3/bin/python3"
 else
   PYTHON_BIN="$(command -v python3)"
@@ -31,6 +33,7 @@ if "${PYTHON_BIN}" -c "import PyInstaller" >/dev/null 2>&1; then
   "${PYTHON_BIN}" -m PyInstaller --noconfirm --clean haluro.spec
   APP_BUNDLE="dist/Haluro.app"
   xattr -cr "${APP_BUNDLE}"
+  xattr -d com.apple.FinderInfo "${APP_BUNDLE}" 2>/dev/null || true
   codesign --force --deep -s - "${APP_BUNDLE}" 2>/dev/null || true
 else
   echo "==> [3/4] PyInstaller no instalado en este entorno; verificando Haluro.app nativo local ..."

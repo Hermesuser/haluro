@@ -43,6 +43,9 @@ logger = logging.getLogger("haluro.native")
 
 WINDOW_TITLE = "Haluro — Laboratorio Analógico Digital"
 
+_ACTIVE_WINDOW: object | None = None
+_MACOS_ABOUT_OPTIONS: dict[object, object] | None = None
+
 
 class AppApi:
     """JavaScript <-> Native OS bridge exposed as `window.pywebview.api`."""
@@ -137,16 +140,119 @@ def wait_for_server(port: int, timeout: float = 8.0) -> bool:
 
 def run_backend(port: int) -> None:
     """Run local loopback HTTP engine (`127.0.0.1` only)."""
-    from app import app
+    try:
+        from app import app
 
-    logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    app.run(
-        host="127.0.0.1",
-        port=port,
-        debug=False,
-        use_reloader=False,
-        threaded=True,
-    )
+        logging.getLogger("werkzeug").setLevel(logging.ERROR)
+        app.run(
+            host="127.0.0.1",
+            port=port,
+            debug=False,
+            use_reloader=False,
+            threaded=True,
+        )
+    except Exception as exc:
+        logger.exception("Backend server failed to start: %s", exc)
+        sys.stderr.write(f"Backend thread exception: {exc}\n")
+
+
+def configure_macos_application_identity(window: object | None = None) -> None:
+    """Configure native Cocoa application identity, dock icon, and About panel on macOS.
+
+    Replaces default Python / generic folder icon with Haluro's branded camera
+    optics icon, version metadata, and developer attribution for César Fernández Ardiles.
+    """
+    if sys.platform != "darwin":
+        return
+
+    try:
+        import AppKit
+    except ImportError:  # pragma: no cover
+        logger.debug("AppKit not available in this Python runtime; skipping Cocoa identity.")
+        return
+
+    try:
+        app_instance = AppKit.NSApplication.sharedApplication()
+
+        # 1. Provide bundle metadata so Cocoa uses Haluro instead of python3
+        bundle = AppKit.NSBundle.mainBundle()
+        info = bundle.infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = APP_NAME
+            info["CFBundleDisplayName"] = APP_NAME
+            info["CFBundleShortVersionString"] = __version__
+            info["CFBundleVersion"] = __version__
+            info["NSHumanReadableCopyright"] = "© 2026 César Fernández Ardiles. Todos los derechos reservados."
+
+        try:
+            import webview.platforms.cocoa as cocoa
+
+            if hasattr(cocoa, "info") and isinstance(cocoa.info, dict):
+                cocoa.info["CFBundleName"] = APP_NAME
+                cocoa.info["CFBundleDisplayName"] = APP_NAME
+        except Exception:  # pragma: no cover
+            pass
+
+        # 2. Locate and load Haluro AppIcon.icns
+        icon_path = _BOOT_DIR / "assets" / "AppIcon.icns"
+        if not icon_path.is_file():
+            icon_path = _BOOT_DIR.parent / "assets" / "AppIcon.icns"
+
+        icon_img = None
+        if icon_path.is_file():
+            icon_img = AppKit.NSImage.alloc().initWithContentsOfFile_(str(icon_path))
+            if icon_img:
+                app_instance.setApplicationIconImage_(icon_img)
+
+        # 3. Build native About Panel options dictionary with developer information
+        credits_text = (
+            "Fotógrafo y Desarrollador: César Fernández Ardiles\n"
+            "Oregano · Chile\n\n"
+            f"{APP_NAME} — Laboratorio Analógico Digital (v{__version__})\n"
+            "Emulación de 72 emulsiones fotográficas clásicas (C-41, B&W, E-6, ECN-2 Cine),\n"
+            "conversión cromática de negativos y virados químicos de cuarto oscuro.\n\n"
+            "100% No destructivo · 100% Local y Privado\n"
+            "Licencia MIT (Distribución libre y gratuita)\n"
+            "https://github.com/cesarfernandez/haluro"
+        )
+        attr_credits = AppKit.NSAttributedString.alloc().initWithString_(credits_text)
+
+        about_options = {
+            AppKit.NSAboutPanelOptionApplicationName: APP_NAME,
+            AppKit.NSAboutPanelOptionApplicationVersion: f"v{__version__}",
+            AppKit.NSAboutPanelOptionVersion: "Laboratorio Analógico Digital",
+            AppKit.NSAboutPanelOptionCredits: attr_credits,
+            "Copyright": "© 2026 César Fernández Ardiles. Todos los derechos reservados.",
+        }
+        if icon_img:
+            about_options[AppKit.NSAboutPanelOptionApplicationIcon] = icon_img
+
+        global _ACTIVE_WINDOW, _MACOS_ABOUT_OPTIONS
+        _MACOS_ABOUT_OPTIONS = about_options
+
+        # 4. Intercept Cocoa standard About action to show custom About panel & in-app modal
+        def _haluro_order_front_about_panel(self: object, sender: object) -> None:
+            try:
+                self.orderFrontStandardAboutPanelWithOptions_(about_options)  # type: ignore[attr-defined]
+            except Exception as exc:  # pragma: no cover
+                logger.warning("Error displaying Cocoa native About panel with options: %s", exc)
+
+            # Trigger in-app modal in webview window as well
+            if _ACTIVE_WINDOW is not None:
+                try:
+                    _ACTIVE_WINDOW.evaluate_js(
+                        "document.getElementById('aboutModal')?.classList.add('active');"
+                    )
+                except Exception as exc:  # pragma: no cover
+                    logger.debug("Could not trigger in-app about modal from Cocoa menu: %s", exc)
+
+        AppKit.NSApplication.orderFrontStandardAboutPanel_ = _haluro_order_front_about_panel
+
+        if window is not None:
+            _ACTIVE_WINDOW = window
+
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Error configuring macOS application identity: %s", exc)
 
 
 def _show_native_fatal_error(title: str, message: str) -> None:
@@ -211,7 +317,29 @@ def main() -> int:
         )
         return 1
 
+    configure_macos_application_identity()
+
     api = AppApi()
+    macos_localization = (
+        {
+            "cocoa.menu.about": "Acerca de",
+            "cocoa.menu.services": "Servicios",
+            "cocoa.menu.hide": "Ocultar",
+            "cocoa.menu.hideOthers": "Ocultar otros",
+            "cocoa.menu.showAll": "Mostrar todo",
+            "cocoa.menu.quit": "Salir de",
+            "cocoa.menu.edit": "Edición",
+            "cocoa.menu.copy": "Copiar",
+            "cocoa.menu.cut": "Cortar",
+            "cocoa.menu.paste": "Pegar",
+            "cocoa.menu.selectAll": "Seleccionar todo",
+            "cocoa.menu.view": "Visualización",
+            "cocoa.menu.fullscreen": "Pantalla completa",
+        }
+        if sys.platform == "darwin"
+        else None
+    )
+
     window = webview.create_window(
         title=WINDOW_TITLE,
         url=url,
@@ -222,8 +350,28 @@ def main() -> int:
         text_select=False,
         zoomable=True,
         js_api=api,
+        localization=macos_localization,
     )
     api.window = window
+    configure_macos_application_identity(window=window)
+
+    if sys.platform == "darwin":
+        def _on_macos_shown() -> None:
+            try:
+                import AppKit
+
+                main_menu = AppKit.NSApplication.sharedApplication().mainMenu()
+                if main_menu and main_menu.numberOfItems() > 0:
+                    first_item = main_menu.itemAtIndex_(0)
+                    first_item.setTitle_(APP_NAME)
+                    app_sub = first_item.submenu()
+                    if app_sub and app_sub.numberOfItems() > 0:
+                        about_item = app_sub.itemAtIndex_(0)
+                        about_item.setTitle_(f"Acerca de {APP_NAME}")
+            except Exception as exc:
+                logger.debug("Menu title adjustment error: %s", exc)
+
+        window.events.shown += _on_macos_shown
 
     if is_windows():
         window.events.shown += lambda: apply_windows11_dark_titlebar(WINDOW_TITLE)

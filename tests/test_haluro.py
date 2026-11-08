@@ -890,3 +890,47 @@ def test_api_v23_roll_analysis_16bit_tiff_and_exif(client, tmp_path: Path) -> No
     hist = client.get("/api/history").get_json()["history"]
     assert hist[0]["meta"]["bw_toner"] == "selenium_2"
     assert hist[0]["meta"]["analog_meta"]["camera_model"] == "FM2n"
+
+
+def test_macos_application_identity_and_about_panel():
+    """Verify that macOS native application identity, icon, and custom About panel are configured."""
+    from native_app import configure_macos_application_identity
+
+    class DummyWindow:
+        def __init__(self):
+            self.js_calls = []
+
+        def evaluate_js(self, script: str):
+            self.js_calls.append(script)
+
+    dummy_win = DummyWindow()
+
+    # Test non-darwin platform behavior
+    with mock.patch("sys.platform", "win32"):
+        configure_macos_application_identity(dummy_win)
+
+    # Test darwin platform behavior
+    if sys.platform == "darwin":
+        import AppKit
+
+        configure_macos_application_identity(dummy_win)
+        bundle = AppKit.NSBundle.mainBundle()
+        info = bundle.infoDictionary()
+        assert info.get("CFBundleName") == "Haluro"
+        assert info.get("CFBundleDisplayName") == "Haluro"
+        assert "César Fernández Ardiles" in info.get("NSHumanReadableCopyright", "")
+
+        from native_app import _MACOS_ABOUT_OPTIONS
+
+        assert _MACOS_ABOUT_OPTIONS is not None
+        assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
+        assert "2.4.0" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
+        assert "César Fernández Ardiles" in credits_str
+        assert "Chile" in credits_str
+
+        app = AppKit.NSApplication.sharedApplication()
+        app.orderFrontStandardAboutPanel_(None)
+
+        assert any("aboutModal" in call for call in dummy_win.js_calls)
+

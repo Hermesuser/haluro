@@ -125,5 +125,6 @@ if IS_MACOS:
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,
             "NSSupportsAutomaticGraphicsSwitching": True,
+            "NSHumanReadableCopyright": "© 2026 César Fernández Ardiles. Todos los derechos reservados.",
         },
     )

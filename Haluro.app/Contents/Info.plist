@@ -26,5 +26,7 @@
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>© 2026 César Fernández Ardiles. Todos los derechos reservados.</string>
 </dict>
 </plist>

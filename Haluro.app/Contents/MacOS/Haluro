@@ -10,7 +10,9 @@ fi
 
 export PATH="/opt/anaconda3/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-if command -v /opt/anaconda3/bin/python3 >/dev/null 2>&1; then
+if [ -x "$APP_DIR/.venv/bin/python3" ]; then
+    PYTHON_EXEC="$APP_DIR/.venv/bin/python3"
+elif command -v /opt/anaconda3/bin/python3 >/dev/null 2>&1; then
     PYTHON_EXEC="/opt/anaconda3/bin/python3"
 else
     PYTHON_EXEC="$(command -v python3)"
