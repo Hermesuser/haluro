@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Haluro v2.4.0 — Reproducible macOS Native App & DMG Build Pipeline
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "${REPO_ROOT}"
+
+VERSION="2.4.0"
+ARCH="$(uname -m)"
+
+if command -v /opt/anaconda3/bin/python3 >/dev/null 2>&1 && [[ -z "${VIRTUAL_ENV:-}" ]]; then
+  PYTHON_BIN="/opt/anaconda3/bin/python3"
+else
+  PYTHON_BIN="$(command -v python3)"
+fi
+
+echo "==> [1/4] Ejecutando suite de pruebas automatizadas (pytest) con ${PYTHON_BIN} ..."
+"${PYTHON_BIN}" -m pytest -v
+
+echo "==> [2/4] Verificando arranque de motor y puente nativo (--smoke-test) ..."
+"${PYTHON_BIN}" native_app.py --smoke-test
+
+mkdir -p dist
+
+if "${PYTHON_BIN}" -c "import PyInstaller" >/dev/null 2>&1; then
+  echo "==> [3/4] Compilando bundle autónomo Haluro.app con PyInstaller ..."
+  rm -rf build dist/Haluro dist/Haluro.app
+  "${PYTHON_BIN}" -m PyInstaller --noconfirm --clean haluro.spec
+  APP_BUNDLE="dist/Haluro.app"
+  xattr -cr "${APP_BUNDLE}"
+  codesign --force --deep -s - "${APP_BUNDLE}" 2>/dev/null || true
+else
+  echo "==> [3/4] PyInstaller no instalado en este entorno; verificando Haluro.app nativo local ..."
+  xattr -cr Haluro.app
+  plutil -lint Haluro.app/Contents/Info.plist
+  codesign --force --deep -s - Haluro.app 2>/dev/null || true
+  APP_BUNDLE="Haluro.app"
+fi
+
+DMG_PATH="dist/Haluro-${VERSION}-macOS-${ARCH}.dmg"
+echo "==> [4/4] Empaquetando imagen de disco ${DMG_PATH} ..."
+rm -f dist/Haluro-*.dmg
+hdiutil create \
+  -volname "Haluro ${VERSION}" \
+  -srcfolder "${APP_BUNDLE}" \
+  -ov \
+  -format UDZO \
+  "${DMG_PATH}"
+
+shasum -a 256 "${DMG_PATH}" > "dist/SHA256SUMS-macOS.txt"
+echo "Construcción macOS completada: ${DMG_PATH}"

@@ -1,0 +1,26 @@
+# Python bytecode & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+
+# Build & installer outputs
+build/
+dist/
+*.egg-info/
+
+# Runtime user state (non-destructive workspace buffers & logs)
+uploads/*
+!uploads/.gitkeep
+developed/*
+!developed/.gitkeep
+logs/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

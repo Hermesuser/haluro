@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Haluro — Laboratorio Analógico Digital</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='2' y='2' width='24' height='24' rx='6' fill='%231B1E23' stroke='%23E59528' stroke-width='1.5'/%3E%3Ccircle cx='14' cy='14' r='6.5' fill='none' stroke='%23ECEEF2' stroke-width='1.4'/%3E%3Cpolygon points='14,9.5 18,14 14,18.5 10,14' fill='%23E59528'/%3E%3C/svg%3E">
+  <meta name="haluro-api-token" content="{{ api_token }}">
+  <meta name="author" content="{{ about.developer.name }}">
+  <link rel="stylesheet" href="/static/css/fonts.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="theme-darkroom">
+  <!-- Global Drag & Drop Overlay -->
+  <div class="dropzone-overlay" id="dropzoneOverlay" aria-hidden="true">
+    <div class="dropzone-card">
+      <svg class="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <h2>Soltar en la mesa de luz</h2>
+      <p>Admite RAW (.CR2, .CR3, .DNG, .NEF, .ARW, ProRAW) y escaneos (.TIFF, .PNG, .JPG, .HEIF)</p>
+    </div>
+  </div>
+
+  <!-- Top Application Bar -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+          <rect x="2" y="2" width="24" height="24" rx="6" fill="#1B1E23" stroke="#E59528" stroke-width="1.5"/>
+          <circle cx="14" cy="14" r="6.5" stroke="#ECEEF2" stroke-width="1.4"/>
+          <polygon points="14,9.5 18,14 14,18.5 10,14" fill="#E59528"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>Haluro</h1>
+        <span class="brand-sub">Laboratorio Analógico</span>
+      </div>
+    </div>
+
+    <!-- Primary Studio Mode Switcher -->
+    <nav class="mode-switch-group" role="tablist" aria-label="Modo de trabajo">
+      <button class="mode-switch-btn active" id="tabDarkroomsMode" role="tab" aria-selected="true">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M7 4v16M17 4v16M2 8h5M2 12h5M2 16h5M17 8h5M17 12h5M17 16h5"/>
+        </svg>
+        <span>Emulación · 72 películas</span>
+      </button>
+      <button class="mode-switch-btn" id="tabNegativeMode" role="tab" aria-selected="false">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v18"/>
+          <path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" fill-opacity="0.22"/>
+        </svg>
+        <span>Revelar negativo</span>
+      </button>
+    </nav>
+
+    <!-- Right Utility & Export Actions -->
+    <div class="header-actions">
+      <button class="btn btn-ghost btn-sm" id="loadSampleBtn" title="Cargar archivo de prueba">
+        <span id="loadSampleLabel">Cargar muestra RAW</span>
+      </button>
+
+      <label class="btn btn-secondary btn-sm upload-label" id="uploadBtnLabel" title="Importar archivos desde tu Mac (⌘O)">
+        <input type="file" id="fileInput" multiple accept=".cr2,.cr3,.dng,.nef,.arw,.orf,.rw2,.raf,.pef,.jpg,.jpeg,.png,.tif,.tiff,.heic,.heif">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span>Importar</span>
+      </label>
+
+      <div class="header-divider" aria-hidden="true"></div>
+
+      <button class="btn btn-icon-only" id="safelightToggle" aria-label="Alternar luz roja de cuarto oscuro (L)" title="Luz roja de laboratorio (Tecla L)">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/>
+        </svg>
+      </button>
+
+      <button class="btn btn-icon-only" id="historyBtn" aria-label="Historial de versiones reveladas" title="Versiones reveladas y recetas no destructivas">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <circle cx="12" cy="12" r="9"/>
+          <polyline points="12 7 12 12 15.5 14"/>
+        </svg>
+      </button>
+
+      <button class="btn btn-icon-only" id="shortcutsBtn" aria-label="Atajos de teclado (?)" title="Atajos de teclado (Tecla ?)">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <rect x="2" y="5" width="20" height="14" rx="2"/>
+          <path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 15h6"/>
+        </svg>
+      </button>
+
+      <button class="btn btn-icon-only" id="aboutBtn" aria-label="Acerca de Haluro" title="Acerca de Haluro y Desarrollador">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="16" x2="12" y2="12"/>
+          <line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+      </button>
+
+      <div class="export-group">
+        <button class="btn btn-primary btn-sm" id="saveDownloadsBtn" title="Guardar a resolución completa en ~/Downloads (⌘S)">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Guardar</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" id="saveAsBtn" title="Elegir carpeta y nombre con diálogo nativo de macOS (⇧⌘S)">
+          Guardar como…
+        </button>
+        <button class="btn btn-outline btn-sm" id="developFullBtn" title="Revelar todos los fotogramas del rollo y crear hoja de contactos">
+          Revelar rollo
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3-Column Darkroom Workstation -->
+  <main class="studio-layout">
+    <!-- LEFT SIDEBAR: Stocks Catalog (Mode 1) OR Negative Calibration & Scanner Profiles (Mode 2) -->
+    <aside class="sidebar sidebar-left" aria-label="Selección de emulsión y calibración">
+
+      <!-- MODE 1 LEFT: 72 Film Stocks Shelf -->
+      <div id="shelfContainer" class="sidebar-pane">
+        <div class="pane-header">
+          <h2>Catálogo de películas</h2>
+          <span class="mono-badge" id="filmCountBadge">72</span>
+        </div>
+
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="20" y1="20" x2="16" y2="16"/>
+          </svg>
+          <input type="search" id="filmSearch" placeholder="Buscar película o marca (Portra, Velvia, Ilford)…" aria-label="Buscar película">
+        </div>
+
+        <div class="category-filters" id="categoryFilters" role="toolbar" aria-label="Filtrar por proceso químico">
+          <button class="filter-pill active" data-category="all">Todas</button>
+          <button class="filter-pill" data-category="fav">★ Favoritas</button>
+          <button class="filter-pill" data-category="neg">Negativo C-41</button>
+          <button class="filter-pill" data-category="slide">Diapositiva E-6</button>
+          <button class="filter-pill" data-category="cine">Cine</button>
+          <button class="filter-pill" data-category="bw">Plata B&amp;N</button>
+          <button class="filter-pill" data-category="xpro">Cross-Pro</button>
+        </div>
+
+        <div class="film-shelf-list" id="filmList" role="listbox" aria-label="Lista de películas analógicas">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- MODE 2 LEFT: Negative Calibration & Minilab Scanner Profiles -->
+      <div id="negativeLabContainer" class="sidebar-pane" style="display: none;">
+        <div class="pane-header">
+          <h2>Calibración del negativo</h2>
+          <span class="mono-badge badge-emerald">Densitometría v2.3</span>
+        </div>
+
+        <div class="pane-scroll">
+          <!-- Film Emulsion Process, Scan Source & Backlight Spectrum -->
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Proceso y captura</h3>
+            </div>
+            <div class="segmented-bar">
+              <button class="seg-btn active" id="btnTypeColor" data-type="color">Color C-41</button>
+              <button class="seg-btn" id="btnTypeBW" data-type="bw">Plata Blanco y Negro</button>
+            </div>
+
+            <div class="sub-label-row">
+              <span>Origen de digitalización</span>
+            </div>
+            <div class="segmented-bar segmented-3" id="negScanSourceBar" role="radiogroup" aria-label="Origen del archivo digitalizado">
+              <button class="seg-btn active" data-source="camera_raw" title="Cámara digital sin espejo o DSLR en formato RAW / DNG">Cámara RAW</button>
+              <button class="seg-btn" data-source="scanner_raw" title="Escáner dedicado lineal (VueScan / SilverFast DNG o TIFF lineal)">Escáner RAW</button>
+              <button class="seg-btn" data-source="flatbed_tiff" title="Escáner plano de cama de cristal (Epson V600/V850) o TIFF/JPEG gamma">Plano TIFF</button>
+            </div>
+
+            <div class="sub-label-row">
+              <span>Espectro del backlight</span>
+            </div>
+            <div class="segmented-bar segmented-3" id="negLightSourceBar" role="radiogroup" aria-label="Espectro de fuente de luz de escaneo">
+              <button class="seg-btn active" data-light="standard" title="Luz blanca High-CRI (6000–9000K) o escáner dedicado">Blanca CRI</button>
+              <button class="seg-btn" data-light="cool" title="Backlight frío (>9000K tipo CS-LITE Cool) o luz directa">Fría &gt;9k</button>
+              <button class="seg-btn" data-light="warm" title="Panel LED doméstico o vídeo cálido (<5500K)">Cálida</button>
+            </div>
+
+            <div class="control-group compact-top" id="negPreSatGroup">
+              <div class="control-label">
+                <span title="Amplifica o modera la separación de capas de tinte C-41 antes de invertir la densidad">Pre-saturación óptica</span>
+                <span class="control-val" id="negPreSatVal">1.00x</span>
+              </div>
+              <input type="range" id="negPreSatSlider" min="0.50" max="1.60" step="0.05" value="1.00" data-default="1.00">
+            </div>
+          </section>
+
+          <!-- Base Mask Neutralization & Roll Analysis -->
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Soporte base (D-min) y rollo</h3>
+              <span class="hint-kbd" title="Atajo de teclado">Tecla I</span>
+            </div>
+            <p class="helper-copy">Neutraliza el soporte de celuloide por fotograma o unifica la densitometría de todo el rollo.</p>
+
+            <div class="base-mask-row">
+              <div class="base-swatch-box">
+                <div class="base-swatch" id="baseSwatch" style="background-color: #e45f21;"></div>
+                <div class="base-readout">
+                  <span class="base-hex" id="baseHex">#E45F21</span>
+                  <span class="base-sub" id="baseRgbLabel">Soporte C-41</span>
+                </div>
+              </div>
+              <div class="base-actions">
+                <button class="btn btn-outline btn-xs" id="btnEyedropper" title="Haz clic en el borde sin exponer del negativo (Tecla I)">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="m2 22 1-1h3l9-9M3 21v-3l9-9"/>
+                    <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>
+                  </svg>
+                  <span>Muestrear</span>
+                </button>
+                <button class="btn btn-secondary btn-xs" id="btnAutoBase" title="Detectar automáticamente la máscara naranja">
+                  Auto
+                </button>
+              </div>
+            </div>
+
+            <div class="eyedropper-tip" id="eyedropperTip" style="display: none;" role="status">
+              Haz clic sobre un área naranja sin exponer en el borde del negativo. Pulsa <kbd>Esc</kbd> para cancelar.
+            </div>
+
+            <div class="sub-label-row">
+              <span>Equilibrio densitométrico</span>
+              <span class="roll-cal-pill" id="rollCalBadge" style="display: none;">Rollo calibrado</span>
+            </div>
+            <div class="segmented-bar segmented-3" id="negColorMethodBar" role="radiogroup" aria-label="Método de equilibrio densitométrico">
+              <button class="seg-btn active" data-method="dynamic" title="Estira punto negro y blanco dinámicamente en cada fotograma">Dinámico</button>
+              <button class="seg-btn" data-method="shadow_weighted" title="Ancla sombras y evita dominantes opuestas en mar, bosque o nieve">Sombras</button>
+              <button class="seg-btn" data-method="roll_locked" title="Usa la envolvente D-min / D-max común del rollo sin bombeo de exposición">Rollo fijo</button>
+            </div>
+
+            <button class="btn btn-outline btn-xs btn-block" id="btnAnalyzeRoll" title="Analiza todos los fotogramas importados para fijar el soporte D-min y rango dinámico real del rollo">
+              Analizar rollo completo (consistencia C-41/B&amp;N)
+            </button>
+
+            <div class="control-group compact-top">
+              <div class="control-label">
+                <span title="Ignora soportes negros o bordes de mesa de luz al calcular el punto blanco y negro">Margen de análisis (Buffer)</span>
+                <span class="control-val" id="negBufferVal">6%</span>
+              </div>
+              <input type="range" id="negBufferSlider" min="0" max="20" step="1" value="6" data-default="6">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Recorta simétricamente las perforaciones o bordes exteriores">Recorte limpio de bordes</span>
+                <span class="control-val" id="negCropVal">0%</span>
+              </div>
+              <input type="range" id="negCropSlider" min="0" max="15" step="0.5" value="0" data-default="0">
+            </div>
+          </section>
+
+          <!-- Photochemical Print Media, Finishing & B&W Chemical Toning -->
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Medio fotoquímico y acabado</h3>
+            </div>
+
+            <div class="sub-label-row">
+              <span>Carácter tonal</span>
+            </div>
+            <div class="segmented-bar segmented-5" id="negToneVariantBar" role="radiogroup" aria-label="Carácter tonal del revelado">
+              <button class="seg-btn" data-tone="soft" title="Contraste abierto y transiciones suaves">Suave</button>
+              <button class="seg-btn active" data-tone="standard" title="Equilibrio sensitométrico nominal">Estándar</button>
+              <button class="seg-btn" data-tone="vivid" title="Contraste profundo y riqueza cromática">Vívido</button>
+              <button class="seg-btn" data-tone="highlight_soft" title="Comprime suavemente el hombro de altas luces protegiendo cielos y pieles">Hombro</button>
+              <button class="seg-btn" data-tone="shadow_soft" title="Levanta delicadamente el talón de sombras densas">Abierto</button>
+            </div>
+
+            <!-- Contextual Color Print Finishing (0% - 200%) -->
+            <div id="negColorFinishPanel" class="sub-panel-box">
+              <div class="control-label">
+                <span>Acabado de copia (Print Finish)</span>
+              </div>
+              <select id="negPrintFinishSelect" class="dark-select" aria-label="Acabado de copia en color">
+                <option value="none">Sin acabado extra (Inversión pura)</option>
+                <option value="crystal_archive">Papel Fujicolor Crystal Archive</option>
+                <option value="portra_airy">Retrato Pastel Luminoso</option>
+                <option value="gold_warm">Ámbar Dorado Analógico</option>
+                <option value="superia_cool">Esmeralda Editorial 90s</option>
+                <option value="cine_halation">Halación Cine Tungsteno</option>
+                <option value="portrait_soft">Piel Suave de Estudio</option>
+                <option value="clean_contrast">Contraste Limpio de Galería</option>
+              </select>
+              <div class="control-group compact-top" id="negFinishAmountGroup">
+                <div class="control-label">
+                  <span>Intensidad de acabado</span>
+                  <span class="control-val" id="negFinishAmountVal">100%</span>
+                </div>
+                <input type="range" id="negFinishAmountSlider" min="0" max="200" step="5" value="100" data-default="100">
+              </div>
+            </div>
+
+            <!-- Contextual B&W Chemical Toning & Fine-Art Paper (0% - 150%) -->
+            <div id="negBwChemPanel" class="sub-panel-box bw-chem-box" style="display: none;">
+              <div class="control-label">
+                <span>Virado químico y papel B&amp;N</span>
+                <span class="mono-badge">Cuarto oscuro</span>
+              </div>
+              <select id="negBwTonerSelect" class="dark-select" aria-label="Virado químico o papel baritado B&N">
+                <option value="neutral">Gelatina de Plata Neutra</option>
+                <option value="selenium_1">Selenio #1 · Archivo Sutil</option>
+                <option value="selenium_2">Selenio #2 · Galería Clásico</option>
+                <option value="selenium_3">Selenio #3 · Berenjena Profundo</option>
+                <option value="palladium">Platino / Paladio Artesanal</option>
+                <option value="sepia_sulfide">Sepia Sulfuro / Kodak Brown</option>
+                <option value="copper_iron">Virado Cobre y Hierro (Split)</option>
+                <option value="warmtone_foma">Clorobromuro Cálido (Fomatone)</option>
+                <option value="cooltone">Bromuro Frío Azul-Negro</option>
+                <option value="cotton_matte">Papel Algodón Mate Museo</option>
+              </select>
+              <p class="helper-copy" id="negBwTonerDesc">Copia baritada clásica de plata pura (R=G=B) sin virado químico.</p>
+              <div class="control-group compact-top">
+                <div class="control-label">
+                  <span>Intensidad del virado</span>
+                  <span class="control-val" id="negBwTonerStrengthVal">100%</span>
+                </div>
+                <input type="range" id="negBwTonerStrengthSlider" min="0" max="150" step="5" value="100" data-default="100">
+              </div>
+            </div>
+
+            <div class="profile-grid" id="negProfileList" role="listbox" aria-label="Perfil fotoquímico o escáner Minilab">
+              <div class="profile-card" data-profile="ra4_paper" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Papel Cuarto Oscuro RA-4</span>
+                  <span class="profile-chip">C-Print</span>
+                </div>
+                <div class="profile-desc">Curva fotoquímica de papel cromogénico con verdes orgánicos y pieles naturales.</div>
+              </div>
+              <div class="profile-card" data-profile="cine_ecp" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Copia de Cine ECP 2383</span>
+                  <span class="profile-chip">CinePrint</span>
+                </div>
+                <div class="profile-desc">Estética de proyección cinematográfica: negros densos de sala y separación cálido-fría.</div>
+              </div>
+              <div class="profile-card selected" data-profile="frontier" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Fuji Frontier SP-3000</span>
+                  <span class="profile-chip">Clásico</span>
+                </div>
+                <div class="profile-desc">Contraste vivo, pieles cálidas doradas y altas luces luminosas.</div>
+              </div>
+              <div class="profile-card" data-profile="noritsu" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Noritsu HS-1800</span>
+                  <span class="profile-chip">Suave</span>
+                </div>
+                <div class="profile-desc">Sombras pastel abiertas, latitud amplia y transiciones delicadas.</div>
+              </div>
+              <div class="profile-card" data-profile="pakon" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Pakon F135 Plus</span>
+                  <span class="profile-chip">Vibrante</span>
+                </div>
+                <div class="profile-desc">Estética editorial de los 90, saturación profunda y microcontraste.</div>
+              </div>
+              <div class="profile-card" data-profile="vlog_flat" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Logarítmico Latitud (V-Log)</span>
+                  <span class="profile-chip">Latitud</span>
+                </div>
+                <div class="profile-desc">Rango extendido para películas de alto contraste, caducadas o cruzadas.</div>
+              </div>
+              <div class="profile-card" data-profile="linear" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Lineal Plano</span>
+                  <span class="profile-chip">Neutro</span>
+                </div>
+                <div class="profile-desc">Sin curva de compresión; rango dinámico íntegro para etalonaje.</div>
+              </div>
+              <div class="profile-card" data-profile="bw" role="option" tabindex="0">
+                <div class="profile-title-row">
+                  <span class="profile-title">Gelatina de Plata B&amp;N</span>
+                  <span class="profile-chip">Monocromo</span>
+                </div>
+                <div class="profile-desc">Inversión densitométrica pura libre de dominantes cromáticas.</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER STAGE: Light Table, Split Viewport & 35mm Filmstrip -->
+    <section class="viewport" aria-label="Visor principal de revelado">
+      <div class="viewport-toolbar">
+        <!-- View Modes -->
+        <div class="view-modes" role="group" aria-label="Modo de visualización">
+          <button class="mode-btn active" id="viewSplitBtn" title="Comparativa dividida Antes/Después (Tecla 1)">Dividida</button>
+          <button class="mode-btn" id="viewFullBtn" title="Ver solo fotografía revelada (Tecla 2)">Revelada</button>
+          <button class="mode-btn" id="viewOrigBtn" title="Mantén pulsado '\' o haz clic para ver el original sin procesar">Original</button>
+          <button class="mode-btn" id="viewSheetBtn" title="Generar hoja de contactos del rollo (Tecla 3)">Contactos</button>
+        </div>
+
+        <!-- Geometry & Zoom Instruments -->
+        <div class="geometry-tools" role="group" aria-label="Orientación y lupa">
+          <button class="tool-icon-btn" id="rotateLeftBtn" aria-label="Rotar 90 grados a la izquierda" title="Rotar 90° izquierda (⇧R)">
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+          </button>
+          <button class="tool-icon-btn" id="rotateRightBtn" aria-label="Rotar 90 grados a la derecha" title="Rotar 90° derecha (Tecla R)">
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
+              <path d="M21 3v5h-5"/>
+            </svg>
+          </button>
+          <button class="tool-icon-btn" id="flipHBtn" aria-label="Espejo horizontal de emulsión" title="Voltear horizontalmente / Lado de emulsión (Tecla F)">
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 3v18M8 7l-5 5 5 5M16 7l5 5-5 5"/>
+            </svg>
+          </button>
+          <span class="toolbar-sep" aria-hidden="true"></span>
+          <button class="tool-icon-btn" id="zoomOutBtn" aria-label="Alejar zoom" title="Alejar (-)">−</button>
+          <button class="zoom-readout" id="zoomResetBtn" title="Restablecer vista al 100% encajado (Tecla 0)">Ajustar</button>
+          <button class="tool-icon-btn" id="zoomInBtn" aria-label="Acercar zoom" title="Acercar (+ o rueda del ratón)">+</button>
+          <span class="toolbar-sep" aria-hidden="true"></span>
+          <button class="recipe-pill-btn" id="copyRecipeBtn" title="Copiar receta óptica del fotograma activo (⇧⌘C)">Copiar</button>
+          <button class="recipe-pill-btn" id="pasteRecipeBtn" title="Pegar receta copiada en este fotograma (⇧⌘V)" disabled>Pegar</button>
+          <button class="recipe-pill-btn recipe-sync-btn" id="syncRollBtn" title="Sincronizar la receta actual en todos los fotogramas del rollo">Sincronizar rollo</button>
+        </div>
+
+        <!-- Live Telemetry Status -->
+        <div class="render-stats" id="renderStats">
+          <span class="status-dot" id="renderDot" aria-hidden="true"></span>
+          <span class="badge-nondestructive" title="Edición 100% no destructiva: tu archivo original jamás se altera">Original intacto</span>
+          <span class="separator">·</span>
+          <span id="statResolution">—</span>
+          <span class="separator">·</span>
+          <span id="statTime">—</span>
+        </div>
+      </div>
+
+      <!-- Main Light Table Canvas -->
+      <div class="canvas-container" id="canvasContainer">
+        <div class="split-slider-wrapper" id="splitWrapper">
+          <img id="imgOriginal" class="split-image original" src="" alt="Fotografía original sin procesar" draggable="false">
+          <img id="imgDeveloped" class="split-image developed" src="" alt="Fotografía revelada en Haluro" crossorigin="anonymous" draggable="false">
+
+          <div class="split-divider" id="splitDivider" role="slider" tabindex="0" aria-label="Divisor de comparativa antes y después" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+            <div class="divider-handle" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                <polyline points="9 18 3 12 9 6"/>
+                <polyline points="15 6 21 12 15 18"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="split-label label-left" id="originalLabel">Original</div>
+          <div class="split-label label-right" id="developedLabel">Kodak Portra 400</div>
+
+          <!-- Floating Eyedropper Magnifier Pill -->
+          <div class="eyedropper-loupe" id="eyedropperLoupe" style="display: none;">
+            <span class="loupe-dot" id="loupeDot"></span>
+            <span class="loupe-label" id="loupeLabel">Muestrear base</span>
+          </div>
+        </div>
+
+        <!-- Contact Sheet Container -->
+        <div class="sheet-container" id="sheetContainer" style="display: none;">
+          <img id="sheetPreview" src="" alt="Hoja de contactos analógica">
+        </div>
+
+        <!-- Heavy Batch / Initial Import Overlay (Never triggered on slider drags) -->
+        <div class="loading-overlay" id="loadingOverlay" role="status" aria-live="polite">
+          <div class="darkroom-timer">
+            <div class="red-bulb"></div>
+            <p id="loadingMessage">Procesando en el laboratorio…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom 35mm Perforated Film Strip -->
+      <footer class="film-strip" aria-label="Tira de fotogramas importados">
+        <div class="sprocket-track top" aria-hidden="true"></div>
+        <div class="strip-frames-scroll" id="stripFrames">
+          <!-- Populated dynamically with real image thumbnails -->
+        </div>
+        <div class="sprocket-track bottom" aria-hidden="true"></div>
+      </footer>
+    </section>
+
+    <!-- RIGHT SIDEBAR: Live RGB Histogram, Precision Controls & Output Format -->
+    <aside class="sidebar sidebar-right" aria-label="Densitómetro y controles químicos">
+      <!-- Live RGB & Luminance Histogram -->
+      <div class="histogram-box">
+        <div class="histogram-header">
+          <span class="panel-eyebrow">Densitómetro RGB</span>
+          <div class="clip-indicators">
+            <span class="clip-pill" id="clipShadows" title="Porcentaje de sombras puras en negro">Sombras 0.0%</span>
+            <span class="clip-pill" id="clipHighlights" title="Porcentaje de altas luces al límite">Luces 0.0%</span>
+          </div>
+        </div>
+        <canvas id="histogramCanvas" width="272" height="84" aria-label="Histograma RGB en tiempo real"></canvas>
+        <div class="active-stock-bar">
+          <span class="stock-label-muted">Receta activa</span>
+          <span class="stock-label-value" id="statFilm">Kodak Portra 400</span>
+        </div>
+      </div>
+
+      <!-- Inspector Scrollable Controls -->
+      <div class="inspector-scroll">
+        <!-- CONTROLS FOR MODE 1: FILM SIMULATION -->
+        <div id="simInspectorControls">
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Química y óptica</h3>
+              <button class="reset-link" id="resetSimBtn" title="Restablecer todos los controles a sus valores nominales">Restablecer</button>
+            </div>
+            <p class="helper-copy">Doble clic en cualquier deslizador para volver a su punto neutro.</p>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Compensación de exposición</span>
+                <span class="control-val" id="evVal">0.0 EV</span>
+              </div>
+              <input type="range" class="bipolar-range" id="evSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Halación en altas luces</span>
+                <span class="control-val" id="halationVal">1.0x</span>
+              </div>
+              <input type="range" id="halationSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Grano de haluro de plata</span>
+                <span class="control-val" id="grainVal">1.0x</span>
+              </div>
+              <input type="range" id="grainSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Viñeteo óptico</span>
+                <span class="control-val" id="vignetteVal">1.0x</span>
+              </div>
+              <input type="range" id="vignetteSlider" min="0.0" max="2.0" step="0.1" value="1.0" data-default="1.0">
+            </div>
+
+            <div class="control-toggle">
+              <label class="switch" for="dateToggle">
+                <input type="checkbox" id="dateToggle">
+                <span class="slider"></span>
+              </label>
+              <label for="dateToggle" class="toggle-text">Sello de fecha en cuarzo ámbar</label>
+            </div>
+          </section>
+        </div>
+
+        <!-- CONTROLS FOR MODE 2: NEGATIVE LAB -->
+        <div id="negInspectorControls" style="display: none;">
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Curva tonal y proceso</h3>
+              <button class="reset-link" id="resetNegTonalBtn">Restablecer</button>
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Brillo (Gamma de emulsión)</span>
+                <span class="control-val" id="negBrightnessVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negBrightnessSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Ajusta la exposición de medios tonos manteniendo bloqueada la cromaticidad neutra">Densidad neutra (Medios)</span>
+                <span class="control-val" id="negMidtoneNdVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negMidtoneNdSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Contraste S-Curve</span>
+                <span class="control-val" id="negContrastVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negContrastSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Compensa películas forzadas (Push +) o suaviza contrastes duros (Pull −)">Latitud Pull ↔ Push</span>
+                <span class="control-val" id="negPushPullVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negPushPullSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Altas luces</span>
+                <span class="control-val" id="negLightsVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negLightsSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Sombras</span>
+                <span class="control-val" id="negDarksVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negDarksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Punto blanco (Hombro)</span>
+                <span class="control-val" id="negWhitesVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negWhitesSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Punto negro (Talón)</span>
+                <span class="control-val" id="negBlacksVal">0.00</span>
+              </div>
+              <input type="range" class="bipolar-range" id="negBlacksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Ancla selectivamente el velo de base en sombras profundas sin oscurecer pieles">Negros anti-velo (Inky)</span>
+                <span class="control-val" id="negInkyBlacksVal">0%</span>
+              </div>
+              <input type="range" id="negInkyBlacksSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Vibrancia analógica que protege los grises neutros mientras aviva colores apagados">Impulso RP Tone</span>
+                <span class="control-val" id="negRpToneVal">0%</span>
+              </div>
+              <input type="range" id="negRpToneSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Saturación cromática</span>
+                <span class="control-val" id="negSatVal">1.00x</span>
+              </div>
+              <input type="range" id="negSatSlider" min="0.0" max="2.0" step="0.05" value="1.0" data-default="1.0">
+            </div>
+
+            <details class="sub-drawer">
+              <summary class="sub-drawer-summary">Recorte densitométrico y protección de luces</summary>
+              <div class="sub-drawer-body">
+                <div class="control-group">
+                  <div class="control-label">
+                    <span title="Ajusta el umbral inferior de densidad D-min (BlackClip)">Recorte negro (BlackClip)</span>
+                    <span class="control-val" id="negBlackClipVal">0.00</span>
+                  </div>
+                  <input type="range" class="bipolar-range" id="negBlackClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00">
+                </div>
+                <div class="control-group">
+                  <div class="control-label">
+                    <span title="Ajusta el umbral superior de densidad D-max (WhiteClip)">Recorte blanco (WhiteClip)</span>
+                    <span class="control-val" id="negWhiteClipVal">0.00</span>
+                  </div>
+                  <input type="range" class="bipolar-range" id="negWhiteClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00">
+                </div>
+                <div class="control-toggle">
+                  <label class="switch" for="negClipProtectToggle">
+                    <input type="checkbox" id="negClipProtectToggle" checked>
+                    <span class="slider"></span>
+                  </label>
+                  <label for="negClipProtectToggle" class="toggle-text">Protección de tinte en luces altas</label>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Ampliadora CMY y 3 vías</h3>
+              <button class="reset-link" id="resetNegColorBtn">Neutro</button>
+            </div>
+
+            <!-- Positive Scene Neutral WB Row for Borderless Scans -->
+            <div class="scene-wb-bar">
+              <button class="btn btn-outline btn-xs scene-wb-btn" id="btnSceneWbEyedropper" title="Haz clic sobre un gris, asfalto o sombra neutra en el positivo (Tecla W)">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="m2 22 1-1h3l9-9M3 21v-3l9-9"/>
+                  <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>
+                </svg>
+                <span>Gris neutro (W)</span>
+              </button>
+              <button class="btn btn-secondary btn-xs scene-wb-btn" id="btnAutoSceneWb" title="Equilibrar automáticamente dominantes en escaneos sin bordes visibles">
+                Auto WB escena
+              </button>
+            </div>
+
+            <div class="eyedropper-tip" id="sceneWbTip" style="display: none;" role="status">
+              Haz clic sobre un objeto gris, asfalto o sombra neutra en el positivo revelado. Pulsa <kbd>Esc</kbd> para cancelar.
+            </div>
+
+            <!-- 4-Zone CMY Selector: Global Enlarger Lights vs 3-Way Split Toning -->
+            <div class="segmented-bar segmented-4" id="cmyZoneBar" role="tablist" aria-label="Zona tonal CMY">
+              <button class="seg-btn active" data-zone="global" title="Luces globales del cabezal dicroico CMY">Global</button>
+              <button class="seg-btn" data-zone="shadows" title="Tinte CMY selectivo en sombras conservando luminancia">Sombras</button>
+              <button class="seg-btn" data-zone="mids" title="Tinte CMY selectivo en medios tonos y pieles">Medios</button>
+              <button class="seg-btn" data-zone="highs" title="Tinte CMY selectivo en altas luces y cielos">Luces</button>
+            </div>
+
+            <div id="cmyGlobalPane" class="zone-stack">
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Cian ↔ Rojo</span>
+                  <span class="control-val" id="cmyRedVal">0.00</span>
+                </div>
+                <input type="range" class="track-cyan-red" id="cmyRedSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Magenta ↔ Verde</span>
+                  <span class="control-val" id="cmyGreenVal">0.00</span>
+                </div>
+                <input type="range" class="track-magenta-green" id="cmyGreenSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Amarillo ↔ Azul</span>
+                  <span class="control-val" id="cmyBlueVal">0.00</span>
+                </div>
+                <input type="range" class="track-yellow-blue" id="cmyBlueSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Temperatura</span>
+                  <span class="control-val" id="negTempVal">0.00</span>
+                </div>
+                <input type="range" class="track-temp" id="negTempSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Tinte fino</span>
+                  <span class="control-val" id="negTintVal">0.00</span>
+                </div>
+                <input type="range" class="track-tint" id="negTintSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+            </div>
+
+            <div id="cmyZonePane" class="zone-stack" style="display: none;">
+              <p class="helper-copy" id="cmyZoneHelper">Etalonaje selectivo de zona con preservación de luminancia.</p>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="zoneRedLabel">Cian ↔ Rojo (Sombras)</span>
+                  <span class="control-val" id="zoneCmyRedVal">0.00</span>
+                </div>
+                <input type="range" class="track-cyan-red" id="zoneCmyRedSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="zoneGreenLabel">Magenta ↔ Verde (Sombras)</span>
+                  <span class="control-val" id="zoneCmyGreenVal">0.00</span>
+                </div>
+                <input type="range" class="track-magenta-green" id="zoneCmyGreenSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="zoneBlueLabel">Amarillo ↔ Azul (Sombras)</span>
+                  <span class="control-val" id="zoneCmyBlueVal">0.00</span>
+                </div>
+                <input type="range" class="track-yellow-blue" id="zoneCmyBlueSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              </div>
+
+              <div class="control-group compact-top">
+                <div class="control-label">
+                  <span>Cruce de sombras</span>
+                  <span class="control-val" id="negShadowsRangeVal">50%</span>
+                </div>
+                <input type="range" id="negShadowsRangeSlider" min="0" max="100" step="5" value="50" data-default="50">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Cruce de altas luces</span>
+                  <span class="control-val" id="negHighsRangeVal">50%</span>
+                </div>
+                <input type="range" id="negHighsRangeSlider" min="0" max="100" step="5" value="50" data-default="50">
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Filtros y nitidez óptica</h3>
+              <button class="reset-link" id="resetNegOpticalBtn">Restablecer</button>
+            </div>
+
+            <div class="sub-label-row">
+              <span>Nitidez en luminancia (protege grano)</span>
+            </div>
+            <div class="segmented-bar segmented-3" id="negSharpenModeBar" role="radiogroup" aria-label="Modo de nitidez óptica">
+              <button class="seg-btn active" data-sharpen="off" title="Sin enfoque posterior">Apagada</button>
+              <button class="seg-btn" data-sharpen="lab" title="Micro-acutancia de óptica Minilab Frontier / Noritsu">Lab</button>
+              <button class="seg-btn" data-sharpen="scanner" title="Recuperación de foco para escáner plano de cama de cristal">Escáner</button>
+            </div>
+
+            <div class="control-group" id="negSharpenAmountGroup" style="display: none;">
+              <div class="control-label">
+                <span>Intensidad de acutancia</span>
+                <span class="control-val" id="negSharpenAmountVal">100%</span>
+              </div>
+              <input type="range" id="negSharpenAmountSlider" min="0" max="200" step="10" value="100" data-default="100">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Filtro ámbar tipo Wratten 85B para película de tungsteno (800T / 500T) en luz día">Filtro 85B Cálido</span>
+                <span class="control-val" id="negWarming85Val">0%</span>
+              </div>
+              <input type="range" id="negWarming85Slider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Corrige selectivamente el tinte rojizo en altas luces provocado por backlights cálidos">Filtro Skylight (Anti-rojo)</span>
+                <span class="control-val" id="negSkylightVal">0%</span>
+              </div>
+              <input type="range" id="negSkylightSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span title="Neutraliza el velo verdoso en sombras de negativos subexpuestos o caducados">Filtro Sombra (Anti-verde)</span>
+                <span class="control-val" id="negShadeVal">0%</span>
+              </div>
+              <input type="range" id="negShadeSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Difusión de luz (LabGlow)</span>
+                <span class="control-val" id="negGlowVal">1.0x</span>
+              </div>
+              <input type="range" id="negGlowSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span>Papel mate (LabFade)</span>
+                <span class="control-val" id="negFadeVal">1.0x</span>
+              </div>
+              <input type="range" id="negFadeSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+            </div>
+          </section>
+        </div>
+
+        <!-- SHARED ANALOG EXIF TECHNICAL SHEET (Stamps Camera/Lens/Film/ISO into JPG, PNG & 16-bit TIFF) -->
+        <details class="panel-card analog-exif-card" id="analogExifDetails">
+          <summary class="analog-exif-summary">
+            <span>Ficha técnica EXIF analógica</span>
+            <span class="mono-badge" id="exifStatusBadge">Opcional</span>
+          </summary>
+          <div class="analog-exif-body">
+            <p class="helper-copy">Se incrusta nativamente en los metadatos EXIF de JPG, PNG y TIFF 16-bit al exportar.</p>
+            <div class="exif-grid-2">
+              <label class="exif-field">
+                <span>Marca cámara</span>
+                <input type="text" id="exifCameraMake" list="dlCameraMakes" placeholder="Leica, Nikon…">
+              </label>
+              <label class="exif-field">
+                <span>Modelo cámara</span>
+                <input type="text" id="exifCameraModel" list="dlCameraModels" placeholder="M6, FM2n, AE-1…">
+              </label>
+            </div>
+            <label class="exif-field">
+              <span>Objetivo / Óptica</span>
+              <input type="text" id="exifLens" list="dlLenses" placeholder="50mm f/1.4, 35mm Summicron…">
+            </label>
+            <div class="exif-grid-2">
+              <label class="exif-field">
+                <span>Película disparada</span>
+                <input type="text" id="exifFilmStock" list="dlFilmStocks" placeholder="Kodak Portra 400…">
+              </label>
+              <label class="exif-field">
+                <span>ISO expuesto</span>
+                <input type="text" id="exifShotIso" placeholder="400">
+              </label>
+            </div>
+            <div class="exif-grid-2">
+              <label class="exif-field">
+                <span>Formato</span>
+                <select id="exifFilmFormat" class="dark-select">
+                  <option value="">— Formato —</option>
+                  <option value="135 (35mm)">135 (35mm)</option>
+                  <option value="120 Medio Formato">120 Medio Formato</option>
+                  <option value="Medio Cuadro">Medio Cuadro (Half)</option>
+                  <option value="Gran Formato 4x5">Gran Formato 4x5</option>
+                  <option value="110 / APS">110 / APS</option>
+                </select>
+              </label>
+              <label class="exif-field">
+                <span>Revelador / Proceso</span>
+                <input type="text" id="exifDevProcess" list="dlDevProcesses" placeholder="C-41 / D-76 1+1">
+              </label>
+            </div>
+            <div class="exif-grid-2">
+              <label class="exif-field">
+                <span>Escáner / Captura</span>
+                <input type="text" id="exifScanner" list="dlScanners" placeholder="Frontier / Cámara Macro">
+              </label>
+              <label class="exif-field">
+                <span>Fotógrafo / Autor</span>
+                <input type="text" id="exifPhotographer" placeholder="Nombre o estudio">
+              </label>
+            </div>
+            <label class="exif-field">
+              <span>Notas de cuarto oscuro</span>
+              <input type="text" id="exifNotes" placeholder="Push +1, filtro amarillo…">
+            </label>
+            <div class="exif-actions-row">
+              <button type="button" class="btn btn-outline btn-xs" id="btnCopyAnalogCaption" title="Copiar pie de foto técnico al portapapeles">
+                Copiar pie técnico
+              </button>
+              <button type="button" class="btn btn-ghost btn-xs" id="btnClearAnalogExif">
+                Limpiar ficha
+              </button>
+            </div>
+          </div>
+        </details>
+
+        <!-- Autocomplete Datalists for Analog Cameras, Lenses, Films & Chemistry -->
+        <datalist id="dlCameraMakes">
+          <option value="Leica"></option>
+          <option value="Nikon"></option>
+          <option value="Canon"></option>
+          <option value="Olympus"></option>
+          <option value="Pentax"></option>
+          <option value="Hasselblad"></option>
+          <option value="Mamiya"></option>
+          <option value="Contax"></option>
+          <option value="Minolta"></option>
+          <option value="Rolleiflex"></option>
+        </datalist>
+        <datalist id="dlCameraModels">
+          <option value="Leica M6"></option>
+          <option value="Nikon FM2n"></option>
+          <option value="Nikon F3HP"></option>
+          <option value="Canon AE-1 Program"></option>
+          <option value="Olympus OM-1n"></option>
+          <option value="Pentax K1000"></option>
+          <option value="Pentax 67II"></option>
+          <option value="Hasselblad 500C/M"></option>
+          <option value="Mamiya RB67 Pro-S"></option>
+          <option value="Contax T2"></option>
+        </datalist>
+        <datalist id="dlLenses">
+          <option value="35mm f/2 Summicron"></option>
+          <option value="50mm f/1.4 Nikkor AI-S"></option>
+          <option value="50mm f/1.4 FD SSC"></option>
+          <option value="80mm f/2.8 Planar T*"></option>
+          <option value="105mm f/2.4 Takumar"></option>
+          <option value="28mm f/2.8 Zuiko"></option>
+        </datalist>
+        <datalist id="dlFilmStocks">
+          <option value="Kodak Portra 400"></option>
+          <option value="Kodak Portra 160"></option>
+          <option value="Kodak Gold 200"></option>
+          <option value="Kodak Ultramax 400"></option>
+          <option value="Kodak Tri-X 400"></option>
+          <option value="Cinestill 800T"></option>
+          <option value="Ilford HP5 Plus 400"></option>
+          <option value="Ilford Delta 100"></option>
+          <option value="Fujifilm Superia X-TRA 400"></option>
+          <option value="Fomapan 200 Creative"></option>
+        </datalist>
+        <datalist id="dlDevProcesses">
+          <option value="C-41 Estándar"></option>
+          <option value="ECN-2 Cine"></option>
+          <option value="Kodak D-76 (1+1)"></option>
+          <option value="Kodak HC-110 Dil. B"></option>
+          <option value="Rodinal (1+50)"></option>
+          <option value="Ilford Ilfosol 3"></option>
+          <option value="Kodak XTOL"></option>
+        </datalist>
+        <datalist id="dlScanners">
+          <option value="Fuji Frontier SP-3000"></option>
+          <option value="Noritsu HS-1800"></option>
+          <option value="Cámara Digital RAW + Lente Macro"></option>
+          <option value="Epson Perfection V850 Pro"></option>
+          <option value="Plustek OpticFilm 8200i"></option>
+          <option value="Nikon Coolscan V ED"></option>
+        </datalist>
+      </div>
+
+      <!-- Output Format & Archive Footer -->
+      <div class="inspector-footer">
+        <div class="format-row">
+          <span class="format-label">Formato maestro</span>
+          <div class="format-pills" id="outputFormatPills" role="radiogroup" aria-label="Formato de archivo de exportación">
+            <button class="fmt-pill active" data-format="jpg" title="JPEG 96% sin submuestreo cromático (4:4:4) con EXIF analógico">JPG 4:4:4</button>
+            <button class="fmt-pill" data-format="png" title="PNG sin pérdida con metadatos EXIF">PNG</button>
+            <button class="fmt-pill" data-format="tiff" title="TIFF Maestro de 16 bits por canal (48-bit RGB) sin pérdida con EXIF analógico">TIFF 16b</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-block btn-xs" id="openFolderBtn">
+          Abrir carpeta interna de revelados en Finder
+        </button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Modal: Batch Roll Development Result -->
+  <div class="modal-backdrop" id="resultModal" role="dialog" aria-modal="true" aria-labelledby="resultModalTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="resultModalTitle">Rollo revelado a resolución nativa</h3>
+        <button class="modal-close" id="closeModalBtn" aria-label="Cerrar ventana">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modalSummary">Se procesaron todos los fotogramas preservando el archivo original intacto.</p>
+        <div class="modal-actions">
+          <button class="btn btn-primary btn-lg" id="modalSaveZipBtn">
+            Guardar archivo ZIP en Descargas y mostrar en Finder
+          </button>
+          <button class="btn btn-secondary btn-lg" id="modalOpenRollBtn">
+            Abrir carpeta con copias y hoja de contactos
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Non-Destructive History & Recipe Restoration -->
+  <div class="modal-backdrop" id="historyModal" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3 id="historyModalTitle">Historial de versiones y recetas</h3>
+        <button class="modal-close" id="closeHistoryBtn" aria-label="Cerrar historial">&times;</button>
+      </div>
+      <div class="modal-body modal-body-left">
+        <p class="helper-copy" id="historyHelperCopy">
+          Tus archivos RAW y negativos originales jamás se modifican. Puedes localizar cualquier copia en Finder o restaurar su receta exacta en el laboratorio:
+        </p>
+        <div class="history-list" id="historyList">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Keyboard Shortcuts -->
+  <div class="modal-backdrop" id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="shortcutsModalTitle">Atajos de laboratorio</h3>
+        <button class="modal-close" id="closeShortcutsBtn" aria-label="Cerrar atajos">&times;</button>
+      </div>
+      <div class="modal-body modal-body-left">
+        <div class="shortcuts-grid">
+          <div class="shortcut-row"><span>Guardar en Descargas</span><kbd id="kbdSave">⌘ S</kbd></div>
+          <div class="shortcut-row"><span>Guardar como…</span><kbd id="kbdSaveAs">⇧ ⌘ S</kbd></div>
+          <div class="shortcut-row"><span>Importar fotografía o escaneo</span><kbd id="kbdOpen">⌘ O</kbd></div>
+          <div class="shortcut-row"><span>Comparar original (mantener)</span><kbd>\</kbd></div>
+          <div class="shortcut-row"><span>Vista Dividida / Revelada / Contactos</span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></div>
+          <div class="shortcut-row"><span>Rotar fotograma 90°</span><kbd>R</kbd></div>
+          <div class="shortcut-row"><span>Espejo horizontal de emulsión</span><kbd>F</kbd></div>
+          <div class="shortcut-row"><span>Cuentagotas de soporte base (D-min)</span><kbd>I</kbd></div>
+          <div class="shortcut-row"><span>Cuentagotas de gris neutro en positivo</span><kbd>W</kbd></div>
+          <div class="shortcut-row"><span>Copiar / Pegar receta óptica</span><kbd id="kbdCopyPaste">⇧ ⌘ C / V</kbd></div>
+          <div class="shortcut-row"><span>Encajar zoom en mesa de luz</span><kbd>0</kbd></div>
+          <div class="shortcut-row"><span>Luz roja de cuarto oscuro</span><kbd>L</kbd></div>
+          <div class="shortcut-row"><span>Restablecer deslizador individual</span><kbd>Doble clic</kbd></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: About Haluro & Developer Credits -->
+  <div class="modal-backdrop" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <div class="about-title-row">
+          <div class="brand-mark brand-mark-sm" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+              <rect x="2" y="2" width="24" height="24" rx="6" fill="#1B1E23" stroke="#E59528" stroke-width="1.5"/>
+              <circle cx="14" cy="14" r="6.5" stroke="#ECEEF2" stroke-width="1.4"/>
+              <polygon points="14,9.5 18,14 14,18.5 10,14" fill="#E59528"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="aboutModalTitle">Haluro — Laboratorio Analógico Digital</h3>
+            <span class="about-version-badge">Versión 2.4.0 · Distribución Libre y Gratuita</span>
+          </div>
+        </div>
+        <button class="modal-close" id="closeAboutBtn" aria-label="Cerrar acerca de">&times;</button>
+      </div>
+      <div class="modal-body modal-body-left">
+        <!-- Developer Profile Card -->
+        <div class="about-card-hero">
+          <div class="about-dev-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
+          <div class="about-dev-info">
+            <div class="about-dev-name">César Fernández Ardiles</div>
+            <div class="about-dev-role">Fotógrafo y Desarrollador · Oregano · Chile</div>
+            <p class="about-dev-desc">
+              Diseñado desde la experiencia directa en cuarto oscuro y fotografía de película, Haluro combina la sensitometría clásica de haluros de plata con procesamiento digital de 16 bits para ofrecer emulación analógica y revelado de negativos con precisión de laboratorio.
+            </p>
+          </div>
+        </div>
+
+        <!-- Pillar highlights -->
+        <div class="about-pillars-grid">
+          <div class="about-pillar-item">
+            <div class="about-pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div>
+              <strong>100% No Destructivo</strong>
+              <p>Tus fotografías RAW, TIFF y JPG originales nunca se modifican ni sobrescriben.</p>
+            </div>
+          </div>
+          <div class="about-pillar-item">
+            <div class="about-pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div>
+              <strong>100% Privado y Local</strong>
+              <p>Opera exclusivamente en tu equipo (127.0.0.1). Cero telemetría, cero nube, cero rastreadores.</p>
+            </div>
+          </div>
+          <div class="about-pillar-item">
+            <div class="about-pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <div>
+              <strong>Calidad de Laboratorio</strong>
+              <p>72 películas químicas, Hurter-Driffield, virados B&N, Roll Analysis y exportación TIFF 16-bit real.</p>
+            </div>
+          </div>
+          <div class="about-pillar-item">
+            <div class="about-pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </div>
+            <div>
+              <strong>Ficha Analógica EXIF</strong>
+              <p>Inyección nativa de cámara, objetivo, película, ISO, revelador y escáner en metadatos estándar.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Licensing & Copyright Details -->
+        <div class="about-license-section">
+          <h4>Licencias de Software Libre y Atribución</h4>
+          <ul class="about-license-list">
+            <li><strong>Haluro Engine & UI:</strong> Código fuente abierto bajo licencia <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>. Copyright &copy; 2026 César Fernández Ardiles (Oregano, Chile).</li>
+            <li><strong>Colección de Simulación de Película (3D LUTs):</strong> Basada en los perfiles libres de Pat David (PIXLS.US), GREYC/G'MIC y RawTherapee, distribuidos bajo licencia <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.</li>
+            <li><strong>Tipografías Locales:</strong> Plus Jakarta Sans y JetBrains Mono bajo licencia <a href="https://openfontlicense.org" target="_blank" rel="noopener">SIL Open Font License 1.1</a> (alojadas 100% de manera autónoma y local).</li>
+            <li><strong>Motor RAW & Librerías:</strong> LibRaw / rawpy (LGPL 2.1 / CDDL 1.0 / MIT), Flask, Werkzeug, NumPy, SciPy y pywebview (BSD-3-Clause), Pillow (HPND / MIT-CMU).</li>
+          </ul>
+        </div>
+
+        <!-- Nominative trademark notice -->
+        <div class="about-trademark-box">
+          <small>
+            <strong>Aviso de marcas:</strong> Kodak, Fujifilm, Ilford, Agfa, CineStill, Rollei, Lomography, Polaroid, Noritsu, Frontier, Foma y demás marcas registradas se mencionan exclusivamente con fines descriptivos (nominative fair use) para señalar los materiales analógicos que el software modela. Haluro no tiene afiliación ni respaldo comercial por parte de dichas marcas.
+          </small>
+        </div>
+      </div>
+      <div class="modal-footer about-modal-footer">
+        <span class="about-footer-status"><span class="status-dot status-ok"></span> Listo para producción</span>
+        <button class="btn btn-secondary btn-sm" id="btnCopyAboutInfo">Copiar ficha técnica</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Stack -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

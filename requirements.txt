@@ -1,0 +1,12 @@
+# Haluro v2.4.0 — Runtime Dependencies (macOS & Windows 11)
+# Seguridad: Pillow >= 13.0.0 corrige ~30 CVE/PYSEC detectados por pip-audit en 12.x.
+flask>=3.0.0,<4.0.0
+Pillow>=13.0.0,<14.0.0
+numpy>=1.26.0,<3.0.0
+scipy>=1.12.0,<2.0.0
+rawpy>=0.21.0,<1.0.0
+pywebview>=5.0.0,<7.0.0
+pythonnet>=3.0.3; sys_platform == 'win32'
+clr-loader>=0.2.6; sys_platform == 'win32'
+pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'
+pyobjc-framework-WebKit>=10.0; sys_platform == 'darwin'

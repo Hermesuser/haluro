@@ -1,0 +1,105 @@
+name: Build & Release Native Apps (macOS & Windows 11)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  quality-gate:
+    name: Quality Gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+
+      - name: Run dependency security audit (pip-audit)
+        run: pip-audit --progress-spinner off
+
+      - name: Run automated pytest suite
+        run: pytest -v
+
+      - name: Run native host smoke test
+        run: python native_app.py --smoke-test
+
+  build-macos:
+    name: Package macOS Native App (.dmg)
+    needs: quality-gate
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+
+      - name: Build Haluro.app & DMG
+        run: |
+          chmod +x packaging/macos/build_macos.sh
+          ./packaging/macos/build_macos.sh
+
+      - name: Upload macOS DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Haluro-macOS-AppleSilicon
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS-macOS.txt
+
+  build-windows11:
+    name: Package Windows 11 Native Installer (.exe & .zip)
+    needs: quality-gate
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 (x64)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: "x64"
+          cache: "pip"
+
+      - name: Build Windows 11 Executable, Portable ZIP & Inno Setup Installer
+        shell: pwsh
+        run: ./packaging/windows/build_windows11.ps1 -SkipTests
+
+      - name: Upload Windows 11 Installer & Portable artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Haluro-Windows11-x64
+          path: |
+            dist/Haluro-Setup-*.exe
+            dist/Haluro-Portable-*.zip
+            dist/SHA256SUMS-Windows11.txt

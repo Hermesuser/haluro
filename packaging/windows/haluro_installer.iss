@@ -1,0 +1,98 @@
+; =============================================================================
+; Haluro — Laboratorio Analógico Digital (v2.4.0)
+; Inno Setup 6 Installer Script for Windows 11 (x64 / ARM64 compatible)
+; =============================================================================
+
+#define MyAppName "Haluro"
+#define MyAppFullName "Haluro — Laboratorio Analógico Digital"
+#define MyAppVersion "2.4.0"
+#define MyAppPublisher "César Fernández Ardiles (Oregano, Chile)"
+#define MyAppExeName "Haluro.exe"
+#define RepoRoot "..\.."
+
+[Setup]
+AppId={{8E92D4C1-5F3B-4A72-9C1E-42F7A180D210}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppVerName={#MyAppFullName} {#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+DisableProgramGroupPage=yes
+; Per-user install by default (zero UAC friction), with optional Admin override
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=10.0.19041
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+SetupIconFile={#RepoRoot}\assets\haluro.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayName={#MyAppFullName}
+OutputDir={#RepoRoot}\dist
+OutputBaseFilename=Haluro-Setup-{#MyAppVersion}-Win11-x64
+
+[Languages]
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Files]
+Source: "{#RepoRoot}\dist\Haluro\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Comment: "{#MyAppFullName}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "{#MyAppFullName}"
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function HasWebView2Runtime(): Boolean;
+var
+  Version: String;
+begin
+  { Microsoft Edge WebView2 Client ID — pre-installed on all Windows 11 builds }
+  Result :=
+    RegQueryStringValue(
+      HKLM,
+      'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv',
+      Version
+    ) or
+    RegQueryStringValue(
+      HKLM,
+      'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv',
+      Version
+    ) or
+    RegQueryStringValue(
+      HKCU,
+      'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv',
+      Version
+    );
+end;
+
+function InitializeSetup(): Boolean;
+var
+  ErrorCode: Integer;
+begin
+  Result := True;
+  if not HasWebView2Runtime() then
+  begin
+    if MsgBox(
+      'Haluro utiliza el motor nativo Microsoft Edge WebView2 (incluido de serie en Windows 11).' + #13#10 + #13#10 +
+      'No se detectó WebView2 en este equipo. ¿Deseas abrir la página oficial de Microsoft para instalarlo antes de continuar?',
+      mbConfirmation,
+      MB_YESNO
+    ) = IDYES then
+    begin
+      ShellExec('open', 'https://go.microsoft.com/fwlink/p/?LinkId=2124703', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+    end;
+  end;
+end;
