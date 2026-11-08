@@ -91,6 +91,9 @@ jobs:
           architecture: "x64"
           cache: "pip"
 
+      - name: Install Inno Setup 6 (Compiler)
+        run: choco install innosetup --no-progress
+
       - name: Build Windows 11 Executable, Portable ZIP & Inno Setup Installer
         shell: pwsh
         run: ./packaging/windows/build_windows11.ps1 -SkipTests
