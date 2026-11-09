@@ -38,6 +38,11 @@
 1. **Emulación Analógica Auténtica:** Simulación espectral de **72 películas químicas clásicas** (Kodak Portra, Tri-X, Ektachrome, Fuji Velvia, Provia, Neopan, Ilford HP5+, Delta, CineStill 800T, etc.) mediante matrices de interpolación tetraédrica 3D LUT, grano volumétrico no repetitivo, halo rojo de capa antihalo y viñeteo óptico.
 2. **Revelado Digital de Negativos:** Inversión sensitométrica basada en el modelo **Hurter–Driffield (H&D)** para negativos color (C-41) y blanco y negro digitalizados mediante escáner plano, escáner dedicado de película o cámara digital con fuente de luz LED. Elimina matemáticamente la máscara naranja (D-min), desacopla el balance de blancos de la escena y emula la respuesta tonal de papeles fotográficos tradicionales (**Fuji Crystal Archive RA-4**, **Kodak Vision 2383 ECP** de cine, Minilabs **Noritsu / Frontier** y perfil logarítmico **V-Log**).
 
+<img width="1507" height="892" alt="image" src="https://github.com/user-attachments/assets/799a98b0-341f-42d2-a1ae-2a63a6a0799f" />
+
+
+<img width="1512" height="889" alt="image" src="https://github.com/user-attachments/assets/574916ec-7748-4fe2-b841-cbb806056818" />
+
 ---
 
 ## Filosofía de Diseño y Calidad
