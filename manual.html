@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Haluro 2.4.0 — Manual de Usuario y Guía de Cuarto Oscuro</title>
+  <style>
+    :root {
+      --bg: #121316;
+      --bg-card: #1a1c22;
+      --bg-card-hover: #22252d;
+      --border: #2e323d;
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.2);
+      --accent-secondary: #06b6d4;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --code-bg: #090a0c;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header & Hero */
+    header.hero {
+      background: linear-gradient(180deg, #1f232d 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 3rem 1.5rem 2.5rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .badge-tag {
+      display: inline-block;
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    h1.hero-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    p.hero-sub {
+      color: var(--text-muted);
+      font-size: 1.15rem;
+      max-width: 680px;
+      margin: 0 auto 1.5rem;
+    }
+
+    .meta-bar {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      font-size: 0.9rem;
+      color: var(--text-dim);
+    }
+
+    /* Navigation Bar */
+    nav.nav-bar {
+      position: sticky;
+      top: 0;
+      background: rgba(18, 19, 22, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    nav.nav-bar a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    nav.nav-bar a:hover {
+      color: #fff;
+      background: var(--bg-card);
+    }
+
+    .btn-print {
+      background: var(--accent);
+      color: #000 !important;
+      font-weight: 600 !important;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-print:hover {
+      background: #d97706 !important;
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 5rem;
+    }
+
+    /* Section Styles */
+    section {
+      margin-bottom: 4rem;
+      scroll-margin-top: 5rem;
+    }
+
+    h2.section-heading {
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2.section-heading .num {
+      background: var(--bg-card);
+      color: var(--accent);
+      font-size: 1rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    h3 {
+      font-size: 1.3rem;
+      color: #e5e7eb;
+      margin: 1.8rem 0 0.75rem;
+    }
+
+    p {
+      margin-bottom: 1.1rem;
+      color: #d1d5db;
+    }
+
+    /* Image Containers */
+    .figure-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin: 1.75rem 0;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+
+    .figure-card img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .figure-caption {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.25);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Cards & Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+      margin: 1.5rem 0;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover {
+      border-color: #4b5563;
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Workflow Steps */
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+
+    .step-num {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #000;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-body h4 {
+      font-size: 1.1rem;
+      color: #fff;
+      margin-bottom: 0.35rem;
+    }
+
+    .step-body p {
+      margin-bottom: 0;
+      font-size: 0.95rem;
+    }
+
+    /* Callouts / Alerts */
+    .callout {
+      background: rgba(245, 158, 11, 0.08);
+      border-left: 4px solid var(--accent);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+      color: #fde68a;
+    }
+
+    .callout.info {
+      background: rgba(6, 182, 212, 0.08);
+      border-left-color: var(--accent-secondary);
+      color: #cffafe;
+    }
+
+    .callout-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 0.95rem;
+    }
+
+    th {
+      background: #15171d;
+      color: #fff;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:not(:last-child) td {
+      border-bottom: 1px solid var(--border);
+    }
+
+    kbd {
+      background: #262933;
+      border: 1px solid #434958;
+      border-radius: 4px;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+      color: #e5e7eb;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      padding: 2px 6px;
+      display: inline-block;
+      white-space: nowrap;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+
+    /* Print Stylesheet */
+    @media print {
+      body {
+        background: #fff !important;
+        color: #111 !important;
+        font-size: 13pt;
+        line-height: 1.5;
+      }
+      nav.nav-bar, .btn-print {
+        display: none !important;
+      }
+      header.hero {
+        background: none !important;
+        border-bottom: 2px solid #000;
+        padding: 1.5rem 0;
+      }
+      h1.hero-title {
+        color: #000 !important;
+        font-size: 2rem;
+      }
+      p.hero-sub, .meta-bar, p {
+        color: #333 !important;
+      }
+      h2.section-heading {
+        color: #000 !important;
+        border-bottom: 1px solid #ccc;
+        page-break-before: always;
+      }
+      .figure-card {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        page-break-inside: avoid;
+      }
+      .card {
+        background: #fafafa !important;
+        border: 1px solid #ddd !important;
+        color: #111 !important;
+      }
+      .card-title, h3 {
+        color: #000 !important;
+      }
+      .callout {
+        background: #fdfaf0 !important;
+        border-left: 4px solid #d97706 !important;
+        color: #451a03 !important;
+      }
+      kbd {
+        background: #eee !important;
+        border: 1px solid #ccc !important;
+        color: #000 !important;
+      }
+      table, th, td {
+        border-color: #ddd !important;
+        color: #111 !important;
+      }
+      th {
+        background: #f0f0f0 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="hero">
+    <span class="badge-tag">Manual Oficial 2.4.0</span>
+    <h1 class="hero-title">Haluro — Laboratorio Analógico Digital</h1>
+    <p class="hero-sub">Guía maestra de inversión fotoquímica, neutralización de soporte base (D-min), ampliadora dicroica CMY y catálogo de 72 emulsiones clásicas.</p>
+    <div class="meta-bar">
+      <span>Edición: Noviembre 2026</span>
+      <span>•</span>
+      <span>Autor: César Fernández Ardiles</span>
+      <span>•</span>
+      <span>Plataformas: macOS & Windows 11</span>
+    </div>
+  </header>
+
+  <nav class="nav-bar">
+    <a href="#instalacion">1. Instalación</a>
+    <a href="#interfaz">2. Interfaz y Mesa</a>
+    <a href="#modo-negativo">3. Inversión y D-min</a>
+    <a href="#ampliadora-cmy">4. Ampliadora CMY</a>
+    <a href="#catalogo">5. 72 Emulsiones</a>
+    <a href="#optica-grano">6. Grano y Halación</a>
+    <a href="#exif-export">7. EXIF y Export</a>
+    <a href="#faq">8. FAQ</a>
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  </nav>
+
+  <div class="container">
+
+    <!-- 1. INSTALACIÓN -->
+    <section id="instalacion">
+      <h2 class="section-heading"><span class="num">01</span> Requisitos e Instalación</h2>
+      <p>Haluro se distribuye como una aplicación nativa optimizada tanto para computadores Apple como para estaciones de trabajo con Windows 11.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">🍎 macOS (Apple Silicon e Intel)</div>
+          <p>Dispones de dos archivos instaladores optimizados:</p>
+          <ul style="padding-left: 1.25rem; margin-bottom: 1rem; color: #d1d5db; font-size: 0.95rem;">
+            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> <code>Haluro-2.4.0-macOS-arm64.dmg</code></li>
+            <li><strong>Intel (Core i5/i7/i9/Xeon):</strong> <code>Haluro-2.4.0-macOS-x86_64.dmg</code></li>
+          </ul>
+          <p style="font-size: 0.9rem; color: var(--text-muted);">Monta el DMG y arrastra Haluro a tu carpeta <strong>Aplicaciones</strong>.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🪟 Windows 11 (64-bit)</div>
+          <p>Instalador oficial disponible:</p>
+          <ul style="padding-left: 1.25rem; margin-bottom: 1rem; color: #d1d5db; font-size: 0.95rem;">
+            <li><strong>Instalador Setup:</strong> <code>Haluro-Setup-2.4.0-Win11-x64.exe</code></li>
+            <li><strong>Edición Portátil:</strong> <code>Haluro-Portable-2.4.0-Win11-x64.zip</code></li>
+          </ul>
+          <p style="font-size: 0.9rem; color: var(--text-muted);">Se integra automáticamente con Microsoft Edge WebView2 y el modo oscuro de Windows 11.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">⚠️ Aviso de Gatekeeper en macOS Sequoia (macOS 15) o Sonoma (macOS 14)</div>
+        <p>Al ser una aplicación independiente y artesanal sin suscripción corporativa de Apple, el sistema mostrará: <em>«Apple no pudo verificar que Haluro no contenga software malicioso»</em>. <strong>Para autorizarla por única vez:</strong></p>
+        <ol style="padding-left: 1.25rem; margin-top: 0.5rem; font-size: 0.95rem;">
+          <li>Haz clic en <strong>«Listo»</strong> en la ventana de advertencia.</li>
+          <li>Abre <strong>Ajustes del Sistema () > Privacidad y seguridad</strong> y desciende hasta el apartado <strong>Seguridad</strong>.</li>
+          <li>Haz clic en el botón <strong>«Abrir de todos modos»</strong> e ingresa tu contraseña o Touch ID.</li>
+        </ol>
+        <p style="margin-top: 0.5rem; font-size: 0.88rem;"><em>Atajo por Terminal:</em> <code>xattr -cr /Applications/Haluro.app</code></p>
+      </div>
+    </section>
+
+    <!-- 2. INTERFAZ Y MESA DE LUZ -->
+    <section id="interfaz">
+      <h2 class="section-heading"><span class="num">02</span> Arquitectura de la Interfaz y Mesa de Luz</h2>
+      <p>La pantalla principal recrea una mesa de luz de laboratorio profesional con calibración de color neutro y fondo antideslumbrante.</p>
+
+      <div class="figure-card">
+        <img src="docs/images/01_mesa_de_luz.png" alt="Mesa de luz inicial de Haluro">
+        <div class="figure-caption">
+          <span>Figura 1:</span> Pantalla de bienvenida con zona de soltado (Drop Zone), selector de modos y acceso a muestras RAW de prueba.
+        </div>
+      </div>
+
+      <div class="steps-container">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Importar Fotogramas</h4>
+            <p>Arrastra uno o varios archivos RAW (<code>.CR2</code>, <code>.NEF</code>, <code>.ARW</code>, <code>.RAF</code>, <code>.DNG</code>) o imágenes ráster (<code>.TIFF</code> 16-bit, <code>.JPG</code>) directamente al centro de la mesa de luz. También puedes usar el atajo <kbd>⌘ + O</kbd> (<kbd>Ctrl + O</kbd> en Windows).</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Elegir el Modo de Revelado</h4>
+            <p><strong>Modo Negativo:</strong> Para rollos digitalizados en su estado virgen invertido (con máscara naranja o soporte de B&N).<br>
+            <strong>Modo Darkrooms:</strong> Para aplicar el catálogo de las 72 películas analógicas sobre positivos o fotografías digitales.</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>Inspección Densitométrica</h4>
+            <p>Pasa el puntero por cualquier región de la fotografía para leer los valores de luminancia y densidad RGB en el densitómetro flotante en tiempo real.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>Atajos de Teclado Universales</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Atajo (macOS)</th>
+            <th>Atajo (Windows)</th>
+            <th>Función en el Laboratorio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><kbd>⌘ + O</kbd></td>
+            <td><kbd>Ctrl + O</kbd></td>
+            <td>Abrir explorador para cargar negativos o positivos</td>
+          </tr>
+          <tr>
+            <td><kbd>I</kbd></td>
+            <td><kbd>I</kbd></td>
+            <td>Activar cuentagotas para muestreo de soporte base D-min</td>
+          </tr>
+          <tr>
+            <td><kbd>\</kbd></td>
+            <td><kbd>\</kbd></td>
+            <td>Alternar vista comparativa en vivo (Antes / Después)</td>
+          </tr>
+          <tr>
+            <td><kbd>Espacio + Arrastrar</kbd></td>
+            <td><kbd>Espacio + Arrastrar</kbd></td>
+            <td>Moverse (Pan) sobre la mesa de luz con aumento</td>
+          </tr>
+          <tr>
+            <td><kbd>⌘ + 0</kbd></td>
+            <td><kbd>Ctrl + 0</kbd></td>
+            <td>Ajustar fotografía completa a la pantalla</td>
+          </tr>
+          <tr>
+            <td><kbd>⌘ + 1</kbd></td>
+            <td><kbd>Ctrl + 1</kbd></td>
+            <td>Zoom al 100% (inspección de cristales de plata y grano)</td>
+          </tr>
+          <tr>
+            <td><kbd>⌘ + S</kbd></td>
+            <td><kbd>Ctrl + S</kbd></td>
+            <td>Exportar copia positiva de alta resolución</td>
+          </tr>
+          <tr>
+            <td><kbd>R</kbd></td>
+            <td><kbd>R</kbd></td>
+            <td>Girar fotograma 90° en sentido horario</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 3. MODO NEGATIVO Y D-MIN -->
+    <section id="modo-negativo">
+      <h2 class="section-heading"><span class="num">03</span> Laboratorio de Inversión de Negativos y Soporte D-min</h2>
+      <p>A diferencia de los editores genéricos que simplemente aplican una curva invertida en X, Haluro modela la física de transmisión lumínica del acetato y la reducción fotoquímica.</p>
+
+      <div class="figure-card">
+        <img src="docs/images/03_modo_negativo_inversion.png" alt="Inversión y calibración en Modo Negativo">
+        <div class="figure-caption">
+          <span>Figura 2:</span> Modo Negativo: calibración de captura, muestreo de soporte D-min y perfiles de escáner.
+        </div>
+      </div>
+
+      <h3>El Secreto de la Densidad Mínima (D-min)</h3>
+      <p>En toda película color (C-41), los acopladores cromógenos no expuestos forman una máscara naranja que bloquea longitudes de onda azules. El paso más importante para lograr colores fieles es muestrear este soporte virgen:</p>
+      
+      <div class="steps-container">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Activar Cuentagotas D-min (<kbd>Tecla I</kbd>)</h4>
+            <p>Pulsa la tecla <kbd>I</kbd> o haz clic en el icono del cuentagotas en el panel izquierdo (<strong>Soporte base y rollo</strong>).</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Muestrear el Borde de la Película</h4>
+            <p>Haz clic en el reborde virgen perforado o en la franja negra sin exponer entre fotogramas. Haluro deducirá la absorción exacta del sustrato y normalizará el histograma en 16 bits.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">🔬 Fuji Frontier SP-3000</div>
+          <p>Emula el legendario escáner japonés de laboratorio Minilab. Tonos de piel luminosos, sombras apasteladas, verdes orgánicos y una transición muy gradual en altas luces. <em>Ideal para retrato y bodas.</em></p>
+        </div>
+        <div class="card">
+          <div class="card-title">⚡ Noritsu HS-1800</div>
+          <p>Emula el escáner de alta producción Noritsu. Mayor contraste en la zona recta de la curva, negros densos y profundos, y máxima acutancia óptica. <em>Ideal para paisaje y calle.</em></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. AMPLIADORA CMY -->
+    <section id="ampliadora-cmy">
+      <h2 class="section-heading"><span class="num">04</span> Cabezal Dicroico CMY y Curvas Tonales</h2>
+      <p>El panel derecho recrea los mandos de filtración de una ampliadora clásica de color para equilibrar el positivado.</p>
+
+      <div class="figure-card">
+        <img src="docs/images/04_ampliadora_cmy_controles.png" alt="Controles de Ampliadora CMY y Curva Tonal">
+        <div class="figure-caption">
+          <span>Figura 3:</span> Ampliadora dicroica CMY, balance de 3 vías (sombras, medios tonos, luces) y corrección de gamma.
+        </div>
+      </div>
+
+      <h3>Filtrado por Sustracción de Color</h3>
+      <p>Modifica las densidades cromáticas con precisión de laboratorista:</p>
+      <ul style="padding-left: 1.5rem; margin-bottom: 1.25rem; color: #d1d5db;">
+        <li><strong>Filtro Cian (C):</strong> Calibra la dominancia de rojos en las sombras y tonos medios.</li>
+        <li><strong>Filtro Magenta (M):</strong> Modula el equilibrio entre verde y magenta (clave para afinar tonos de piel).</li>
+        <li><strong>Filtro Amarillo (Y):</strong> Controla la temperatura analógica (calidez vs. frialdad del papel).</li>
+      </ul>
+
+      <div class="callout info">
+        <div class="callout-title">💡 Balance de 3 Vías</div>
+        <p>Aísla la corrección cromática por zonas de luminancia: limpia el color de las sombras oscuras sin descalibrar el cielo o los tonos de piel en los medios tonos.</p>
+      </div>
+    </section>
+
+    <!-- 5. CATÁLOGO DE PELÍCULAS -->
+    <section id="catalogo">
+      <h2 class="section-heading"><span class="num">05</span> Catálogo de 72 Emulsiones Clásicas</h2>
+      <p>En el <strong>Modo Darkrooms</strong>, Haluro pone a tu disposición un catálogo de 72 emulsiones icónicas con sus curvas características sensitométricas (pie, zona recta y hombro).</p>
+
+      <div class="figure-card">
+        <img src="docs/images/06_catalogo_peliculas_cinestill.png" alt="Catálogo de emulsiones con CineStill 800T">
+        <div class="figure-caption">
+          <span>Figura 4:</span> Catálogo interactivo de emulsiones con selector de familias y vista previa de CineStill 800T.
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">🎞️ Negativos Color (C-41)</div>
+          <p><strong>Kodak Portra 160 / 400 / 800:</strong> Máxima fidelidad en tonos de piel y transiciones suaves.<br>
+          <strong>Kodak Ektar 100:</strong> Grano ultrafino y colores vivos e intensos.<br>
+          <strong>Kodak Gold 200 & ColorPlus:</strong> Tonos cálidos y nostálgicos de época.<br>
+          <strong>Fujicolor Pro 400H:</strong> Sombras cian y altas luces delicadas.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🎬 Cine y Tungsteno (ECN-2)</div>
+          <p><strong>CineStill 800T:</strong> La emulsión cinematográfica nocturna por excelencia, con halación roja en faroles y luces artificiales.<br>
+          <strong>CineStill 50D:</strong> Grano imperceptible para luz de día.<br>
+          <strong>Kodak Vision3 250D / 500T:</strong> La base del cine moderno.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📷 Blanco y Negro Clásico</div>
+          <p><strong>Kodak Tri-X 400:</strong> Contraste rudo, negros profundos y textura de fotoperiodismo.<br>
+          <strong>Ilford HP5 Plus:</strong> Sombras abiertas y flexibilidad tonal.<br>
+          <strong>Ilford FP4 Plus 125:</strong> Detalle fino para estudio y naturaleza.<br>
+          <strong>Fomapan 100 / 400:</strong> Plata clásica de tradición centroeuropea.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💎 Grano Tabular y Diapositivas</div>
+          <p><strong>Kodak T-Max 100 / 400:</strong> Cristales planos T-Grain sin grano invasivo.<br>
+          <strong>Ilford Delta 100 / 400 / 3200:</strong> Resolución geométrica estricta.<br>
+          <strong>Fuji Velvia 50:</strong> Saturación legendaria para paisajes.<br>
+          <strong>Kodachrome 64:</strong> La paleta legendaria de National Geographic.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. GRANO, HALACIÓN Y ÓPTICA -->
+    <section id="optica-grano">
+      <h2 class="section-heading"><span class="num">06</span> Efectos Fotoquímicos: Grano, Halación y Virados</h2>
+      <p>Cada efecto fotoquímico en Haluro se genera a partir de modelos físicos del comportamiento de la luz y la plata coloidal.</p>
+
+      <div class="figure-card">
+        <img src="docs/images/05_optica_grano_exif.png" alt="Filtros Ópticos y Textura Fotoquímica">
+        <div class="figure-caption">
+          <span>Figura 5:</span> Ajustes de grano orgánico, halación analógica, virados químicos de papel y metadatos EXIF.
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">🔴 Halación Analógica</div>
+          <p>Modela el rebote interno de fotones contra la base de película cuando falta la capa antihalo (como en CineStill). Genera un halo rojizo difuso en bombillas, faroles y reflejos solares.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🧂 Grano de Haluro de Plata</div>
+          <p>Elige entre cristales <strong>Cúbicos</strong> (textura orgánica y tridimensional) o cristales planos <strong>Tabulares T-Grain</strong> (textura moderna y microscópica). Modula intensidad, tamaño y acutancia.</p>
+        </div>
+      </div>
+
+      <h3>Virados Químicos para Blanco y Negro</h3>
+      <ul style="padding-left: 1.5rem; color: #d1d5db;">
+        <li><strong>Virado al Selenio:</strong> Profundiza los negros (D-max) y enfría sutilmente los medios tonos. Tradicional para copias de museo.</li>
+        <li><strong>Virado al Sepia:</strong> Transforma la plata metálica en sulfuro de plata, otorgando una calidez clásica.</li>
+        <li><strong>Cianotipia (Azul Prusia):</strong> Tiñe sombras y medios tonos con el azul clásico de la solución ferrosa.</li>
+        <li><strong>Virado al Oro:</strong> Tono cálido rojizo con máxima protección contra el deterioro temporal.</li>
+      </ul>
+    </section>
+
+    <!-- 7. METADATOS EXIF Y EXPORTACIÓN -->
+    <section id="exif-export">
+      <h2 class="section-heading"><span class="num">07</span> Metadatos Analógicos (Analog EXIF) y Exportación</h2>
+      <p>Conserva la memoria histórica de tus rollos incrustando los datos de la toma analógica directamente en el archivo digital.</p>
+
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-title">📝 Campos de Analog EXIF</div>
+        <div class="grid-2" style="margin: 0.5rem 0 0;">
+          <div>
+            <p style="margin-bottom: 0.25rem;"><strong>Cámara Clásica:</strong> Leica M6, Pentax 67, Canon AE-1...</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Lente Analógico:</strong> Carl Zeiss Planar 80mm f/2.8...</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Emulsión:</strong> Kodak Portra 400...</p>
+          </div>
+          <div>
+            <p style="margin-bottom: 0.25rem;"><strong>Rollo / Fotograma:</strong> Rollo #04 - Frame 12</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Revelado / Químico:</strong> D-76 1+1 @ 20°C (10m 30s)</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Fecha de Toma:</strong> Fecha original de exposición</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">🗂️ Exportar en TIFF de 16 Bits</div>
+          <p>Sin compresión con pérdidas y con la máxima profundidad de color de 16 bits por canal. Es el formato recomendado para impresión de bellas artes, archivo patrimonial o retoque posterior en Photoshop.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">📱 Exportar en JPEG (Calidad 100%)</div>
+          <p>Genera un archivo con perfil sRGB calibrado para que los colores se vean exactamente iguales en pantallas Retina, teléfonos inteligentes y plataformas como Instagram o 500px.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. FAQ -->
+    <section id="faq">
+      <h2 class="section-heading"><span class="num">08</span> Preguntas Frecuentes y Diagnóstico</h2>
+      
+      <div class="card" style="margin-bottom: 1rem;">
+        <div class="card-title">❓ ¿Cómo proceso un rollo completo de 36 fotos con los mismos ajustes?</div>
+        <p>Ajusta el primer fotograma (muestreo D-min y cabezal dicroico), haz clic en <strong>«Guardar Ajustes de Rollo»</strong> en el panel izquierdo y luego arrastra el resto de fotos a la mesa de luz. Pulsa <strong>«Aplicar por Lote y Exportar»</strong> para procesar todo el carrete en segundo plano.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <div class="card-title">❓ Mi foto no tiene borde con película virgen visible para el D-min. ¿Qué hago?</div>
+        <p>En el panel derecho, pulsa el botón <strong>«Equilibrio de escena (Sin bordes)»</strong>. El algoritmo analizará la distribución de densidades de las sombras profundas para estimar matemáticamente el sustrato base sin necesidad del borde perforado.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">❓ ¿Puedo guardar mis combinaciones de película y grano favoritas?</div>
+        <p>Sí. En la parte superior del inspector derecho encontrarás el botón <strong>«Guardar Preset»</strong>. Puedes almacenar perfiles personalizados (por ejemplo, <em>«Mi Portra 400 + Frontier + Grano Fino»</em>) para reutilizarlos en un clic.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>
+    <p><strong>Haluro 2.4.0 — Laboratorio Analógico Digital</strong></p>
+    <p style="margin-top: 0.25rem;">Desarrollado para fotógrafos que aprecian la ciencia y el alma de la fotografía química.</p>
+  </footer>
+
+</body>
+</html>

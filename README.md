@@ -9,7 +9,8 @@
 
 > **Desarrollador y Autor:** Fotógrafo **César Fernández Ardiles**  
 > **Estudio / Origen:** Oregano · Chile  
-> **Propósito:** Software libre, gratuito y de código abierto para fotógrafos analógicos, laboratorios independientes y creadores visuales.
+> **Propósito:** Software libre, gratuito y de código abierto para fotógrafos analógicos, laboratorios independientes y creadores visuales.  
+> **Documentación Oficial:** 📖 [Manual de Uso y Guía de Cuarto Oscuro](MANUAL_DE_USO.md) · 🖨️ [Guía Web Interactiva e Imprimible](manual.html)
 
 ---
 
