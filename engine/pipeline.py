@@ -595,13 +595,18 @@ def apply_optical_sharpen(srgb_arr: np.ndarray, mode: str = "off", amount: float
     return np.clip(out, 0.0, 1.0)
 
 
-def apply_vignette(lin, strength=0.12):
-    """Simulates lens falloff."""
+def apply_vignette(lin, strength=1.0):
+    """Simulates authentic analog optical lens falloff with smoothstep radial feathering."""
+    if strength <= 0.001:
+        return lin
     h, w = lin.shape[:2]
     y = np.linspace(-1.0, 1.0, h, dtype=np.float32)[:, None]
     x = np.linspace(-1.0, 1.0, w, dtype=np.float32)[None, :]
-    r2 = (x * x + y * y) * 0.5
-    vig = np.clip(1.0 - strength * r2, 0.2, 1.0)[..., None]
+    r = np.sqrt(x * x + y * y) / np.sqrt(2.0)
+    falloff = np.clip((r - 0.25) / 0.75, 0.0, 1.0)
+    falloff_smooth = falloff * falloff * (3.0 - 2.0 * falloff)
+    max_attenuation = np.clip(0.55 * strength, 0.0, 0.85)
+    vig = (1.0 - max_attenuation * falloff_smooth)[..., None]
     return lin * vig
 
 
@@ -705,9 +710,8 @@ def develop_frame(
         lin = lin * (2.0 ** total_ev)
         
     # 2. Vignette
-    vig_amt = 0.12 * vignette_mult
-    if vig_amt > 0.001:
-        lin = apply_vignette(lin, strength=vig_amt)
+    if vignette_mult > 0.001:
+        lin = apply_vignette(lin, strength=vignette_mult)
         
     # 3. Halation
     hal_strength = film.get("halation", 0.0) * halation_mult

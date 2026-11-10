@@ -933,3 +933,25 @@ def test_macos_application_identity_and_about_panel():
         # Verify custom handler runs without deadlocks or errors
         app.orderFrontStandardAboutPanel_(None)
 
+
+def test_optical_vignette():
+    from engine.pipeline import apply_vignette
+    canvas = np.ones((100, 100, 3), dtype=np.float32)
+
+    # 0.0x: completely untouched
+    v0 = apply_vignette(canvas, strength=0.0)
+    assert np.allclose(v0, canvas)
+
+    # 1.0x: nominal analog falloff
+    v1 = apply_vignette(canvas, strength=1.0)
+    # Center pixel is unaffected
+    assert np.isclose(v1[50, 50, 0], 1.0)
+    # Corner pixel has authentic ~55% attenuation
+    assert 0.40 <= v1[0, 0, 0] <= 0.50
+
+    # 2.0x: strong vintage falloff
+    v2 = apply_vignette(canvas, strength=2.0)
+    assert np.isclose(v2[50, 50, 0], 1.0)
+    assert 0.10 <= v2[0, 0, 0] <= 0.20
+
+

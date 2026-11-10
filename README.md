@@ -2,7 +2,7 @@
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2011-blue.svg)](#requisitos-técnicos)
-[![Tests](https://img.shields.io/badge/Tests-25%20Passing-emerald.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-27%20Passing-emerald.svg)](tests/)
 [![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades-brightgreen.svg)](#seguridad-y-privacidad)
 [![Privacidad](https://img.shields.io/badge/Privacidad-100%25%20Local%20%26%20Offline-success.svg)](#seguridad-y-privacidad)
 [![Edición](https://img.shields.io/badge/Edición-100%25%20No%20Destructiva-blueviolet.svg)](#filosofía-de-diseño)
