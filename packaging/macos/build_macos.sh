@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Haluro v2.4.0 — Reproducible macOS Native App & DMG Build Pipeline
+# Haluro v2.4.1 — Reproducible macOS Native App & DMG Build Pipeline
 # =============================================================================
 set -euo pipefail
 
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
-VERSION="2.4.0"
+VERSION="2.4.1"
 
 if [[ -n "${PYTHON_BIN:-}" ]]; then
   : # Use user-specified PYTHON_BIN
