@@ -133,7 +133,13 @@
    - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.4.0-macOS-arm64.dmg`
    - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.4.0-macOS-x86_64.dmg`
 2. Haz doble clic sobre el archivo `.dmg` montado y arrastra el icono de **Haluro** hacia tu carpeta de **Aplicaciones**.
-3. Abre **Haluro** desde Launchpad, Spotlight o Finder. (Si macOS solicita confirmación de seguridad en el primer arranque, haz clic derecho sobre la app y selecciona *Abrir*).
+3. Abre **Haluro** desde Launchpad, Spotlight o tu carpeta de **Aplicaciones**.
+   > **Nota para el primer arranque en macOS Sequoia / Sonoma:**  
+   > Al ser una aplicación artesanal e independiente, Gatekeeper puede mostrar un cartel preventivo (*«Apple no pudo verificar que Haluro no contenga software malicioso»*). Para autorizarla por única vez:
+   > 1. Haz clic en **«Listo»** en el cuadro de diálogo.
+   > 2. Abre **Ajustes del Sistema  > Privacidad y seguridad** y baja hasta el apartado **Seguridad**.
+   > 3. Haz clic en el botón **«Abrir de todos modos»** y confirma con tu contraseña o Touch ID.  
+   > *(Alternativa rápida en Terminal: `xattr -cr /Applications/Haluro.app`)*. A partir de ese momento abrirá de forma normal con doble clic.
 
 #### Opción 2: Ejecución desde código fuente
 ```bash
