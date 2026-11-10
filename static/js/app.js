@@ -1,5 +1,5 @@
 /**
- * Haluro — Laboratorio Analógico Digital (v2.4.2)
+ * Haluro — Laboratorio Analógico Digital (v2.4.3)
  * Precision frontend controller: 72-stock film simulation, C-41/B&W optical negative
  * inversion (RA-4, ECP 2383, Minilab, V-Log), B&W chemical toners & fine-art papers,
  * unified multi-frame Roll Analysis, 3-Way CMY split-toning, color-protected soft clip,
@@ -88,6 +88,7 @@ const state = {
   // Cache tracker so we don't re-request original base64 on every slider tick
   lastOriginalKey: "",
   lastRollResult: null,
+  contactSheetCache: null,
   copiedRecipe: null,
   analogMeta: loadAnalogExifStorage(),
   updateInfo: null,
@@ -2399,6 +2400,9 @@ function toggleSafelight() {
 
 async function saveDirectToDownloads() {
   if (state.frames.length === 0) return;
+  if (state.viewMode === "sheet") {
+    return saveContactSheetOnly(false);
+  }
   const activeFrame = state.frames[state.activeFrameIndex];
   const fmtUpper = state.outputFormat.toUpperCase();
 
@@ -2461,6 +2465,9 @@ async function saveDirectToDownloads() {
 
 async function saveAsWithDialog() {
   if (state.frames.length === 0) return;
+  if (state.viewMode === "sheet") {
+    return saveContactSheetOnly(true);
+  }
   const activeFrame = state.frames[state.activeFrameIndex];
   const stem = activeFrame.filename.replace(/\.[^/.]+$/, "");
   const ext = state.outputFormat === "tiff" ? ".tiff" : state.outputFormat === "png" ? ".png" : ".jpg";
@@ -2600,18 +2607,38 @@ async function developFullRoll() {
   }
 }
 
+function buildContactSheetSignature() {
+  const filenames = state.frames.map((f) => f.filename).join(",");
+  const recipes = JSON.stringify(buildPerFrameRecipesMap());
+  if (state.appMode === "negative") {
+    return `neg_${filenames}_${recipes}_${JSON.stringify(buildNegativePayload())}`;
+  } else {
+    return `pos_${filenames}_${recipes}_${state.selectedFilm}_${state.ev}_${state.halation}_${state.grain}_${state.vignette}_${state.date}_${state.rotate}_${state.flip_h}`;
+  }
+}
+
 async function generateContactSheetPreview() {
   if (state.frames.length === 0) return;
+  const sig = buildContactSheetSignature();
+  const sheetImg = document.getElementById("sheetPreview");
+
+  // Instant display from client-side cache if settings didn't change
+  if (state.contactSheetCache && state.contactSheetCache.signature === sig && state.contactSheetCache.url) {
+    if (sheetImg) {
+      sheetImg.src = state.contactSheetCache.url;
+    }
+    return;
+  }
+
   showLoading(true, "Componiendo hoja de contactos analógica…");
   try {
     const filenames = state.frames.map((f) => f.filename);
     const perFrameRecipes = buildPerFrameRecipesMap();
     const isNeg = state.appMode === "negative";
-    const endpoint = isNeg ? "/api/negative/develop_full" : "/api/develop_full";
+    const endpoint = isNeg ? "/api/negative/contact_sheet_preview" : "/api/contact_sheet_preview";
     const payload = isNeg
       ? {
           filenames,
-          sheet: true,
           roll_name: "PREVIEW_NEG",
           per_frame_recipes: perFrameRecipes,
           ...buildNegativePayload(),
@@ -2626,7 +2653,6 @@ async function generateContactSheetPreview() {
           date: state.date,
           rotate: state.rotate,
           flip_h: state.flip_h,
-          sheet: true,
           roll_name: "PREVIEW",
           per_frame_recipes: perFrameRecipes,
         };
@@ -2637,14 +2663,93 @@ async function generateContactSheetPreview() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (data.success && data.sheet) {
-      const sheetImg = document.getElementById("sheetPreview");
+    if (data.success && data.sheet_url) {
       if (sheetImg) {
-        sheetImg.src = `/api/image/${data.roll_folder}/SHEET.jpg?t=${Date.now()}`;
+        sheetImg.src = data.sheet_url;
       }
+      state.contactSheetCache = { signature: sig, url: data.sheet_url };
     }
   } catch (err) {
-    console.error("Contact sheet error:", err);
+    console.error("Contact sheet preview error:", err);
+    showToast("Error en contactos", err.message || "No se pudo componer la hoja.");
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function saveContactSheetOnly(withDialog = false) {
+  if (state.frames.length === 0) return;
+  const isNeg = state.appMode === "negative";
+  const rollName = isNeg ? "HALURO_NEG" : "HALURO_ROLL";
+  const defaultName = `Haluro_Contactos_${rollName}.jpg`;
+
+  try {
+    let chosenPath = null;
+    if (withDialog) {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_file_dialog) {
+        chosenPath = await window.pywebview.api.save_file_dialog(defaultName);
+      } else {
+        const dlgRes = await fetch("/api/choose_save_path", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ default_name: defaultName }),
+        });
+        const dlgData = await dlgRes.json();
+        if (dlgData.cancelled) return;
+        chosenPath = dlgData.chosen_path;
+      }
+      if (!chosenPath) return;
+    }
+
+    showLoading(true, "Generando y guardando hoja de contactos en alta resolución…");
+    const filenames = state.frames.map((f) => f.filename);
+    const perFrameRecipes = buildPerFrameRecipesMap();
+    const endpoint = isNeg ? "/api/negative/save_contact_sheet" : "/api/save_contact_sheet";
+    const payload = isNeg
+      ? {
+          filenames,
+          roll_name: rollName,
+          dest_path: chosenPath,
+          reveal: true,
+          per_frame_recipes: perFrameRecipes,
+          ...buildNegativePayload(),
+        }
+      : {
+          filenames,
+          film: state.selectedFilm,
+          ev: state.ev,
+          halation: state.halation,
+          grain: state.grain,
+          vignette: state.vignette,
+          date: state.date,
+          rotate: state.rotate,
+          flip_h: state.flip_h,
+          roll_name: rollName,
+          dest_path: chosenPath,
+          reveal: true,
+          per_frame_recipes: perFrameRecipes,
+        };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "No se pudo guardar la hoja de contactos");
+    }
+
+    const copy = getOsCopy();
+    showToast(
+      `Hoja de contactos guardada (${data.width}×${data.height})`,
+      `${copy.downloadsPrefix}${data.filename}`,
+      copy.revealCta,
+      () => revealFileInFinder(data.saved_path)
+    );
+  } catch (err) {
+    console.error("Save contact sheet error:", err);
+    showToast("Error al guardar contactos", err.message || "Operación interrumpida.");
   } finally {
     showLoading(false);
   }
@@ -2810,6 +2915,9 @@ function initUIListeners() {
 
   document.getElementById("saveDownloadsBtn")?.addEventListener("click", saveDirectToDownloads);
   document.getElementById("saveAsBtn")?.addEventListener("click", saveAsWithDialog);
+  document.getElementById("saveSheetBtn")?.addEventListener("click", () => saveContactSheetOnly(false));
+  document.getElementById("sheetQuickSaveBtn")?.addEventListener("click", () => saveContactSheetOnly(false));
+  document.getElementById("sheetSaveAsBtn")?.addEventListener("click", () => saveContactSheetOnly(true));
   document.getElementById("developFullBtn")?.addEventListener("click", developFullRoll);
 
   // Catalog search & category filter pills
@@ -3161,7 +3269,7 @@ function initUIListeners() {
   });
   document.getElementById("btnCopyAboutInfo")?.addEventListener("click", () => {
     const text =
-      "Haluro — Laboratorio Analógico Digital (v2.4.2)\n" +
+      "Haluro — Laboratorio Analógico Digital (v2.4.3)\n" +
       "Desarrollador: Fotógrafo César Fernández Ardiles (Oregano, Chile)\n" +
       "Licencia: MIT (Software libre y gratuito)\n" +
       "Emulación: 72 películas químicas + Inversión óptica C-41 / B&N\n" +

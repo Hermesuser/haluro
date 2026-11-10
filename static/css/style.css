@@ -1506,11 +1506,33 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Contact Sheet Overlay */
 .sheet-container {
+  position: relative;
   max-width: 96%;
   max-height: 96%;
   overflow: auto;
   border: 1px solid var(--hairline-rule);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8);
+}
+
+.sheet-floating-actions {
+  position: sticky;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(18, 20, 24, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  width: fit-content;
+  margin-left: auto;
+  margin-right: 12px;
+  margin-bottom: -46px;
 }
 
 .sheet-container img {

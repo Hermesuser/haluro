@@ -122,6 +122,9 @@
         <button class="btn btn-secondary btn-sm" id="saveAsBtn" title="Elegir carpeta y nombre con diálogo nativo de macOS (⇧⌘S)">
           Guardar como…
         </button>
+        <button class="btn btn-secondary btn-sm" id="saveSheetBtn" title="Guardar únicamente la hoja de contactos analógica en alta resolución">
+          Guardar contactos
+        </button>
         <button class="btn btn-outline btn-sm" id="developFullBtn" title="Revelar todos los fotogramas del rollo y crear hoja de contactos">
           Revelar rollo
         </button>
@@ -484,6 +487,19 @@
 
         <!-- Contact Sheet Container -->
         <div class="sheet-container" id="sheetContainer" style="display: none;">
+          <div class="sheet-floating-actions" id="sheetFloatingActions">
+            <button class="btn btn-primary btn-sm" id="sheetQuickSaveBtn" title="Guardar hoja de contactos en Descargas (JPG alta resolución)">
+              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Guardar hoja de contactos</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="sheetSaveAsBtn" title="Guardar hoja de contactos eligiendo carpeta y nombre">
+              Guardar como…
+            </button>
+          </div>
           <img id="sheetPreview" src="" alt="Hoja de contactos analógica">
         </div>
 
@@ -1119,7 +1135,7 @@
           </div>
           <div>
             <h3 id="aboutModalTitle">Haluro — Laboratorio Analógico Digital</h3>
-            <span class="about-version-badge">Versión 2.4.2 · Distribución Libre y Gratuita</span>
+            <span class="about-version-badge">Versión 2.4.3 · Distribución Libre y Gratuita</span>
           </div>
         </div>
         <button class="modal-close" id="closeAboutBtn" aria-label="Cerrar acerca de">&times;</button>
@@ -1146,7 +1162,7 @@
         <div class="about-update-card">
           <div class="about-update-info">
             <span class="about-update-title">Actualizaciones de software</span>
-            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.2 instalada</span>
+            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.3 instalada</span>
           </div>
           <button class="btn btn-secondary btn-sm" id="btnCheckUpdateManual">
             <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">

@@ -437,13 +437,13 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_api_health_and_security_headers(client) -> None:
-    assert __version__ == "2.4.2"
+    assert __version__ == "2.4.3"
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
-    assert body["version"] == "2.4.2"
+    assert body["version"] == "2.4.3"
     assert body["films_count"] == 72
     assert body["platform"] in {"macos", "windows", "linux"}
 
@@ -460,7 +460,7 @@ def test_api_about_manifest(client) -> None:
     assert resp.status_code == 200
     info = resp.get_json()
     assert info["app"] == "Haluro"
-    assert info["version"] == "2.4.2"
+    assert info["version"] == "2.4.3"
     assert info["license"] == "MIT"
     assert "César Fernández Ardiles" in info["developer"]["name"]
     assert "Chile" in info["developer"]["country"]
@@ -924,7 +924,7 @@ def test_macos_application_identity_and_about_panel():
 
         assert _MACOS_ABOUT_OPTIONS is not None
         assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
-        assert "2.4.2" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        assert "2.4.3" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
         credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
         assert "César Fernández Ardiles" in credits_str
         assert "Chile" in credits_str
@@ -1093,6 +1093,79 @@ def test_api_check_update_and_open_external(client):
         )
         assert bad_resp.status_code == 200
         assert bad_resp.get_json()["ok"] is False
+
+
+def test_contact_sheet_preview_and_save_film(client, tmp_path):
+    # 1. Test fast preview endpoint
+    resp = client.post(
+        "/api/contact_sheet_preview",
+        json={
+            "filenames": ["SAMPLE.CR2"],
+            "film": "portra400",
+            "roll_name": "TEST_PREV_ROLL",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["sheet"] is True
+    assert "sheet_url" in data
+    assert data["total_frames"] == 1
+
+    # 2. Test dedicated Save Contact Sheet Only endpoint to custom path
+    dest_file = tmp_path / "custom_sheet.jpg"
+    save_resp = client.post(
+        "/api/save_contact_sheet",
+        json={
+            "filenames": ["SAMPLE.CR2"],
+            "film": "portra400",
+            "roll_name": "TEST_ROLL",
+            "dest_path": str(dest_file),
+            "reveal": False,
+        },
+    )
+    assert save_resp.status_code == 200
+    save_data = save_resp.get_json()
+    assert save_data["success"] is True
+    assert dest_file.exists()
+    assert dest_file.stat().st_size > 10000
+
+
+def test_contact_sheet_preview_and_save_negative(client, tmp_path):
+    # 1. Test fast negative preview endpoint
+    resp = client.post(
+        "/api/negative/contact_sheet_preview",
+        json={
+            "filenames": ["SAMPLE_NEGATIVE.jpg"],
+            "profile": "frontier",
+            "roll_name": "TEST_PREV_NEG",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["sheet"] is True
+    assert "sheet_url" in data
+    assert data["total_frames"] == 1
+
+    # 2. Test dedicated Save Contact Sheet Only endpoint to custom path
+    dest_file = tmp_path / "custom_neg_sheet.jpg"
+    save_resp = client.post(
+        "/api/negative/save_contact_sheet",
+        json={
+            "filenames": ["SAMPLE_NEGATIVE.jpg"],
+            "profile": "frontier",
+            "roll_name": "TEST_NEG_ROLL",
+            "dest_path": str(dest_file),
+            "reveal": False,
+        },
+    )
+    assert save_resp.status_code == 200
+    save_data = save_resp.get_json()
+    assert save_data["success"] is True
+    assert dest_file.exists()
+    assert dest_file.stat().st_size > 10000
+
 
 
 

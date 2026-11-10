@@ -1,4 +1,4 @@
-# Haluro 2.4.2 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
+# Haluro 2.4.3 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
 
 Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfica concebida desde la práctica y los principios de la fotoquímica analógica. Esta guía detalla cada módulo, herramienta, atajo de teclado y proceso de calibración para obtener el máximo rendimiento tanto en la inversión de negativos digitalizados con cámara como en la emulación de emulsiones cinematográficas y fotográficas clásicas.
 
@@ -43,8 +43,8 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 | Arquitectura de Mac | Archivo a Descargar |
 | :--- | :--- |
-| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.4.2-macOS-arm64.dmg` |
-| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.4.2-macOS-x86_64.dmg` |
+| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.4.3-macOS-arm64.dmg` |
+| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.4.3-macOS-x86_64.dmg` |
 
 #### Pasos de Instalación:
 1. Haz doble clic sobre el archivo `.dmg` correspondiente a tu procesador.
@@ -64,7 +64,7 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 ### Windows 11
 
-* **Archivo requerido:** `Haluro-Setup-2.4.2-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.4.2-Win11-x64.zip`).
+* **Archivo requerido:** `Haluro-Setup-2.4.3-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.4.3-Win11-x64.zip`).
 * **Instalación:** Ejecuta el instalador. No requiere permisos de administrador forzados (instalación limpia por usuario) y se integra automáticamente con el motor **Microsoft Edge WebView2** preinstalado en Windows 11.
 
 ---
@@ -294,13 +294,19 @@ Haluro permite exportar en dos estándares profesionales:
 
 ---
 
-### Procesamiento por Lotes
+### Procesamiento por Lotes y Hoja de Contactos
 
-Si digitalizaste un carrete de 36 fotogramas con la misma cámara y luz de fondo:
-1. Calibra y ajusta el primer fotograma en Haluro (Muestreo D-min, perfiles y ampliadora CMY).
-2. Haz clic en **«Guardar Ajustes de Rollo»**.
-3. Arrastra los 35 fotogramas restantes a la mesa de luz.
-4. Pulsa **«Aplicar por Lote y Exportar»** para procesar todo el carrete automáticamente en segundo plano.
+Haluro incluye dos métodos optimizados para trabajar con rollos fotográficos completos:
+
+1. **Hoja de Contactos Analógica en 1 Clic (Tecla `3`):**
+   - Pulsa la pestaña **«Contactos»** para previsualizar al instante una cuadrícula de estilo laboratorio clásico con tipografía de emulsión, borde de chasis y numeración de fotogramas (DX 01A, 02A...).
+   - **Composición instantánea:** Se procesa concurrentemente en memoria en menos de 1 segundo sin tocar el disco.
+
+2. **Guardar Exclusivamente la Hoja de Contactos:**
+   - Si solo deseas archivar o compartir la hoja de contactos sin tener que exportar cada fotograma individual a tu disco, utiliza el botón **«Guardar contactos»** en la barra superior o los botones flotantes sobre la hoja. Se exportará un archivo JPEG de alta resolución de archivo (`Haluro_Contactos_...jpg`).
+
+3. **Revelar Rollo Completo (Motor Multinúcleo):**
+   - El botón **«Revelar rollo»** procesa todos los fotogramas del carrete a máxima resolución nativa (TIFF 16-bit o JPEG) aprovechando todos los núcleos de tu procesador en paralelo, e incluye automáticamente la hoja de contactos `SHEET.jpg` dentro de la carpeta del rollo.
 
 ---
 
@@ -320,4 +326,4 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 2.4.2 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*
+*Haluro 2.4.3 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*

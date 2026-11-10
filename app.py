@@ -4,10 +4,12 @@ real-time cached previews, lossless multi-format export, and contact sheets.
 """
 
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 import functools
 import io
 import json
 import logging
+import os
 import time
 import uuid
 import zipfile
@@ -545,16 +547,14 @@ def api_develop_full():
     out_roll_dir = DEVELOPED_DIR / f"{roll_name}_{film_key}"
     out_roll_dir.mkdir(parents=True, exist_ok=True)
 
-    developed_images = []
-    output_files = []
-
     analog_meta = _parse_analog_meta(data)
     per_frame_recipes = data.get("per_frame_recipes") or {}
     t_start = time.time()
-    for fname in filenames:
+
+    def _develop_one(fname):
         fpath = _resolve_source_file(fname)
         if not fpath:
-            continue
+            return None
 
         fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
         f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
@@ -589,8 +589,22 @@ def api_develop_full():
             float_srgb=srgb_f,
             analog_meta=analog_meta,
         )
-        output_files.append(out_name)
-        developed_images.append(dev_img)
+        return (out_name, dev_img)
+
+    max_workers = min(4, max(1, os.cpu_count() or 1))
+    if len(filenames) > 1 and max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = list(executor.map(_develop_one, filenames))
+    else:
+        results = [_develop_one(fn) for fn in filenames]
+
+    developed_images = []
+    output_files = []
+    for res in results:
+        if res:
+            out_name, dev_img = res
+            output_files.append(out_name)
+            developed_images.append(dev_img)
 
     sheet_created = False
     if gen_sheet and developed_images:
@@ -612,6 +626,187 @@ def api_develop_full():
         "files": output_files,
         "sheet": sheet_created,
         "total_frames": len(developed_images),
+        "elapsed_seconds": elapsed,
+    })
+
+
+@app.route("/api/contact_sheet_preview", methods=["POST"])
+def api_contact_sheet_preview():
+    """Ultra-fast concurrent preview of film emulation contact sheet without disk writes."""
+    data = request.json or {}
+    filenames = data.get("filenames", ["SAMPLE.CR2"])
+    film_key = data.get("film", "portra400")
+    ev = float(data.get("ev", 0.0))
+    halation = float(data.get("halation", 1.0))
+    grain = float(data.get("grain", 1.0))
+    vignette = float(data.get("vignette", 1.0))
+    add_date = bool(data.get("date", False))
+    rotate = int(data.get("rotate", 0))
+    flip_h = bool(data.get("flip_h", False))
+    roll_name = secure_filename(data.get("roll_name", "PREVIEW")) or "PREVIEW"
+
+    film_info = get_film(film_key)
+    per_frame_recipes = data.get("per_frame_recipes") or {}
+    t_start = time.time()
+
+    def _render_thumb(fname):
+        fpath = _resolve_source_file(fname)
+        if not fpath:
+            return None
+        fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
+        f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
+        f_ev = float(fr.get("ev", ev)) if isinstance(fr, dict) else ev
+        f_hal = float(fr.get("halation", halation)) if isinstance(fr, dict) else halation
+        f_grn = float(fr.get("grain", grain)) if isinstance(fr, dict) else grain
+        f_vig = float(fr.get("vignette", vignette)) if isinstance(fr, dict) else vignette
+        f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
+        f_rot = int(fr.get("rotate", rotate)) if isinstance(fr, dict) else rotate
+        f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
+
+        return develop_frame(
+            fpath,
+            film_key=f_film,
+            ev_adjust=f_ev,
+            halation_mult=f_hal,
+            grain_mult=f_grn,
+            vignette_mult=f_vig,
+            add_date=f_date,
+            max_dim=720,
+            rotate=f_rot,
+            flip_h=f_flip,
+        )
+
+    max_workers = min(6, max(1, os.cpu_count() or 1))
+    if len(filenames) > 1 and max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
+    else:
+        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+
+    if not rendered_images:
+        return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
+
+    sheet = generate_contact_sheet(
+        rendered_images,
+        roll_name=roll_name,
+        film_name=film_info["name"],
+        thumb_width=480,
+    )
+
+    cache_dir = DEVELOPED_DIR / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    sheet_cache_path = cache_dir / "sheet_preview.jpg"
+    sheet.save(sheet_cache_path, format="JPEG", quality=90)
+
+    elapsed = round(time.time() - t_start, 2)
+    return jsonify({
+        "success": True,
+        "sheet": True,
+        "sheet_url": f"/api/image/cache/sheet_preview.jpg?t={int(time.time() * 1000)}",
+        "total_frames": len(rendered_images),
+        "width": sheet.width,
+        "height": sheet.height,
+        "elapsed_seconds": elapsed,
+    })
+
+
+@app.route("/api/save_contact_sheet", methods=["POST"])
+def api_save_contact_sheet():
+    """Render archival high-resolution contact sheet only and save directly or to chosen path."""
+    data = request.json or {}
+    filenames = data.get("filenames", ["SAMPLE.CR2"])
+    film_key = data.get("film", "portra400")
+    ev = float(data.get("ev", 0.0))
+    halation = float(data.get("halation", 1.0))
+    grain = float(data.get("grain", 1.0))
+    vignette = float(data.get("vignette", 1.0))
+    add_date = bool(data.get("date", False))
+    rotate = int(data.get("rotate", 0))
+    flip_h = bool(data.get("flip_h", False))
+    reveal = bool(data.get("reveal", True))
+    roll_name = secure_filename(data.get("roll_name", "HALURO_ROLL")) or "HALURO_ROLL"
+
+    dest_path = data.get("dest_path")
+    if dest_path:
+        target_path, err = _validate_destination_path(dest_path)
+        if err:
+            return jsonify({"error": err}), 400
+    else:
+        downloads_dir = get_downloads_dir()
+        base_name = f"Haluro_Contactos_{roll_name}_{film_key}.jpg"
+        target_path = downloads_dir / base_name
+        counter = 1
+        while target_path.exists():
+            target_path = downloads_dir / f"Haluro_Contactos_{roll_name}_{film_key}_{counter}.jpg"
+            counter += 1
+
+    film_info = get_film(film_key)
+    per_frame_recipes = data.get("per_frame_recipes") or {}
+    t_start = time.time()
+
+    def _render_thumb(fname):
+        fpath = _resolve_source_file(fname)
+        if not fpath:
+            return None
+        fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
+        f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
+        f_ev = float(fr.get("ev", ev)) if isinstance(fr, dict) else ev
+        f_hal = float(fr.get("halation", halation)) if isinstance(fr, dict) else halation
+        f_grn = float(fr.get("grain", grain)) if isinstance(fr, dict) else grain
+        f_vig = float(fr.get("vignette", vignette)) if isinstance(fr, dict) else vignette
+        f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
+        f_rot = int(fr.get("rotate", rotate)) if isinstance(fr, dict) else rotate
+        f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
+
+        return develop_frame(
+            fpath,
+            film_key=f_film,
+            ev_adjust=f_ev,
+            halation_mult=f_hal,
+            grain_mult=f_grn,
+            vignette_mult=f_vig,
+            add_date=f_date,
+            max_dim=1400,
+            rotate=f_rot,
+            flip_h=f_flip,
+        )
+
+    max_workers = min(6, max(1, os.cpu_count() or 1))
+    if len(filenames) > 1 and max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
+    else:
+        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+
+    if not rendered_images:
+        return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
+
+    sheet = generate_contact_sheet(
+        rendered_images,
+        roll_name=roll_name,
+        film_name=film_info["name"],
+        thumb_width=960,
+    )
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(target_path, format="JPEG", quality=94, subsampling=0)
+
+    if reveal:
+        reveal_in_file_manager(target_path)
+
+    _record_history_entry(sheet, target_path, {
+        "type": "contact_sheet",
+        "film": film_info["name"],
+        "roll_name": roll_name,
+        "frames_count": len(rendered_images),
+    })
+
+    elapsed = round(time.time() - t_start, 2)
+    return jsonify({
+        "success": True,
+        "saved_path": str(target_path),
+        "filename": target_path.name,
+        "width": sheet.width,
+        "height": sheet.height,
         "elapsed_seconds": elapsed,
     })
 
@@ -1372,15 +1567,13 @@ def api_negative_develop_full():
     out_roll_dir = DEVELOPED_DIR / f"{roll_name}_neg_{profile_key}"
     out_roll_dir.mkdir(parents=True, exist_ok=True)
 
-    developed_images = []
-    output_files = []
-
     per_frame_recipes = data.get("per_frame_recipes") or {}
     t_start = time.time()
-    for fname in filenames:
+
+    def _develop_one(fname):
         fpath = _resolve_source_file(fname)
         if not fpath:
-            continue
+            return None
 
         fr_raw = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
         if isinstance(fr_raw, dict):
@@ -1400,8 +1593,22 @@ def api_negative_develop_full():
             float_srgb=srgb_f,
             analog_meta=analog_meta,
         )
-        output_files.append(out_name)
-        developed_images.append(pos_img)
+        return (out_name, pos_img)
+
+    max_workers = min(4, max(1, os.cpu_count() or 1))
+    if len(filenames) > 1 and max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = list(executor.map(_develop_one, filenames))
+    else:
+        results = [_develop_one(fn) for fn in filenames]
+
+    developed_images = []
+    output_files = []
+    for res in results:
+        if res:
+            out_name, pos_img = res
+            output_files.append(out_name)
+            developed_images.append(pos_img)
 
     sheet_created = False
     if gen_sheet and developed_images:
@@ -1423,6 +1630,147 @@ def api_negative_develop_full():
         "files": output_files,
         "sheet": sheet_created,
         "total_frames": len(developed_images),
+        "elapsed_seconds": elapsed,
+    })
+
+
+@app.route("/api/negative/contact_sheet_preview", methods=["POST"])
+def api_negative_contact_sheet_preview():
+    """Ultra-fast concurrent preview of negative inversion contact sheet without disk writes."""
+    data = request.json or {}
+    filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
+    roll_name = secure_filename(data.get("roll_name", "PREVIEW_NEG")) or "PREVIEW_NEG"
+
+    params = _parse_negative_params(data)
+    profile_key = params["profile_key"]
+    profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
+
+    per_frame_recipes = data.get("per_frame_recipes") or {}
+    t_start = time.time()
+
+    def _render_thumb(fname):
+        fpath = _resolve_source_file(fname)
+        if not fpath:
+            return None
+        fr_raw = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
+        if isinstance(fr_raw, dict):
+            frame_params = _parse_negative_params({**data, **fr_raw})
+        else:
+            frame_params = params
+
+        return process_negative_to_image(fpath, max_dim=720, return_float=False, **frame_params)
+
+    max_workers = min(6, max(1, os.cpu_count() or 1))
+    if len(filenames) > 1 and max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
+    else:
+        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+
+    if not rendered_images:
+        return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
+
+    sheet = generate_contact_sheet(
+        rendered_images,
+        roll_name=roll_name,
+        film_name=f"Negativo · {profile_info['name']}",
+        thumb_width=480,
+    )
+
+    cache_dir = DEVELOPED_DIR / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    sheet_cache_path = cache_dir / "sheet_preview.jpg"
+    sheet.save(sheet_cache_path, format="JPEG", quality=90)
+
+    elapsed = round(time.time() - t_start, 2)
+    return jsonify({
+        "success": True,
+        "sheet": True,
+        "sheet_url": f"/api/image/cache/sheet_preview.jpg?t={int(time.time() * 1000)}",
+        "total_frames": len(rendered_images),
+        "width": sheet.width,
+        "height": sheet.height,
+        "elapsed_seconds": elapsed,
+    })
+
+
+@app.route("/api/negative/save_contact_sheet", methods=["POST"])
+def api_negative_save_contact_sheet():
+    """Render archival high-resolution negative contact sheet only and save directly or to chosen path."""
+    data = request.json or {}
+    filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
+    roll_name = secure_filename(data.get("roll_name", "HALURO_NEG")) or "HALURO_NEG"
+    reveal = bool(data.get("reveal", True))
+
+    params = _parse_negative_params(data)
+    profile_key = params["profile_key"]
+    profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
+
+    dest_path = data.get("dest_path")
+    if dest_path:
+        target_path, err = _validate_destination_path(dest_path)
+        if err:
+            return jsonify({"error": err}), 400
+    else:
+        downloads_dir = get_downloads_dir()
+        base_name = f"Haluro_Contactos_{roll_name}_{profile_key}.jpg"
+        target_path = downloads_dir / base_name
+        counter = 1
+        while target_path.exists():
+            target_path = downloads_dir / f"Haluro_Contactos_{roll_name}_{profile_key}_{counter}.jpg"
+            counter += 1
+
+    per_frame_recipes = data.get("per_frame_recipes") or {}
+    t_start = time.time()
+
+    def _render_thumb(fname):
+        fpath = _resolve_source_file(fname)
+        if not fpath:
+            return None
+        fr_raw = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
+        if isinstance(fr_raw, dict):
+            frame_params = _parse_negative_params({**data, **fr_raw})
+        else:
+            frame_params = params
+
+        return process_negative_to_image(fpath, max_dim=1400, return_float=False, **frame_params)
+
+    max_workers = min(6, max(1, os.cpu_count() or 1))
+    if len(filenames) > 1 and max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
+    else:
+        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+
+    if not rendered_images:
+        return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
+
+    sheet = generate_contact_sheet(
+        rendered_images,
+        roll_name=roll_name,
+        film_name=f"Negativo · {profile_info['name']}",
+        thumb_width=960,
+    )
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(target_path, format="JPEG", quality=94, subsampling=0)
+
+    if reveal:
+        reveal_in_file_manager(target_path)
+
+    _record_history_entry(sheet, target_path, {
+        "type": "contact_sheet",
+        "film": f"Negativo · {profile_info['name']}",
+        "roll_name": roll_name,
+        "frames_count": len(rendered_images),
+    })
+
+    elapsed = round(time.time() - t_start, 2)
+    return jsonify({
+        "success": True,
+        "saved_path": str(target_path),
+        "filename": target_path.name,
+        "width": sheet.width,
+        "height": sheet.height,
         "elapsed_seconds": elapsed,
     })
 

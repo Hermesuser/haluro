@@ -37,15 +37,16 @@ def generate_contact_sheet(
     n_frames = len(loaded_frames)
     rows = math.ceil(n_frames / columns)
     
-    # Calculate dimensions
-    margin_x = 40
-    margin_top = 130
-    margin_bottom = 60
-    spacing_x = 24
-    spacing_y = 48
+    # Scale layout and typography proportionally with thumbnail resolution
+    scale = max(0.5, float(thumb_width) / 480.0)
+    margin_x = int(round(40 * scale))
+    margin_top = int(round(130 * scale))
+    margin_bottom = int(round(60 * scale))
+    spacing_x = int(round(24 * scale))
+    spacing_y = int(round(48 * scale))
     
     # Target frame aspect ratio approx 3:2
-    thumb_h = int(thumb_width * 2 / 3)
+    thumb_h = int(round(thumb_width * 2 / 3))
     
     total_w = margin_x * 2 + columns * thumb_width + (columns - 1) * spacing_x
     total_h = margin_top + margin_bottom + rows * thumb_h + (rows - 1) * spacing_y
@@ -55,23 +56,26 @@ def generate_contact_sheet(
     draw = ImageDraw.Draw(sheet)
     
     # Header Fonts (cross-platform: macOS, Windows 11, Linux)
-    title_font = load_ui_font("sans-bold", 32)
-    meta_font = load_ui_font("mono", 18)
-    frame_font = load_ui_font("mono-bold", 14)
+    title_font = load_ui_font("sans-bold", int(round(32 * scale)))
+    meta_font = load_ui_font("mono", int(round(18 * scale)))
+    frame_font = load_ui_font("mono-bold", int(round(14 * scale)))
         
     # Draw Header & Amber Film Rule
-    draw.rectangle([margin_x, 30, total_w - margin_x, 34], fill=(220, 140, 30))
-    draw.text((margin_x, 48), film_name.upper(), font=title_font, fill=(240, 240, 240))
-    draw.text((margin_x, 88), f"ROLL: {roll_name}   •   FRAMES: {n_frames}   •   DATE: {date_str}", font=meta_font, fill=(180, 180, 180))
+    rule_h = max(2, int(round(4 * scale)))
+    rule_y = int(round(30 * scale))
+    draw.rectangle([margin_x, rule_y, total_w - margin_x, rule_y + rule_h], fill=(220, 140, 30))
+    draw.text((margin_x, int(round(48 * scale))), film_name.upper(), font=title_font, fill=(240, 240, 240))
+    draw.text((margin_x, int(round(88 * scale))), f"ROLL: {roll_name}   •   FRAMES: {n_frames}   •   DATE: {date_str}", font=meta_font, fill=(180, 180, 180))
     
     # Draw Film Canister Badge
-    badge_w, badge_h = 160, 40
+    badge_w, badge_h = int(round(160 * scale)), int(round(40 * scale))
     bx = total_w - margin_x - badge_w
-    by = 50
-    draw.rounded_rectangle([bx, by, bx + badge_w, by + badge_h], radius=6, fill=(28, 30, 35), outline=(229, 149, 40), width=2)
-    draw.text((bx + 24, by + 12), "HALURO LAB", font=frame_font, fill=(229, 149, 40))
+    by = int(round(50 * scale))
+    draw.rounded_rectangle([bx, by, bx + badge_w, by + badge_h], radius=max(3, int(round(6 * scale))), fill=(28, 30, 35), outline=(229, 149, 40), width=max(1, int(round(2 * scale))))
+    draw.text((bx + int(round(24 * scale)), by + int(round(12 * scale))), "HALURO LAB", font=frame_font, fill=(229, 149, 40))
     
     # Draw Frames
+    border_pad = max(2, int(round(4 * scale)))
     for idx, frame in enumerate(loaded_frames):
         r = idx // columns
         c = idx % columns
@@ -80,25 +84,27 @@ def generate_contact_sheet(
         y = margin_top + r * (thumb_h + spacing_y)
         
         # Fit image maintaining aspect ratio
-        thumb = frame.copy()
-        thumb.thumbnail((thumb_width, thumb_h), Image.Resampling.LANCZOS)
+        if frame.width != thumb_width or frame.height > thumb_h:
+            thumb = frame.copy()
+            thumb.thumbnail((thumb_width, thumb_h), Image.Resampling.BICUBIC)
+        else:
+            thumb = frame
         
         # Center inside slot
         px = x + (thumb_width - thumb.width) // 2
         py = y + (thumb_h - thumb.height) // 2
         
         # Film rebate border
-        border_pad = 4
         draw.rectangle(
             [px - border_pad, py - border_pad, px + thumb.width + border_pad, py + thumb.height + border_pad],
             outline=(45, 45, 50),
-            width=1
+            width=max(1, int(round(1 * scale)))
         )
         
         sheet.paste(thumb, (px, py))
         
         # Frame Number Marker (e.g. "01", "02")
         frame_str = f"▶ {idx + 1:02d}A  DX"
-        draw.text((px, py + thumb.height + 6), frame_str, font=frame_font, fill=(190, 120, 20))
+        draw.text((px, py + thumb.height + int(round(6 * scale))), frame_str, font=frame_font, fill=(190, 120, 20))
         
     return sheet
