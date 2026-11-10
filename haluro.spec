@@ -122,7 +122,7 @@ if IS_MACOS:
             "CFBundleDisplayName": "Haluro",
             "CFBundleVersion": "2.4.0",
             "CFBundleShortVersionString": "2.4.0",
-            "LSMinimumSystemVersion": "11.0",
+            "LSMinimumSystemVersion": "14.0",
             "NSHighResolutionCapable": True,
             "NSSupportsAutomaticGraphicsSwitching": True,
             "NSHumanReadableCopyright": "© 2026 César Fernández Ardiles. Todos los derechos reservados.",
