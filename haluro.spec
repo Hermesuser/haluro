@@ -7,6 +7,7 @@ Targets:
 """
 
 from pathlib import Path
+import platform
 import sys
 from PyInstaller.utils.hooks import (
     collect_data_files,
@@ -122,7 +123,7 @@ if IS_MACOS:
             "CFBundleDisplayName": "Haluro",
             "CFBundleVersion": "2.4.0",
             "CFBundleShortVersionString": "2.4.0",
-            "LSMinimumSystemVersion": "14.0",
+            "LSMinimumSystemVersion": "12.0" if platform.machine() == "x86_64" else "14.0",
             "NSHighResolutionCapable": True,
             "NSSupportsAutomaticGraphicsSwitching": True,
             "NSHumanReadableCopyright": "© 2026 César Fernández Ardiles. Todos los derechos reservados.",

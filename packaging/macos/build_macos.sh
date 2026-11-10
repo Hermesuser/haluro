@@ -9,15 +9,18 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
 VERSION="2.4.0"
-ARCH="$(uname -m)"
 
-if [[ -x "${REPO_ROOT}/.venv/bin/python3" ]]; then
+if [[ -n "${PYTHON_BIN:-}" ]]; then
+  : # Use user-specified PYTHON_BIN
+elif [[ -x "${REPO_ROOT}/.venv/bin/python3" ]]; then
   PYTHON_BIN="${REPO_ROOT}/.venv/bin/python3"
 elif command -v /opt/anaconda3/bin/python3 >/dev/null 2>&1 && [[ -z "${VIRTUAL_ENV:-}" ]]; then
   PYTHON_BIN="/opt/anaconda3/bin/python3"
 else
   PYTHON_BIN="$(command -v python3)"
 fi
+
+ARCH="$("${PYTHON_BIN}" -c "import platform; print(platform.machine())")"
 
 echo "==> [1/4] Ejecutando suite de pruebas automatizadas (pytest) con ${PYTHON_BIN} ..."
 "${PYTHON_BIN}" -m pytest -v
@@ -50,9 +53,9 @@ codesign --verify --deep --strict "${STAGE_DIR}/Haluro.app"
 
 DMG_PATH="dist/Haluro-${VERSION}-macOS-${ARCH}.dmg"
 echo "==> [4/4] Empaquetando imagen de disco ${DMG_PATH} ..."
-rm -f dist/Haluro-*.dmg
+rm -f "${DMG_PATH}"
 hdiutil create \
-  -volname "Haluro ${VERSION}" \
+  -volname "Haluro ${VERSION} (${ARCH})" \
   -srcfolder "${STAGE_DIR}/Haluro.app" \
   -ov \
   -format UDZO \
@@ -60,5 +63,5 @@ hdiutil create \
 
 rm -rf "${STAGE_DIR}"
 
-shasum -a 256 "${DMG_PATH}" > "dist/SHA256SUMS-macOS.txt"
+(cd dist && shasum -a 256 Haluro-*.dmg > "SHA256SUMS-macOS.txt")
 echo "Construcción macOS completada: ${DMG_PATH}"

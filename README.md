@@ -129,9 +129,11 @@
 ### A) macOS (Nativo)
 
 #### Opción 1: Imagen de Disco Oficial (.dmg)
-1. Descarga el archivo `Haluro-2.4.0-macOS-arm64.dmg` desde la sección de [Releases de GitHub](https://github.com/Hermesuser/haluro/releases).
+1. Descarga la versión adecuada para tu procesador desde [Releases de GitHub](https://github.com/Hermesuser/haluro/releases):
+   - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.4.0-macOS-arm64.dmg`
+   - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.4.0-macOS-x86_64.dmg`
 2. Haz doble clic sobre el archivo `.dmg` montado y arrastra el icono de **Haluro** hacia tu carpeta de **Aplicaciones**.
-3. Abre **Haluro** desde Launchpad, Spotlight o Finder.
+3. Abre **Haluro** desde Launchpad, Spotlight o Finder. (Si macOS solicita confirmación de seguridad en el primer arranque, haz clic derecho sobre la app y selecciona *Abrir*).
 
 #### Opción 2: Ejecución desde código fuente
 ```bash
