@@ -19,6 +19,7 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 
 from engine import __version__, APP_NAME, about_payload
+from engine.updater import check_for_updates, open_external_url
 from engine.films import list_films, get_film, LUT_DIR
 from engine.pipeline import (
     develop_frame,
@@ -367,6 +368,23 @@ def index():
 def api_about():
     """Return JSON manifest with application identity, authorship, and licensing."""
     return jsonify(about_payload())
+
+
+@app.route("/api/check-update")
+def api_check_update():
+    """Check for Haluro updates with privacy, zero telemetry, and timeout safety."""
+    return jsonify(check_for_updates())
+
+
+@app.route("/api/open-external", methods=["POST"])
+def api_open_external():
+    """Safely open an approved external download URL in the host's default web browser."""
+    data = request.get_json(silent=True) or {}
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "URL requerida"}), 400
+    success = open_external_url(url)
+    return jsonify({"ok": success, "url": url})
 
 
 @app.route("/favicon.ico")

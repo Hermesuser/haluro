@@ -97,6 +97,11 @@
         </svg>
       </button>
 
+      <button class="btn btn-update-badge btn-sm" id="updateBadgeBtn" style="display: none;" title="Nueva versión de Haluro disponible" aria-label="Nueva versión de Haluro disponible">
+        <span class="update-pulse-dot" aria-hidden="true"></span>
+        <span id="updateBadgeText">Nueva versión</span>
+      </button>
+
       <button class="btn btn-icon-only" id="aboutBtn" aria-label="Acerca de Haluro" title="Acerca de Haluro y Desarrollador">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <circle cx="12" cy="12" r="10"/>
@@ -1137,6 +1142,20 @@
           </div>
         </div>
 
+        <!-- In-app update card -->
+        <div class="about-update-card">
+          <div class="about-update-info">
+            <span class="about-update-title">Actualizaciones de software</span>
+            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.1 instalada</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btnCheckUpdateManual">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span id="btnCheckUpdateManualLabel">Comprobar ahora</span>
+          </button>
+        </div>
+
         <!-- Pillar highlights -->
         <div class="about-pillars-grid">
           <div class="about-pillar-item">
@@ -1198,6 +1217,59 @@
       <div class="modal-footer about-modal-footer">
         <span class="about-footer-status"><span class="status-dot status-ok"></span> Listo para producción</span>
         <button class="btn btn-secondary btn-sm" id="btnCopyAboutInfo">Copiar ficha técnica</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Actualización de Haluro disponible -->
+  <div class="modal-backdrop" id="updateModal" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="about-title-row">
+          <div class="update-icon-glow" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E59528" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="updateModalTitle">¡Nueva versión disponible!</h3>
+            <span class="update-version-tag" id="updateVersionTag">Haluro</span>
+          </div>
+        </div>
+        <button class="modal-close" id="closeUpdateModalBtn" aria-label="Cerrar ventana de actualización">&times;</button>
+      </div>
+      <div class="modal-body modal-body-left">
+        <p id="updateModalDesc" class="update-modal-intro">
+          Hay una nueva versión de Haluro lista para descargar con mejoras de laboratorio y correcciones.
+        </p>
+
+        <div class="update-highlights-box">
+          <h4>Novedades de esta versión:</h4>
+          <ul id="updateHighlightsList" class="update-highlights-list">
+          </ul>
+        </div>
+
+        <div class="update-system-detect">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          <span id="updatePlatformLabel">Detectado: macOS</span>
+        </div>
+      </div>
+      <div class="modal-footer update-modal-footer">
+        <button class="btn btn-ghost btn-sm" id="btnDismissUpdate">Recordar más tarde</button>
+        <button class="btn btn-primary btn-sm" id="btnDownloadUpdate">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span id="btnDownloadUpdateLabel">Descargar actualización</span>
+        </button>
       </div>
     </div>
   </div>

@@ -315,6 +315,9 @@ El aviso de seguridad de macOS Sequoia solo aparece **una única vez** tras desc
 #### ¿Puedo guardar mis propias fórmulas de revelado?
 Sí. En la esquina superior derecha del panel Inspector puedes hacer clic en **«Guardar Preset»** para almacenar tu combinación favorita de película, grano, halación y virado dicroico bajo un nombre personalizado.
 
+#### ¿Cómo mantengo Haluro actualizado con las últimas mejoras?
+Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez que inicias la aplicación (o al pulsar **«Comprobar ahora»** en la ventana *Acerca de*), Haluro consulta en segundo plano si existe una nueva versión oficial en GitHub. Si hay una versión más reciente, verás un distintivo sutil en la barra superior (`✨ Nueva versión`) que te mostrará las novedades y te permitirá descargar el instalador específico para tu equipo (macOS Apple Silicon, macOS Intel o Windows) en un solo clic.
+
 ---
 
-*Haluro 2.4.0 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*
+*Haluro 2.4.1 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*

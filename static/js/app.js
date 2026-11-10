@@ -90,6 +90,7 @@ const state = {
   lastRollResult: null,
   copiedRecipe: null,
   analogMeta: loadAnalogExifStorage(),
+  updateInfo: null,
 };
 
 const negativeState = {
@@ -351,6 +352,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   syncRuntimePlatform();
   await fetchFilms();
   await loadSamplePhoto(false);
+
+  // Smart update checker: silently query remote version manifest after 2.5s
+  setTimeout(() => {
+    checkForUpdates(false);
+  }, 2500);
 });
 
 async function fetchFilms() {
@@ -2795,6 +2801,13 @@ function initUIListeners() {
     document.getElementById("aboutModal")?.classList.add("active");
   });
 
+  // Smart update system listeners
+  document.getElementById("updateBadgeBtn")?.addEventListener("click", openUpdateModal);
+  document.getElementById("closeUpdateModalBtn")?.addEventListener("click", closeUpdateModal);
+  document.getElementById("btnDismissUpdate")?.addEventListener("click", closeUpdateModal);
+  document.getElementById("btnCheckUpdateManual")?.addEventListener("click", () => checkForUpdates(true));
+  document.getElementById("btnDownloadUpdate")?.addEventListener("click", triggerUpdateDownload);
+
   document.getElementById("saveDownloadsBtn")?.addEventListener("click", saveDirectToDownloads);
   document.getElementById("saveAsBtn")?.addEventListener("click", saveAsWithDialog);
   document.getElementById("developFullBtn")?.addEventListener("click", developFullRoll);
@@ -3148,7 +3161,7 @@ function initUIListeners() {
   });
   document.getElementById("btnCopyAboutInfo")?.addEventListener("click", () => {
     const text =
-      "Haluro — Laboratorio Analógico Digital (v2.4.0)\n" +
+      "Haluro — Laboratorio Analógico Digital (v2.4.1)\n" +
       "Desarrollador: Fotógrafo César Fernández Ardiles (Oregano, Chile)\n" +
       "Licencia: MIT (Software libre y gratuito)\n" +
       "Emulación: 72 películas químicas + Inversión óptica C-41 / B&N\n" +
@@ -3264,4 +3277,142 @@ function showToast(title, desc, actionLabel = null, actionCallback = null) {
   setTimeout(() => {
     if (toast.parentNode) toast.remove();
   }, 5500);
+}
+
+// =============================================================
+// SMART IN-APP UPDATE SYSTEM
+// =============================================================
+
+async function checkForUpdates(manual = false) {
+  const statusEl = document.getElementById("aboutUpdateStatus");
+  const manualBtn = document.getElementById("btnCheckUpdateManual");
+  const manualLabel = document.getElementById("btnCheckUpdateManualLabel");
+  const badgeBtn = document.getElementById("updateBadgeBtn");
+  const badgeText = document.getElementById("updateBadgeText");
+
+  if (manual) {
+    if (statusEl) statusEl.textContent = "Comprobando actualizaciones con GitHub...";
+    if (manualLabel) manualLabel.textContent = "Buscando...";
+    if (manualBtn) manualBtn.disabled = true;
+  }
+
+  try {
+    const res = await fetch("/api/check-update");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    state.updateInfo = data;
+
+    if (data.update_available) {
+      if (badgeBtn) {
+        badgeBtn.style.display = "inline-flex";
+        if (badgeText) badgeText.textContent = `v${data.latest_version} disponible`;
+      }
+      if (statusEl) {
+        statusEl.classList.add("has-update");
+        statusEl.textContent = `✨ Nueva versión v${data.latest_version} disponible (${data.release_date || "reciente"})`;
+      }
+      if (manual) {
+        openUpdateModal();
+      } else {
+        showToast(
+          "Actualización de Haluro disponible",
+          `La versión v${data.latest_version} está lista para descargar con mejoras de laboratorio.`,
+          "Ver novedades",
+          () => openUpdateModal()
+        );
+      }
+    } else {
+      if (badgeBtn) badgeBtn.style.display = "none";
+      if (data.offline) {
+        if (statusEl) statusEl.textContent = `Modo offline · Versión ${data.current_version} instalada`;
+        if (manual) {
+          showToast("Modo Offline", "No fue posible comprobar actualizaciones. Verifica tu conexión a internet.");
+        }
+      } else {
+        if (statusEl) {
+          statusEl.classList.remove("has-update");
+          statusEl.textContent = `Versión ${data.current_version} instalada (¡Al día!)`;
+        }
+        if (manual) {
+          showToast("Haluro está actualizado", `Estás utilizando la versión más reciente (v${data.current_version}).`);
+        }
+      }
+    }
+  } catch (err) {
+    console.debug("Comprobación de actualización omitida:", err);
+    if (manual) {
+      if (statusEl) statusEl.textContent = "Error al conectar con el servidor de actualizaciones.";
+      showToast("Comprobación no disponible", "No se pudo consultar el repositorio en este momento.");
+    }
+  } finally {
+    if (manual) {
+      if (manualLabel) manualLabel.textContent = "Comprobar ahora";
+      if (manualBtn) manualBtn.disabled = false;
+    }
+  }
+}
+
+function openUpdateModal() {
+  const modal = document.getElementById("updateModal");
+  if (!modal) return;
+  const info = state.updateInfo;
+  if (!info || !info.update_available) {
+    checkForUpdates(true);
+    return;
+  }
+
+  const titleEl = document.getElementById("updateModalTitle");
+  const versionTag = document.getElementById("updateVersionTag");
+  const descEl = document.getElementById("updateModalDesc");
+  const listEl = document.getElementById("updateHighlightsList");
+  const platEl = document.getElementById("updatePlatformLabel");
+  const dlLabel = document.getElementById("btnDownloadUpdateLabel");
+
+  if (titleEl) titleEl.textContent = info.title || `¡Haluro v${info.latest_version} disponible!`;
+  if (versionTag) versionTag.textContent = `v${info.current_version} ➔ v${info.latest_version}`;
+  if (descEl && info.description) descEl.textContent = info.description;
+  if (platEl) platEl.textContent = `Equipo detectado: ${info.platform}`;
+  if (dlLabel) dlLabel.textContent = `Descargar para ${info.platform}`;
+
+  if (listEl) {
+    listEl.innerHTML = "";
+    const items = info.highlights && info.highlights.length > 0
+      ? info.highlights
+      : ["Mejoras generales de rendimiento y calibración de color."];
+    items.forEach((itemText) => {
+      const li = document.createElement("li");
+      li.textContent = itemText;
+      listEl.appendChild(li);
+    });
+  }
+
+  // Close about modal if open so they don't stack
+  document.getElementById("aboutModal")?.classList.remove("active");
+  modal.classList.add("active");
+}
+
+function closeUpdateModal() {
+  document.getElementById("updateModal")?.classList.remove("active");
+}
+
+async function triggerUpdateDownload() {
+  const info = state.updateInfo;
+  if (!info) return;
+  const downloadUrl = info.download_url || info.all_releases_url || "https://github.com/Hermesuser/haluro/releases/latest";
+
+  try {
+    await fetch("/api/open-external", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: downloadUrl }),
+    });
+  } catch (_) {
+    window.open(downloadUrl, "_blank", "noopener");
+  }
+
+  showToast(
+    "Descarga de actualización iniciada",
+    "Se ha abierto el enlace en tu navegador para descargar el instalador."
+  );
+  closeUpdateModal();
 }

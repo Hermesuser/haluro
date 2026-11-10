@@ -437,13 +437,13 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_api_health_and_security_headers(client) -> None:
-    assert __version__ == "2.4.0"
+    assert __version__ == "2.4.1"
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
-    assert body["version"] == "2.4.0"
+    assert body["version"] == "2.4.1"
     assert body["films_count"] == 72
     assert body["platform"] in {"macos", "windows", "linux"}
 
@@ -460,7 +460,7 @@ def test_api_about_manifest(client) -> None:
     assert resp.status_code == 200
     info = resp.get_json()
     assert info["app"] == "Haluro"
-    assert info["version"] == "2.4.0"
+    assert info["version"] == "2.4.1"
     assert info["license"] == "MIT"
     assert "César Fernández Ardiles" in info["developer"]["name"]
     assert "Chile" in info["developer"]["country"]
@@ -924,7 +924,7 @@ def test_macos_application_identity_and_about_panel():
 
         assert _MACOS_ABOUT_OPTIONS is not None
         assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
-        assert "2.4.0" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        assert "2.4.1" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
         credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
         assert "César Fernández Ardiles" in credits_str
         assert "Chile" in credits_str
@@ -953,5 +953,117 @@ def test_optical_vignette():
     v2 = apply_vignette(canvas, strength=2.0)
     assert np.isclose(v2[50, 50, 0], 1.0)
     assert 0.10 <= v2[0, 0, 0] <= 0.20
+
+
+def test_updater_semver_parsing():
+    from engine.updater import parse_semver
+
+    assert parse_semver("2.4.1") == (2, 4, 1)
+    assert parse_semver("v2.5.0") == (2, 5, 0)
+    assert parse_semver("V3.0.0") == (3, 0, 0)
+    assert parse_semver("2.4") == (2, 4, 0)
+    assert parse_semver("2.4.1-rc1") == (2, 4, 1)
+    assert parse_semver("") == (0, 0, 0)
+
+    # Version comparison ordering
+    assert parse_semver("2.5.0") > parse_semver("2.4.1")
+    assert parse_semver("2.4.2") > parse_semver("2.4.1")
+    assert parse_semver("2.4.1") == parse_semver("v2.4.1")
+    assert parse_semver("2.4.0") < parse_semver("2.4.1")
+
+
+def test_updater_platform_detection():
+    from engine.updater import get_client_platform
+
+    plat = get_client_platform()
+    assert plat["os"] in ("macos", "windows", "linux")
+    assert isinstance(plat["arch"], str)
+    assert isinstance(plat["label"], str)
+    assert plat["key"] in ("macos_arm64", "macos_x86_64", "windows_x86_64", "all_releases")
+
+
+def test_updater_check_logic(monkeypatch):
+    import json
+    import urllib.request
+    from engine.updater import check_for_updates
+
+    # Case 1: Newer version available
+    mock_newer = {
+        "version": "2.5.0",
+        "release_date": "2026-12-01",
+        "title": "Haluro v2.5.0",
+        "description": "Nueva versión mayor con mejoras",
+        "highlights": ["Mejora 1", "Mejora 2"],
+        "download_urls": {
+            "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-arm64.dmg",
+            "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-x86_64.dmg",
+            "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-Windows-x64.zip",
+            "all_releases": "https://github.com/Hermesuser/haluro/releases/latest",
+        },
+    }
+
+    class MockResponse:
+        status = 200
+
+        def read(self):
+            return json.dumps(mock_newer).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=3.0: MockResponse())
+
+    res = check_for_updates(timeout=1.0)
+    assert res["update_available"] is True
+    assert res["latest_version"] == "2.5.0"
+    assert res["offline"] is False
+    assert "https://github.com/Hermesuser/haluro/releases" in res["download_url"]
+    assert len(res["highlights"]) == 2
+
+    # Case 2: Offline / connection error
+    def mock_fail(req, timeout=3.0):
+        raise TimeoutError("Conexión expirada")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_fail)
+    res_offline = check_for_updates(timeout=1.0)
+    assert res_offline["offline"] is True
+    assert res_offline["update_available"] is False
+
+
+def test_api_check_update_and_open_external(client):
+    import unittest.mock
+    import webbrowser
+
+    # Test GET /api/check-update
+    resp = client.get("/api/check-update")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "current_version" in data
+    assert "update_available" in data
+    assert "platform" in data
+    assert "download_url" in data
+
+    # Test POST /api/open-external with valid GitHub URL
+    opened = []
+    with unittest.mock.patch.object(webbrowser, "open", lambda url: opened.append(url) or True):
+        post_resp = client.post(
+            "/api/open-external",
+            json={"url": "https://github.com/Hermesuser/haluro/releases/latest"},
+        )
+        assert post_resp.status_code == 200
+        assert post_resp.get_json()["ok"] is True
+        assert len(opened) == 1
+
+        # Test POST /api/open-external with malicious / non-whitelisted URL (defense in depth)
+        bad_resp = client.post(
+            "/api/open-external",
+            json={"url": "https://malicious-site.com/malware.exe"},
+        )
+        assert bad_resp.status_code == 200
+        assert bad_resp.get_json()["ok"] is False
+
 
 

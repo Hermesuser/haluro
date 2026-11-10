@@ -1,0 +1,20 @@
+{
+  "version": "2.4.1",
+  "release_date": "2026-11-10",
+  "name": "Haluro v2.4.1",
+  "title": "Calibración Óptica y Paquetes Multiplataforma",
+  "description": "Actualización con viñeteo óptico corregido y calibrado con atenuación radial suave, manual de usuario ilustrado y soporte binario optimizado para Apple Silicon y Mac Intel.",
+  "highlights": [
+    "Viñeteo óptico calibrado con curva radial suave (smoothstep cosine falloff) que atenúa esquinas de forma natural sin oscurecer el centro.",
+    "Manual de usuario ilustrado paso a paso en español (MANUAL_DE_USO.md y manual.html) con capturas de pantalla de la interfaz.",
+    "Compilación dual de paquetes nativos para macOS Apple Silicon (arm64) y macOS Intel (x86_64).",
+    "Comprobador inteligente de actualizaciones en 1 clic integrado en la aplicación."
+  ],
+  "download_urls": {
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.1/Haluro-2.4.1-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.1/Haluro-2.4.1-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.1/Haluro-2.4.1-Windows-x64.zip",
+    "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
+  },
+  "min_supported_version": "2.0.0"
+}
