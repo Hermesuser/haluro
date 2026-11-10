@@ -1171,17 +1171,24 @@ def invert_negative(
         pos = srgb_to_linear(pos_srgb)
 
     # 8. LabGlow (Optical Enlarger Diffusion / Highlight Bloom in linear light)
-    glow_strength = profile["glow"] * glow_mult
+    base_glow = max(0.12, profile.get("glow", 0.12))
+    glow_strength = base_glow * float(np.clip(glow_mult, 0.0, 3.0))
     if glow_strength > 0.01:
         luma_lin = np.sum(pos * LUMA, axis=-1)
-        highs = np.maximum(0.0, luma_lin - 0.55)
-        glow_blur = scipy.ndimage.gaussian_filter(highs, sigma=max(2.5, w * 0.010))
-        pos = pos + glow_blur[..., None] * (glow_strength * 0.45)
+        highs = np.maximum(0.0, luma_lin - 0.40) ** 1.3
+        glow_blur = scipy.ndimage.gaussian_filter(highs, sigma=max(3.0, w * 0.014))
+        pos = pos + glow_blur[..., None] * (glow_strength * 0.55)
 
     # 9. LabFade (Matte Paper Black Floor)
-    fade_strength = profile["fade"] * fade_mult
+    base_fade = profile.get("fade", 0.0)
+    f_mult = float(np.clip(fade_mult, 0.0, 3.0))
+    if f_mult <= 1.0:
+        fade_strength = base_fade * f_mult
+    else:
+        fade_strength = base_fade + 0.030 * (f_mult - 1.0)
+
     if fade_strength > 0.001:
-        pos = pos * (1.0 - fade_strength) + (fade_strength * 0.35)
+        pos = pos * (1.0 - fade_strength) + (fade_strength * 0.40)
 
     # 10. B&W Silver-Gelatin Chemical Toning & Fine-Art Paper Branch
     if is_bw:

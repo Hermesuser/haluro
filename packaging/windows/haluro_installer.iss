@@ -1,11 +1,11 @@
 ; =============================================================================
-; Haluro — Laboratorio Analógico Digital (v2.4.1)
+; Haluro — Laboratorio Analógico Digital (v2.4.2)
 ; Inno Setup 6 Installer Script for Windows 11 (x64 / ARM64 compatible)
 ; =============================================================================
 
 #define MyAppName "Haluro"
 #define MyAppFullName "Haluro — Laboratorio Analógico Digital"
-#define MyAppVersion "2.4.1"
+#define MyAppVersion "2.4.2"
 #define MyAppPublisher "César Fernández Ardiles (Oregano, Chile)"
 #define MyAppExeName "Haluro.exe"
 #define RepoRoot "..\.."

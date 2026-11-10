@@ -18,12 +18,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'César Fernández Ardiles (Oregano, Chile)'),
             StringStruct('FileDescription', 'Haluro — Laboratorio Analógico Digital'),
-            StringStruct('FileVersion', '2.4.1.0'),
+            StringStruct('FileVersion', '2.4.2.0'),
             StringStruct('InternalName', 'Haluro'),
             StringStruct('LegalCopyright', 'Copyright (c) 2026 César Fernández Ardiles · Oregano · Chile'),
             StringStruct('OriginalFilename', 'Haluro.exe'),
             StringStruct('ProductName', 'Haluro'),
-            StringStruct('ProductVersion', '2.4.1')
+            StringStruct('ProductVersion', '2.4.2')
           ]
         )
       ]

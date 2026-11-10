@@ -1,20 +1,20 @@
 {
-  "version": "2.4.1",
+  "version": "2.4.2",
   "release_date": "2026-11-10",
-  "name": "Haluro v2.4.1",
-  "title": "Calibración Óptica y Paquetes Multiplataforma",
-  "description": "Actualización con viñeteo óptico corregido y calibrado con atenuación radial suave, manual de usuario ilustrado y soporte binario optimizado para Apple Silicon y Mac Intel.",
+  "name": "Haluro v2.4.2",
+  "title": "Calibración Óptica de Filtros y Revelado",
+  "description": "Actualización que perfecciona la difusión de altas luces (LabGlow) y el acabado aterciopelado de papel mate (LabFade) con respuesta analógica precisa en todos los perfiles de escáner y minilab.",
   "highlights": [
-    "Viñeteo óptico calibrado con curva radial suave (smoothstep cosine falloff) que atenúa esquinas de forma natural sin oscurecer el centro.",
-    "Manual de usuario ilustrado paso a paso en español (MANUAL_DE_USO.md y manual.html) con capturas de pantalla de la interfaz.",
-    "Compilación dual de paquetes nativos para macOS Apple Silicon (arm64) y macOS Intel (x86_64).",
-    "Comprobador inteligente de actualizaciones en 1 clic integrado en la aplicación."
+    "Difusión de luz (LabGlow) calibrada: bloom orgánico de ampliadora analógica perceptible en altas luces sin perder contraste.",
+    "Papel mate (LabFade) mejorado: elevación suave del suelo de negros para emular papel baritado y mate en cualquier perfil minilab.",
+    "Filtros de enfriamiento y calentamiento óptico (85B, Skylight y Sombra) verificados y sincronizados con la física del color analógico.",
+    "Paquetes nativos actualizados para Windows 11 (instalador y portátil) y macOS (Apple Silicon y Mac Intel)."
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.1/Haluro-2.4.1-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.1/Haluro-2.4.1-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.1/Haluro-Setup-2.4.1-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.1/Haluro-Portable-2.4.1-Win11-x64.zip",
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.2/Haluro-2.4.2-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.2/Haluro-2.4.2-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.2/Haluro-Setup-2.4.2-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.2/Haluro-Portable-2.4.2-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "min_supported_version": "2.0.0"

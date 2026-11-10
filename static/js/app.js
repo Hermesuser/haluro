@@ -1,5 +1,5 @@
 /**
- * Haluro — Laboratorio Analógico Digital (v2.3.0)
+ * Haluro — Laboratorio Analógico Digital (v2.4.2)
  * Precision frontend controller: 72-stock film simulation, C-41/B&W optical negative
  * inversion (RA-4, ECP 2383, Minilab, V-Log), B&W chemical toners & fine-art papers,
  * unified multi-frame Roll Analysis, 3-Way CMY split-toning, color-protected soft clip,
@@ -3161,7 +3161,7 @@ function initUIListeners() {
   });
   document.getElementById("btnCopyAboutInfo")?.addEventListener("click", () => {
     const text =
-      "Haluro — Laboratorio Analógico Digital (v2.4.1)\n" +
+      "Haluro — Laboratorio Analógico Digital (v2.4.2)\n" +
       "Desarrollador: Fotógrafo César Fernández Ardiles (Oregano, Chile)\n" +
       "Licencia: MIT (Software libre y gratuito)\n" +
       "Emulación: 72 películas químicas + Inversión óptica C-41 / B&N\n" +

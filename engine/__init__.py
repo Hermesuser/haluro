@@ -5,7 +5,7 @@ Consumed by the Flask backend (`/api/about`), the native launcher, the CLI
 (`--version` / `about`), and the macOS / Windows 11 packaging scripts.
 """
 
-__version__ = "2.4.1"
+__version__ = "2.4.2"
 APP_NAME = "Haluro"
 APP_FULL_NAME = "Haluro — Laboratorio Analógico Digital"
 APP_TAGLINE = (

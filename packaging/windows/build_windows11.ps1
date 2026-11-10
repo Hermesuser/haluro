@@ -1,7 +1,7 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Compiles, tests, and packages Haluro v2.4.1 natively for Windows 11 (x64).
+    Compiles, tests, and packages Haluro v2.4.2 natively for Windows 11 (x64).
 
 .DESCRIPTION
     Google-standard reproducible Windows 11 build pipeline:
@@ -10,8 +10,8 @@
       3. Runs the automated `pytest` quality gate and `--smoke-test` check.
       4. Compiles `dist\Haluro\Haluro.exe` via PyInstaller (`haluro.spec`).
       5. Verifies the frozen `Haluro.exe --smoke-test` binary.
-      6. Creates `Haluro-Portable-2.4.1-Win11-x64.zip` and (when Inno Setup 6
-         `ISCC.exe` is installed) `Haluro-Setup-2.4.1-Win11-x64.exe` + SHA-256 checksums.
+      6. Creates `Haluro-Portable-2.4.2-Win11-x64.zip` and (when Inno Setup 6
+         `ISCC.exe` is installed) `Haluro-Setup-2.4.2-Win11-x64.exe` + SHA-256 checksums.
 #>
 
 [CmdletBinding()]
@@ -26,7 +26,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 Set-Location $RepoRoot
 
-$Version = "2.4.1"
+$Version = "2.4.2"
 Write-Host "==> [1/6] Preparando entorno virtual aislado en $RepoRoot\.venv ..." -ForegroundColor Cyan
 
 if (-not (Test-Path ".venv\Scripts\python.exe")) {

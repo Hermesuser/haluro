@@ -437,13 +437,13 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_api_health_and_security_headers(client) -> None:
-    assert __version__ == "2.4.1"
+    assert __version__ == "2.4.2"
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
-    assert body["version"] == "2.4.1"
+    assert body["version"] == "2.4.2"
     assert body["films_count"] == 72
     assert body["platform"] in {"macos", "windows", "linux"}
 
@@ -460,7 +460,7 @@ def test_api_about_manifest(client) -> None:
     assert resp.status_code == 200
     info = resp.get_json()
     assert info["app"] == "Haluro"
-    assert info["version"] == "2.4.1"
+    assert info["version"] == "2.4.2"
     assert info["license"] == "MIT"
     assert "César Fernández Ardiles" in info["developer"]["name"]
     assert "Chile" in info["developer"]["country"]
@@ -924,7 +924,7 @@ def test_macos_application_identity_and_about_panel():
 
         assert _MACOS_ABOUT_OPTIONS is not None
         assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
-        assert "2.4.1" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        assert "2.4.2" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
         credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
         assert "César Fernández Ardiles" in credits_str
         assert "Chile" in credits_str
@@ -953,6 +953,35 @@ def test_optical_vignette():
     v2 = apply_vignette(canvas, strength=2.0)
     assert np.isclose(v2[50, 50, 0], 1.0)
     assert 0.10 <= v2[0, 0, 0] <= 0.20
+
+
+def test_negative_optical_filters_and_fade_glow():
+    from engine.negative_inverter import process_negative_to_image
+
+    sample = Path(__file__).parent.parent / "samples" / "SAMPLE_NEGATIVE.jpg"
+
+    # 1. Base image (Frontier profile, default settings)
+    img_base = process_negative_to_image(sample, max_dim=400, profile_key="frontier")
+    arr_base = np.array(img_base, dtype=np.float32)
+
+    # 2. LabFade test on Frontier (verifies fade > 1.0 produces genuine matte lift)
+    img_fade2 = process_negative_to_image(sample, max_dim=400, profile_key="frontier", fade_mult=2.0)
+    arr_fade2 = np.array(img_fade2, dtype=np.float32)
+    diff_fade = np.mean(np.abs(arr_fade2 - arr_base))
+    assert diff_fade > 3.0  # Must be clearly visible matte paper lift
+
+    # 3. LabGlow test on Frontier (verifies highlight bloom)
+    img_glow2 = process_negative_to_image(sample, max_dim=400, profile_key="frontier", glow_mult=2.0)
+    arr_glow2 = np.array(img_glow2, dtype=np.float32)
+    diff_glow = np.mean(np.abs(arr_glow2 - arr_base))
+    assert diff_glow > 0.8  # Must produce visible bloom in highlights
+    assert np.max(np.abs(arr_glow2 - arr_base)) > 5.0  # Peak bloom in highlights
+
+    # 4. Warming 85B test (shifts Kelvin warmer)
+    img_w85 = process_negative_to_image(sample, max_dim=400, profile_key="frontier", warming_85=1.0)
+    arr_w85 = np.array(img_w85, dtype=np.float32)
+    assert np.mean(arr_w85[..., 0] - arr_base[..., 0]) > 10.0  # Red increases
+    assert np.mean(arr_w85[..., 2] - arr_base[..., 2]) < -10.0  # Blue decreases
 
 
 def test_updater_semver_parsing():
