@@ -42,14 +42,14 @@
 
     <!-- Primary Studio Mode Switcher -->
     <nav class="mode-switch-group" role="tablist" aria-label="Modo de trabajo">
-      <button class="mode-switch-btn active" id="tabDarkroomsMode" role="tab" aria-selected="true">
+      <button class="mode-switch-btn active" id="tabDarkroomsMode" role="tab" aria-selected="true" title="Emulación analógica · 72 películas químicas">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
           <rect x="2" y="4" width="20" height="16" rx="2"/>
           <path d="M7 4v16M17 4v16M2 8h5M2 12h5M2 16h5M17 8h5M17 12h5M17 16h5"/>
         </svg>
-        <span>Emulación · 72 películas</span>
+        <span>Emulación · 72</span>
       </button>
-      <button class="mode-switch-btn" id="tabNegativeMode" role="tab" aria-selected="false">
+      <button class="mode-switch-btn" id="tabNegativeMode" role="tab" aria-selected="false" title="Laboratorio óptico de inversión de negativos">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
           <circle cx="12" cy="12" r="9"/>
           <path d="M12 3v18"/>
@@ -61,8 +61,8 @@
 
     <!-- Right Utility & Export Actions -->
     <div class="header-actions">
-      <button class="btn btn-ghost btn-sm" id="loadSampleBtn" title="Cargar archivo de prueba">
-        <span id="loadSampleLabel">Cargar muestra RAW</span>
+      <button class="btn btn-ghost btn-sm" id="loadSampleBtn" title="Cargar fotografía RAW de prueba en el laboratorio">
+        <span id="loadSampleLabel">Muestra</span>
       </button>
 
       <label class="btn btn-secondary btn-sm upload-label" id="uploadBtnLabel" title="Importar archivos desde tu Mac (⌘O)">
@@ -111,20 +111,31 @@
       </button>
 
       <div class="export-group">
-        <button class="btn btn-primary btn-sm" id="saveDownloadsBtn" title="Guardar a resolución completa en ~/Downloads (⌘S)">
-          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span id="saveDownloadsLabel">Guardar</span>
-        </button>
-        <button class="btn btn-secondary btn-sm" id="saveAsBtn" title="Elegir carpeta y nombre con diálogo nativo (⇧⌘S)">
-          Guardar como…
-        </button>
-        <button class="btn btn-secondary btn-sm" id="saveSheetBtn" title="Guardar únicamente la hoja de contactos analógica en alta resolución">
-          Guardar contactos
-        </button>
+        <div class="export-split" id="exportSplit">
+          <button class="btn btn-primary btn-sm export-main-btn" id="saveDownloadsBtn" title="Guardar a resolución completa en ~/Downloads (⌘S)">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span id="saveDownloadsLabel">Guardar</span>
+          </button>
+          <button type="button" class="btn btn-primary btn-sm export-caret-btn" id="exportMoreBtn" aria-haspopup="true" aria-expanded="false" aria-label="Más opciones de guardado" title="Opciones de guardado y hoja de contactos">
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="export-menu" id="exportMenu" role="menu" aria-label="Opciones de guardado">
+            <button type="button" class="export-menu-item" id="saveAsBtn" role="menuitem" title="Elegir carpeta y nombre con diálogo nativo (⇧⌘S)">
+              <strong>Guardar como…</strong>
+              <span>Elegir carpeta y nombre personalizado</span>
+            </button>
+            <button type="button" class="export-menu-item" id="saveSheetBtn" role="menuitem" title="Guardar únicamente la hoja de contactos analógica en alta resolución">
+              <strong>Guardar solo contactos</strong>
+              <span>Exportar hoja de contactos en alta resolución</span>
+            </button>
+          </div>
+        </div>
         <button class="btn btn-outline btn-sm" id="developFullBtn" title="Revelar todos los fotogramas del rollo y crear hoja de contactos">
           Revelar rollo
         </button>
@@ -170,7 +181,7 @@
       <!-- MODE 2 LEFT: Negative Calibration & Minilab Scanner Profiles -->
       <div id="negativeLabContainer" class="sidebar-pane" style="display: none;">
         <div class="pane-header">
-          <h2>Calibración del negativo</h2>
+          <h2>Calibración negativa</h2>
           <span class="mono-badge badge-emerald">Densitometría v2.3</span>
         </div>
 
@@ -182,34 +193,39 @@
             </div>
             <div class="segmented-bar">
               <button class="seg-btn active" id="btnTypeColor" data-type="color">Color C-41</button>
-              <button class="seg-btn" id="btnTypeBW" data-type="bw">Plata Blanco y Negro</button>
+              <button class="seg-btn" id="btnTypeBW" data-type="bw" title="Emulsión en gelatina de plata blanco y negro">Plata B&amp;N</button>
             </div>
 
-            <div class="sub-label-row">
-              <span>Origen de digitalización</span>
-            </div>
-            <div class="segmented-bar segmented-3" id="negScanSourceBar" role="radiogroup" aria-label="Origen del archivo digitalizado">
-              <button class="seg-btn active" data-source="camera_raw" title="Cámara digital sin espejo o DSLR en formato RAW / DNG">Cámara RAW</button>
-              <button class="seg-btn" data-source="scanner_raw" title="Escáner dedicado lineal (VueScan / SilverFast DNG o TIFF lineal)">Escáner RAW</button>
-              <button class="seg-btn" data-source="flatbed_tiff" title="Escáner plano de cama de cristal (Epson V600/V850) o TIFF/JPEG gamma">Plano TIFF</button>
-            </div>
+            <details class="sub-drawer" id="negCaptureDrawer">
+              <summary class="sub-drawer-summary">Digitalización y luz de escaneo</summary>
+              <div class="sub-drawer-body">
+                <div class="sub-label-row">
+                  <span>Origen de digitalización</span>
+                </div>
+                <div class="segmented-bar segmented-3" id="negScanSourceBar" role="radiogroup" aria-label="Origen del archivo digitalizado">
+                  <button class="seg-btn active" data-source="camera_raw" title="Cámara digital sin espejo o DSLR en formato RAW / DNG">Cámara RAW</button>
+                  <button class="seg-btn" data-source="scanner_raw" title="Escáner dedicado lineal (VueScan / SilverFast DNG o TIFF lineal)">Escáner RAW</button>
+                  <button class="seg-btn" data-source="flatbed_tiff" title="Escáner plano de cama de cristal (Epson V600/V850) o TIFF/JPEG gamma">Plano TIFF</button>
+                </div>
 
-            <div class="sub-label-row">
-              <span>Espectro del backlight</span>
-            </div>
-            <div class="segmented-bar segmented-3" id="negLightSourceBar" role="radiogroup" aria-label="Espectro de fuente de luz de escaneo">
-              <button class="seg-btn active" data-light="standard" title="Luz blanca High-CRI (6000–9000K) o escáner dedicado">Blanca CRI</button>
-              <button class="seg-btn" data-light="cool" title="Backlight frío (>9000K tipo CS-LITE Cool) o luz directa">Fría &gt;9k</button>
-              <button class="seg-btn" data-light="warm" title="Panel LED doméstico o vídeo cálido (<5500K)">Cálida</button>
-            </div>
+                <div class="sub-label-row">
+                  <span>Luz de digitalización</span>
+                </div>
+                <div class="segmented-bar segmented-3" id="negLightSourceBar" role="radiogroup" aria-label="Espectro de fuente de luz de escaneo">
+                  <button class="seg-btn active" data-light="standard" title="Luz blanca High-CRI (6000–9000K) o escáner dedicado">Blanca CRI</button>
+                  <button class="seg-btn" data-light="cool" title="Backlight frío (>9000K tipo CS-LITE Cool) o luz directa">Fría &gt;9k</button>
+                  <button class="seg-btn" data-light="warm" title="Panel LED doméstico o vídeo cálido (<5500K)">Cálida</button>
+                </div>
 
-            <div class="control-group compact-top" id="negPreSatGroup">
-              <div class="control-label">
-                <span title="Amplifica o modera la separación de capas de tinte C-41 antes de invertir la densidad">Pre-saturación óptica</span>
-                <span class="control-val" id="negPreSatVal">1.00x</span>
+                <div class="control-group compact-top" id="negPreSatGroup">
+                  <div class="control-label">
+                    <span title="Amplifica o modera la separación de capas de tinte C-41 antes de invertir la densidad">Pre-saturación óptica</span>
+                    <span class="control-val" id="negPreSatVal">1.00x</span>
+                  </div>
+                  <input type="range" id="negPreSatSlider" min="0.50" max="1.60" step="0.05" value="1.00" data-default="1.00">
+                </div>
               </div>
-              <input type="range" id="negPreSatSlider" min="0.50" max="1.60" step="0.05" value="1.00" data-default="1.00">
-            </div>
+            </details>
           </section>
 
           <!-- Base Mask Neutralization & Roll Analysis -->
@@ -256,25 +272,30 @@
               <button class="seg-btn" data-method="roll_locked" title="Usa la envolvente D-min / D-max común del rollo sin bombeo de exposición">Rollo fijo</button>
             </div>
 
-            <button class="btn btn-outline btn-xs btn-block" id="btnAnalyzeRoll" title="Analiza todos los fotogramas importados para fijar el soporte D-min y rango dinámico real del rollo">
-              Analizar rollo completo (consistencia C-41/B&amp;N)
-            </button>
+            <details class="sub-drawer" id="negRollAnalysisDrawer">
+              <summary class="sub-drawer-summary">Análisis de rollo y márgenes</summary>
+              <div class="sub-drawer-body">
+                <button class="btn btn-outline btn-xs btn-block" id="btnAnalyzeRoll" title="Analiza todos los fotogramas importados para fijar el soporte D-min y rango dinámico real del rollo">
+                  Analizar rollo completo (consistencia C-41/B&amp;N)
+                </button>
 
-            <div class="control-group compact-top">
-              <div class="control-label">
-                <span title="Ignora soportes negros o bordes de mesa de luz al calcular el punto blanco y negro">Margen de análisis (Buffer)</span>
-                <span class="control-val" id="negBufferVal">6%</span>
-              </div>
-              <input type="range" id="negBufferSlider" min="0" max="20" step="1" value="6" data-default="6">
-            </div>
+                <div class="control-group compact-top">
+                  <div class="control-label">
+                    <span title="Ignora soportes negros o bordes de mesa de luz al calcular el punto blanco y negro">Margen de análisis de borde</span>
+                    <span class="control-val" id="negBufferVal">6%</span>
+                  </div>
+                  <input type="range" id="negBufferSlider" min="0" max="20" step="1" value="6" data-default="6">
+                </div>
 
-            <div class="control-group">
-              <div class="control-label">
-                <span title="Recorta simétricamente las perforaciones o bordes exteriores">Recorte limpio de bordes</span>
-                <span class="control-val" id="negCropVal">0%</span>
+                <div class="control-group">
+                  <div class="control-label">
+                    <span title="Recorta simétricamente las perforaciones o bordes exteriores">Recorte limpio de bordes</span>
+                    <span class="control-val" id="negCropVal">0%</span>
+                  </div>
+                  <input type="range" id="negCropSlider" min="0" max="15" step="0.5" value="0" data-default="0">
+                </div>
               </div>
-              <input type="range" id="negCropSlider" min="0" max="15" step="0.5" value="0" data-default="0">
-            </div>
+            </details>
           </section>
 
           <!-- Photochemical Print Media, Finishing & B&W Chemical Toning -->
@@ -297,10 +318,10 @@
             <!-- Contextual Color Print Finishing (0% - 200%) -->
             <div id="negColorFinishPanel" class="sub-panel-box">
               <div class="control-label">
-                <span>Acabado de copia (Print Finish)</span>
+                <span>Acabado de copia en color</span>
               </div>
               <select id="negPrintFinishSelect" class="dark-select" aria-label="Acabado de copia en color">
-                <option value="none">Sin acabado extra (Inversión pura)</option>
+                <option value="none">Estándar (sin acabado extra)</option>
                 <option value="crystal_archive">Papel Fujicolor Crystal Archive</option>
                 <option value="portra_airy">Retrato Pastel Luminoso</option>
                 <option value="gold_warm">Ámbar Dorado Analógico</option>
@@ -446,7 +467,7 @@
           <span class="toolbar-sep" aria-hidden="true"></span>
           <button class="recipe-pill-btn" id="copyRecipeBtn" title="Copiar receta óptica del fotograma activo (⇧⌘C)">Copiar</button>
           <button class="recipe-pill-btn" id="pasteRecipeBtn" title="Pegar receta copiada en este fotograma (⇧⌘V)" disabled>Pegar</button>
-          <button class="recipe-pill-btn recipe-sync-btn" id="syncRollBtn" title="Sincronizar la receta actual en todos los fotogramas del rollo">Sincronizar rollo</button>
+          <button class="recipe-pill-btn recipe-sync-btn" id="syncRollBtn" title="Sincronizar la receta actual en todos los fotogramas del rollo"><span class="sync-label-full">Sincronizar rollo</span><span class="sync-label-short">Sincr. rollo</span></button>
         </div>
 
         <!-- Live Telemetry Status -->
@@ -513,6 +534,20 @@
               <img id="sheetPreview" src="" alt="Hoja de contactos analógica" draggable="false">
               <div class="sheet-overlay-grid" id="sheetOverlayGrid" aria-label="Fotogramas interactivos de la hoja"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Friendly Empty Roll State -->
+        <div class="canvas-empty-state" id="emptyCanvasState" style="display: none;">
+          <svg class="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>
+          </svg>
+          <h3>La mesa de luz está vacía</h3>
+          <p>Arrastra archivos RAW (.CR2, .DNG, .NEF, .ARW) o escaneos (.TIFF, .JPG) aquí para comenzar tu tirada.</p>
+          <div class="empty-state-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="emptyImportBtn">Importar fotografías</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="emptySampleBtn">Cargar foto de prueba</button>
           </div>
         </div>
 
@@ -632,18 +667,10 @@
 
             <div class="control-group">
               <div class="control-label">
-                <span>Contraste S-Curve</span>
+                <span>Contraste tonal</span>
                 <span class="control-val" id="negContrastVal">0.00</span>
               </div>
               <input type="range" class="bipolar-range" id="negContrastSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
-
-            <div class="control-group">
-              <div class="control-label">
-                <span title="Compensa películas forzadas (Push +) o suaviza contrastes duros (Pull −)">Latitud Pull ↔ Push</span>
-                <span class="control-val" id="negPushPullVal">0.00</span>
-              </div>
-              <input type="range" class="bipolar-range" id="negPushPullSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
             </div>
 
             <div class="control-group">
@@ -664,57 +691,65 @@
 
             <div class="control-group">
               <div class="control-label">
-                <span>Punto blanco (Hombro)</span>
-                <span class="control-val" id="negWhitesVal">0.00</span>
-              </div>
-              <input type="range" class="bipolar-range" id="negWhitesSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
-
-            <div class="control-group">
-              <div class="control-label">
-                <span>Punto negro (Talón)</span>
-                <span class="control-val" id="negBlacksVal">0.00</span>
-              </div>
-              <input type="range" class="bipolar-range" id="negBlacksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
-
-            <div class="control-group">
-              <div class="control-label">
-                <span title="Ancla selectivamente el velo de base en sombras profundas sin oscurecer pieles">Negros anti-velo (Inky)</span>
-                <span class="control-val" id="negInkyBlacksVal">0%</span>
-              </div>
-              <input type="range" id="negInkyBlacksSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
-
-            <div class="control-group">
-              <div class="control-label">
-                <span title="Vibrancia analógica que protege los grises neutros mientras aviva colores apagados">Impulso RP Tone</span>
-                <span class="control-val" id="negRpToneVal">0%</span>
-              </div>
-              <input type="range" id="negRpToneSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
-
-            <div class="control-group">
-              <div class="control-label">
                 <span>Saturación cromática</span>
                 <span class="control-val" id="negSatVal">1.00x</span>
               </div>
               <input type="range" id="negSatSlider" min="0.0" max="2.0" step="0.05" value="1.0" data-default="1.0">
             </div>
 
-            <details class="sub-drawer">
-              <summary class="sub-drawer-summary">Recorte densitométrico y protección de luces</summary>
+            <details class="sub-drawer" id="negFineToneDrawer">
+              <summary class="sub-drawer-summary">Ajuste fino de curva y protección</summary>
               <div class="sub-drawer-body">
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Ajusta el umbral inferior de densidad D-min (BlackClip)">Recorte negro (BlackClip)</span>
+                    <span title="Compensa películas forzadas (Push +) o suaviza contrastes duros (Pull −)">Latitud Pull ↔ Push</span>
+                    <span class="control-val" id="negPushPullVal">0.00</span>
+                  </div>
+                  <input type="range" class="bipolar-range" id="negPushPullSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                </div>
+
+                <div class="control-group">
+                  <div class="control-label">
+                    <span>Punto blanco (Hombro)</span>
+                    <span class="control-val" id="negWhitesVal">0.00</span>
+                  </div>
+                  <input type="range" class="bipolar-range" id="negWhitesSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                </div>
+
+                <div class="control-group">
+                  <div class="control-label">
+                    <span>Punto negro (Talón)</span>
+                    <span class="control-val" id="negBlacksVal">0.00</span>
+                  </div>
+                  <input type="range" class="bipolar-range" id="negBlacksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                </div>
+
+                <div class="control-group">
+                  <div class="control-label">
+                    <span title="Ancla selectivamente el velo de base en sombras profundas sin oscurecer pieles">Negros profundos anti-velo</span>
+                    <span class="control-val" id="negInkyBlacksVal">0%</span>
+                  </div>
+                  <input type="range" id="negInkyBlacksSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                </div>
+
+                <div class="control-group">
+                  <div class="control-label">
+                    <span title="Realce analógico que protege los grises neutros mientras aviva colores apagados">Viveza de color natural</span>
+                    <span class="control-val" id="negRpToneVal">0%</span>
+                  </div>
+                  <input type="range" id="negRpToneSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                </div>
+
+                <div class="control-group">
+                  <div class="control-label">
+                    <span title="Ajusta el umbral inferior de densidad en sombras">Corte de negros</span>
                     <span class="control-val" id="negBlackClipVal">0.00</span>
                   </div>
                   <input type="range" class="bipolar-range" id="negBlackClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00">
                 </div>
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Ajusta el umbral superior de densidad D-max (WhiteClip)">Recorte blanco (WhiteClip)</span>
+                    <span title="Ajusta el umbral superior de densidad en luces altas">Corte de luces</span>
                     <span class="control-val" id="negWhiteClipVal">0.00</span>
                   </div>
                   <input type="range" class="bipolar-range" id="negWhiteClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00">
@@ -745,8 +780,8 @@
                 </svg>
                 <span>Gris neutro (W)</span>
               </button>
-              <button class="btn btn-secondary btn-xs scene-wb-btn" id="btnAutoSceneWb" title="Equilibrar automáticamente dominantes en escaneos sin bordes visibles">
-                Auto WB escena
+              <button class="btn btn-secondary btn-xs scene-wb-btn" id="btnAutoSceneWb" title="Equilibrar automáticamente dominantes de color en escaneos sin bordes visibles">
+                Auto equilibrio
               </button>
             </div>
 
@@ -848,69 +883,70 @@
             </div>
           </section>
 
-          <section class="panel-card">
-            <div class="section-head">
-              <h3>Filtros y nitidez óptica</h3>
-              <button class="reset-link" id="resetNegOpticalBtn">Restablecer</button>
-            </div>
-
-            <div class="sub-label-row">
-              <span>Nitidez en luminancia (protege grano)</span>
-            </div>
-            <div class="segmented-bar segmented-3" id="negSharpenModeBar" role="radiogroup" aria-label="Modo de nitidez óptica">
-              <button class="seg-btn active" data-sharpen="off" title="Sin enfoque posterior">Apagada</button>
-              <button class="seg-btn" data-sharpen="lab" title="Micro-acutancia de óptica Minilab Frontier / Noritsu">Lab</button>
-              <button class="seg-btn" data-sharpen="scanner" title="Recuperación de foco para escáner plano de cama de cristal">Escáner</button>
-            </div>
-
-            <div class="control-group" id="negSharpenAmountGroup" style="display: none;">
-              <div class="control-label">
-                <span>Intensidad de acutancia</span>
-                <span class="control-val" id="negSharpenAmountVal">100%</span>
+          <details class="panel-card collapsible-panel" id="negOpticalPanel">
+            <summary class="collapsible-summary">
+              <span>Filtros y nitidez óptica</span>
+            </summary>
+            <div class="collapsible-body">
+              <div class="section-head">
+                <span class="helper-copy">Nitidez en luminancia y óptica de color</span>
+                <button class="reset-link" id="resetNegOpticalBtn">Restablecer</button>
               </div>
-              <input type="range" id="negSharpenAmountSlider" min="0" max="200" step="10" value="100" data-default="100">
-            </div>
-
-            <div class="control-group">
-              <div class="control-label">
-                <span title="Filtro ámbar tipo Wratten 85B para película de tungsteno (800T / 500T) en luz día">Filtro 85B Cálido</span>
-                <span class="control-val" id="negWarming85Val">0%</span>
+              <div class="segmented-bar segmented-3" id="negSharpenModeBar" role="radiogroup" aria-label="Modo de nitidez óptica">
+                <button class="seg-btn active" data-sharpen="off" title="Sin enfoque posterior">Apagada</button>
+                <button class="seg-btn" data-sharpen="lab" title="Micro-acutancia de óptica Minilab Frontier / Noritsu">Lab</button>
+                <button class="seg-btn" data-sharpen="scanner" title="Recuperación de foco para escáner plano de cama de cristal">Escáner</button>
               </div>
-              <input type="range" id="negWarming85Slider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
 
-            <div class="control-group">
-              <div class="control-label">
-                <span title="Corrige selectivamente el tinte rojizo en altas luces provocado por backlights cálidos">Filtro Skylight (Anti-rojo)</span>
-                <span class="control-val" id="negSkylightVal">0%</span>
+              <div class="control-group" id="negSharpenAmountGroup" style="display: none;">
+                <div class="control-label">
+                  <span>Intensidad de acutancia</span>
+                  <span class="control-val" id="negSharpenAmountVal">100%</span>
+                </div>
+                <input type="range" id="negSharpenAmountSlider" min="0" max="200" step="10" value="100" data-default="100">
               </div>
-              <input type="range" id="negSkylightSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
 
-            <div class="control-group">
-              <div class="control-label">
-                <span title="Neutraliza el velo verdoso en sombras de negativos subexpuestos o caducados">Filtro Sombra (Anti-verde)</span>
-                <span class="control-val" id="negShadeVal">0%</span>
+              <div class="control-group">
+                <div class="control-label">
+                  <span title="Filtro ámbar tipo Wratten 85B para película de tungsteno (800T / 500T) en luz día">Filtro 85B Cálido</span>
+                  <span class="control-val" id="negWarming85Val">0%</span>
+                </div>
+                <input type="range" id="negWarming85Slider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
               </div>
-              <input type="range" id="negShadeSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
-            </div>
 
-            <div class="control-group">
-              <div class="control-label">
-                <span>Difusión de luz (LabGlow)</span>
-                <span class="control-val" id="negGlowVal">1.0x</span>
+              <div class="control-group">
+                <div class="control-label">
+                  <span title="Corrige selectivamente el tinte rojizo en altas luces provocado por backlights cálidos">Filtro Skylight (Anti-rojo)</span>
+                  <span class="control-val" id="negSkylightVal">0%</span>
+                </div>
+                <input type="range" id="negSkylightSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
               </div>
-              <input type="range" id="negGlowSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
-            </div>
 
-            <div class="control-group">
-              <div class="control-label">
-                <span>Papel mate (LabFade)</span>
-                <span class="control-val" id="negFadeVal">1.0x</span>
+              <div class="control-group">
+                <div class="control-label">
+                  <span title="Neutraliza el velo verdoso en sombras de negativos subexpuestos o caducados">Filtro Sombra (Anti-verde)</span>
+                  <span class="control-val" id="negShadeVal">0%</span>
+                </div>
+                <input type="range" id="negShadeSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
               </div>
-              <input type="range" id="negFadeSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Halación y difusión suave</span>
+                  <span class="control-val" id="negGlowVal">1.0x</span>
+                </div>
+                <input type="range" id="negGlowSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Acabado mate / velo suave</span>
+                  <span class="control-val" id="negFadeVal">1.0x</span>
+                </div>
+                <input type="range" id="negFadeSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+              </div>
             </div>
-          </section>
+          </details>
         </div>
 
         <!-- SHARED ANALOG EXIF TECHNICAL SHEET (Stamps Camera/Lens/Film/ISO into JPG, PNG & 16-bit TIFF) -->
@@ -1149,6 +1185,8 @@
           <div class="shortcut-row"><span>Guardar en Descargas</span><kbd id="kbdSave">⌘ S</kbd></div>
           <div class="shortcut-row"><span>Guardar como…</span><kbd id="kbdSaveAs">⇧ ⌘ S</kbd></div>
           <div class="shortcut-row"><span>Importar fotografía o escaneo</span><kbd id="kbdOpen">⌘ O</kbd></div>
+          <div class="shortcut-row"><span>Deshacer / Rehacer ajuste</span><kbd id="kbdUndoRedo">⌘ Z / ⇧ ⌘ Z</kbd></div>
+          <div class="shortcut-row"><span>Fotograma anterior / siguiente</span><kbd>←</kbd> <kbd>→</kbd></div>
           <div class="shortcut-row"><span>Comparar original (mantener)</span><kbd>\</kbd></div>
           <div class="shortcut-row"><span>Vista Dividida / Revelada / Contactos</span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></div>
           <div class="shortcut-row"><span>Rotar fotograma 90°</span><kbd>R</kbd></div>
@@ -1178,7 +1216,7 @@
           </div>
           <div>
             <h3 id="aboutModalTitle">Haluro — Laboratorio Analógico Digital</h3>
-            <span class="about-version-badge">Versión 2.4.4 · Distribución Libre y Gratuita</span>
+            <span class="about-version-badge">Versión 2.4.5 · Distribución Libre y Gratuita</span>
           </div>
         </div>
         <button class="modal-close" id="closeAboutBtn" aria-label="Cerrar acerca de">&times;</button>
@@ -1205,7 +1243,7 @@
         <div class="about-update-card">
           <div class="about-update-info">
             <span class="about-update-title">Actualizaciones de software</span>
-            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.4 instalada</span>
+            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.5 instalada</span>
           </div>
           <button class="btn btn-secondary btn-sm" id="btnCheckUpdateManual">
             <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -1241,7 +1279,7 @@
             </div>
             <div>
               <strong>Calidad de Laboratorio</strong>
-              <p>72 películas químicas, Hurter-Driffield, virados B&N, Roll Analysis y exportación TIFF 16-bit real.</p>
+              <p>72 películas químicas, curva Hurter-Driffield, virados B&N, análisis de rollo unificado y exportación TIFF de 16 bits.</p>
             </div>
           </div>
           <div class="about-pillar-item">
@@ -1259,7 +1297,7 @@
         <div class="about-license-section">
           <h4>Licencias de Software Libre y Atribución</h4>
           <ul class="about-license-list">
-            <li><strong>Haluro Engine & UI:</strong> Código fuente abierto bajo licencia <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>. Copyright &copy; 2026 César Fernández Ardiles (Oregano, Chile).</li>
+            <li><strong>Motor y diseño de Haluro:</strong> Código fuente abierto bajo licencia <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>. Copyright &copy; 2026 César Fernández Ardiles (Oregano, Chile).</li>
             <li><strong>Colección de Simulación de Película (3D LUTs):</strong> Basada en los perfiles libres de Pat David (PIXLS.US), GREYC/G'MIC y RawTherapee, distribuidos bajo licencia <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.</li>
             <li><strong>Tipografías Locales:</strong> Plus Jakarta Sans y JetBrains Mono bajo licencia <a href="https://openfontlicense.org" target="_blank" rel="noopener">SIL Open Font License 1.1</a> (alojadas 100% de manera autónoma y local).</li>
             <li><strong>Motor RAW & Librerías:</strong> LibRaw / rawpy (LGPL 2.1 / CDDL 1.0 / MIT), Flask, Werkzeug, NumPy, SciPy y pywebview (BSD-3-Clause), Pillow (HPND / MIT-CMU).</li>

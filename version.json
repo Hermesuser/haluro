@@ -1,20 +1,20 @@
 {
-  "version": "2.4.4",
-  "release_date": "2026-11-10",
-  "name": "Haluro v2.4.4",
-  "title": "Mesa de Luz Interactiva y Progreso de Revelado en Vivo",
-  "description": "Mejoras de interfaz y experiencia de usuario: hoja de contactos interactiva con zoom y selección directa por fotograma, barra de progreso en tiempo real al revelar el rollo con cancelación segura y barra superior adaptada al modo de trabajo.",
+  "version": "2.4.5",
+  "release_date": "2026-11-11",
+  "name": "Haluro v2.4.5",
+  "title": "Flujo de Cuarto Oscuro Refinado, Historial Deshacer y Catálogo en Español",
+  "description": "Pulido integral de interfaz y experiencia de usuario: historial rápido Deshacer/Rehacer (⌘Z / ⇧⌘Z), navegación por fotogramas con flechas, estado vacío guiado, densidad neutra en Laboratorio de Negativos y traducciones completas al español en las 72 películas.",
   "highlights": [
-    "Mesa de luz interactiva: haz clic sobre cualquier fotograma de la hoja de contactos para editarlo al instante, ajusta las columnas (3 a 6) y personaliza el título del rollo.",
-    "Progreso en vivo al revelar el rollo: indicador fotograma a fotograma con tiempo transcurrido y opción de cancelar limpiamente sin dejar copias a medias.",
-    "Barra superior contextual: distingue claramente entre guardar la foto activa, guardar solo la hoja de contactos o revelar todo el rollo.",
-    "Indicadores de fotogramas ajustados en la tira de película y mejor aprovechamiento de pantalla en portátiles."
+    "Deshacer y rehacer ajustes en tiempo real (⌘Z / ⇧⌘Z) junto con navegación directa entre fotogramas con las teclas ← y →.",
+    "Estado vacío guiado sobre la mesa de luz con acciones directas para importar fotografías o iniciar con muestras de laboratorio.",
+    "Control directo de Densidad neutra en el Laboratorio de Negativos y adaptación limpia de la barra de herramientas en portátiles.",
+    "Catálogo completo de 72 películas clásicas en español y terminología de captura unificada (Cámara RAW, Soporte base D-min)."
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-2.4.4-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-2.4.4-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-Setup-2.4.4-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-Portable-2.4.4-Win11-x64.zip",
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-2.4.5-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-2.4.5-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-Setup-2.4.5-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-Portable-2.4.5-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "min_supported_version": "2.0.0"

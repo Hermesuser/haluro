@@ -1,4 +1,4 @@
-# Haluro — Laboratorio Analógico Digital (v2.4.4)
+# Haluro — Laboratorio Analógico Digital (v2.4.5)
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2011-blue.svg)](#requisitos-técnicos)
@@ -131,8 +131,8 @@
 
 #### Opción 1: Imagen de Disco Oficial (.dmg)
 1. Descarga la versión adecuada para tu procesador desde [Releases de GitHub](https://github.com/Hermesuser/haluro/releases):
-   - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.4.4-macOS-arm64.dmg`
-   - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.4.4-macOS-x86_64.dmg`
+   - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.4.5-macOS-arm64.dmg`
+   - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.4.5-macOS-x86_64.dmg`
 2. Haz doble clic sobre el archivo `.dmg` montado y arrastra el icono de **Haluro** hacia tu carpeta de **Aplicaciones**.
 3. Abre **Haluro** desde Launchpad, Spotlight o tu carpeta de **Aplicaciones**.
    > **Nota para el primer arranque en macOS Sequoia / Sonoma:**  
@@ -158,12 +158,12 @@ chmod +x run.sh
 ### B) Windows 11 (Nativo)
 
 #### Opción 1: Instalador Moderno (Setup .exe)
-1. Descarga `Haluro-Setup-2.4.4-Win11-x64.exe` desde las Releases de GitHub.
+1. Descarga `Haluro-Setup-2.4.5-Win11-x64.exe` desde las Releases de GitHub.
 2. Ejecuta el instalador. No requiere permisos de administrador obligatorios (instalación por usuario limpia y sin fricción UAC).
 3. Inicia Haluro desde el Menú Inicio o el acceso directo del Escritorio.
 
 #### Opción 2: Versión Portátil (.zip)
-1. Descarga `Haluro-Portable-2.4.4-Win11-x64.zip`.
+1. Descarga `Haluro-Portable-2.4.5-Win11-x64.zip`.
 2. Descomprime la carpeta en cualquier ubicación (por ejemplo, `C:\Programas\Haluro`).
 3. Ejecuta directamente `Haluro.exe`.
 

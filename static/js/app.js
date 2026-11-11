@@ -1,5 +1,5 @@
 /**
- * Haluro — Laboratorio Analógico Digital (v2.4.4)
+ * Haluro — Laboratorio Analógico Digital (v2.4.5)
  * Precision frontend controller: 72-stock film simulation, C-41/B&W optical negative
  * inversion (RA-4, ECP 2383, Minilab, V-Log), B&W chemical toners & fine-art papers,
  * unified multi-frame Roll Analysis, 3-Way CMY split-toning, color-protected soft clip,
@@ -198,6 +198,7 @@ let debounceTimer = null;
 let previewAbortController = null;
 let offscreenHistCanvas = null;
 let offscreenLoupeCanvas = null;
+let suppressAutoSliderUndo = false;
 let loupeSourceReady = false;
 
 // =============================================================
@@ -251,6 +252,7 @@ function getOsCopy() {
       copyRecipeKbd: "Ctrl+Shift+C",
       pasteRecipeKbd: "Ctrl+Shift+V",
       copyPasteKbd: "Ctrl + Shift + C / V",
+      undoRedoKbd: "Ctrl + Z / Ctrl + Y",
       downloadsPrefix: "Descargas\\",
     };
   }
@@ -267,6 +269,7 @@ function getOsCopy() {
       copyRecipeKbd: "Ctrl+Shift+C",
       pasteRecipeKbd: "Ctrl+Shift+V",
       copyPasteKbd: "Ctrl + Shift + C / V",
+      undoRedoKbd: "Ctrl + Z / Ctrl + Shift + Z",
       downloadsPrefix: "~/Downloads/",
     };
   }
@@ -282,6 +285,7 @@ function getOsCopy() {
     copyRecipeKbd: "⇧⌘C",
     pasteRecipeKbd: "⇧⌘V",
     copyPasteKbd: "⇧ ⌘ C / V",
+    undoRedoKbd: "⌘ Z / ⇧ ⌘ Z",
     downloadsPrefix: "~/Downloads/",
   };
 }
@@ -319,10 +323,12 @@ function applyPlatformUI() {
   const kbdSaveAs = document.getElementById("kbdSaveAs");
   const kbdOpen = document.getElementById("kbdOpen");
   const kbdCopyPaste = document.getElementById("kbdCopyPaste");
+  const kbdUndoRedo = document.getElementById("kbdUndoRedo");
   if (kbdSave) kbdSave.textContent = copy.saveKbd;
   if (kbdSaveAs) kbdSaveAs.textContent = copy.saveAsKbd;
   if (kbdOpen) kbdOpen.textContent = copy.openKbd;
   if (kbdCopyPaste) kbdCopyPaste.textContent = copy.copyPasteKbd;
+  if (kbdUndoRedo) kbdUndoRedo.textContent = copy.undoRedoKbd;
 
   const copyBtn = document.getElementById("copyRecipeBtn");
   const pasteBtn = document.getElementById("pasteRecipeBtn");
@@ -496,6 +502,9 @@ function toggleFavoriteFilm(filmKey) {
 }
 
 function selectFilm(key) {
+  if (key && key !== state.selectedFilm) {
+    pushUndoSnapshotForFrame();
+  }
   state.selectedFilm = key;
   document.querySelectorAll(".film-card").forEach((el) => {
     const sel = el.dataset.key === key;
@@ -526,6 +535,7 @@ async function loadSamplePhoto(forceNegative = false) {
         filename: data.filename,
         name: data.name || data.filename,
         is_raw: true,
+        is_sample: true,
         thumb_url: data.thumb_url || `/api/thumbnail/${encodeURIComponent(data.filename)}`,
       };
       if (existingIdx >= 0) {
@@ -536,6 +546,7 @@ async function loadSamplePhoto(forceNegative = false) {
         state.activeFrameIndex = state.frames.length - 1;
       }
       state.lastOriginalKey = "";
+      syncEmptyRollButtons(false);
       renderFilmStrip();
       await requestPreview(true);
     }
@@ -558,6 +569,7 @@ async function loadNegativeSample() {
         filename: data.filename,
         name: data.name || data.filename,
         is_raw: false,
+        is_sample: true,
         thumb_url: data.thumb_url || `/api/thumbnail/${encodeURIComponent(data.filename)}`,
       };
       if (existingIdx >= 0) {
@@ -568,6 +580,7 @@ async function loadNegativeSample() {
         state.activeFrameIndex = state.frames.length - 1;
       }
       state.lastOriginalKey = "";
+      syncEmptyRollButtons(false);
       renderFilmStrip();
       await autoDetectBaseColor(false);
       await requestPreview(true);
@@ -587,21 +600,39 @@ async function importFiles(fileList) {
   showLoading(true, `Importando ${files.length} fotograma(s) al laboratorio…`);
   let importedCount = 0;
 
+  // Replace untouched single demo sample cleanly so user rolls stay pure
+  const replacingUntouchedSample =
+    state.frames.length === 1 &&
+    state.frames[0].is_sample &&
+    !isFrameCustomized(state.frames[0]);
+
   try {
+    const newEntries = [];
     for (const file of files) {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (res.ok && data.filename) {
-        const entry = {
+        newEntries.push({
           filename: data.filename,
           name: data.name || file.name,
           is_raw: Boolean(data.is_raw),
+          is_sample: false,
           thumb_url:
             data.thumb_url || `/api/thumbnail/${encodeURIComponent(data.filename)}?t=${Date.now()}`,
-        };
-        const existingIdx = state.frames.findIndex((f) => f.filename === data.filename);
+        });
+        importedCount += 1;
+      }
+    }
+
+    if (importedCount > 0) {
+      if (replacingUntouchedSample) {
+        state.frames = [];
+        state.activeFrameIndex = 0;
+      }
+      newEntries.forEach((entry) => {
+        const existingIdx = state.frames.findIndex((f) => f.filename === entry.filename);
         if (existingIdx >= 0) {
           state.frames[existingIdx] = entry;
           state.activeFrameIndex = existingIdx;
@@ -609,13 +640,12 @@ async function importFiles(fileList) {
           state.frames.push(entry);
           state.activeFrameIndex = state.frames.length - 1;
         }
-        importedCount += 1;
-      }
-    }
+      });
 
-    if (importedCount > 0) {
       state.lastOriginalKey = "";
+      state.contactSheetCache = null;
       resetZoom();
+      syncEmptyRollButtons(false);
       renderFilmStrip();
       if (state.appMode === "negative") {
         await autoDetectBaseColor(false);
@@ -722,14 +752,102 @@ async function activateFrameByIndex(idx, viewModeFromSheet = "full") {
   state.lastOriginalKey = "";
   const hadRecipe = loadFrameRecipe(idx);
   renderFilmStrip();
-  const activeThumb = document.querySelectorAll("#stripFrames .film-frame-thumb")[idx];
-  activeThumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  const stripEl = document.getElementById("stripFrames");
+  const activeThumb = stripEl?.querySelectorAll(".film-frame-thumb")[idx];
+  if (stripEl && activeThumb) {
+    const targetLeft = activeThumb.offsetLeft - (stripEl.clientWidth - activeThumb.clientWidth) / 2;
+    stripEl.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
+  }
   if (state.viewMode === "sheet") setViewMode(viewModeFromSheet);
   if (state.appMode === "negative" && (!hadRecipe || negativeState.baseColor === null)) {
     await autoDetectBaseColor(false);
   }
   saveActiveFrameRecipe();
   requestPreview(true);
+}
+
+function syncEmptyRollButtons(isEmpty) {
+  ["saveDownloadsBtn", "saveAsBtn", "saveSheetBtn", "developFullBtn", "exportMoreBtn", "syncRollBtn", "copyRecipeBtn"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = Boolean(isEmpty);
+  });
+  const emptyBox = document.getElementById("emptyCanvasState");
+  const splitWrapper = document.getElementById("splitWrapper");
+  const sheetContainer = document.getElementById("sheetContainer");
+  if (emptyBox) {
+    emptyBox.style.display = isEmpty ? "flex" : "none";
+  }
+  if (!isEmpty) {
+    if (state.viewMode === "sheet") {
+      if (sheetContainer) sheetContainer.style.display = "flex";
+      if (splitWrapper) splitWrapper.style.display = "none";
+    } else {
+      if (splitWrapper) splitWrapper.style.display = "block";
+      if (sheetContainer) sheetContainer.style.display = "none";
+    }
+  } else {
+    if (splitWrapper) splitWrapper.style.display = "none";
+    if (sheetContainer) sheetContainer.style.display = "none";
+  }
+}
+
+function renderEmptyRollUI() {
+  syncEmptyRollButtons(true);
+  renderFilmStrip();
+  const statRes = document.getElementById("statResolution");
+  const statTime = document.getElementById("statTime");
+  if (statRes) statRes.textContent = "Sin fotogramas";
+  if (statTime) statTime.textContent = "—";
+  const histCanvas = document.getElementById("histogramCanvas");
+  if (histCanvas) {
+    const ctx = histCanvas.getContext("2d");
+    ctx?.clearRect(0, 0, histCanvas.width, histCanvas.height);
+  }
+}
+
+async function removeFrameByIndex(idx) {
+  if (idx < 0 || idx >= state.frames.length) return;
+  const removed = state.frames[idx];
+  state.frames.splice(idx, 1);
+  state.contactSheetCache = null;
+  state.sheetLayout = [];
+  state.lastOriginalKey = "";
+
+  if (state.frames.length === 0) {
+    state.activeFrameIndex = 0;
+    renderEmptyRollUI();
+    showToast("Fotograma retirado", `${removed.name} eliminado del rollo.`);
+    return;
+  }
+
+  if (state.activeFrameIndex >= state.frames.length) {
+    state.activeFrameIndex = state.frames.length - 1;
+  } else if (idx < state.activeFrameIndex) {
+    state.activeFrameIndex -= 1;
+  }
+
+  const hadRecipe = loadFrameRecipe(state.activeFrameIndex);
+  syncEmptyRollButtons(false);
+  renderFilmStrip();
+  if (state.appMode === "negative" && (!hadRecipe || negativeState.baseColor === null)) {
+    await autoDetectBaseColor(false);
+  }
+  await requestPreview(true);
+  if (state.viewMode === "sheet") {
+    generateContactSheetPreview();
+  }
+}
+
+function clearRollFrames() {
+  if (state.frames.length === 0) return;
+  state.frames = [];
+  state.activeFrameIndex = 0;
+  state.contactSheetCache = null;
+  state.sheetLayout = [];
+  state.lastOriginalKey = "";
+  negativeState.rollBounds = null;
+  renderEmptyRollUI();
+  showToast("Rollo vaciado", "Arrastra nuevas fotografías cuando estés listo.");
 }
 
 function renderFilmStrip() {
@@ -741,9 +859,10 @@ function renderFilmStrip() {
     const thumb = document.createElement("div");
     thumb.className = `film-frame-thumb ${idx === state.activeFrameIndex ? "active" : ""}`;
     const custom = isFrameCustomized(frame);
+    const sampleNote = frame.is_sample ? " · Muestra de prueba" : "";
     thumb.title = custom
-      ? `${frame.name} (Fotograma #${idx + 1} · Con ajustes propios)`
-      : `${frame.name} (Fotograma #${idx + 1})`;
+      ? `${frame.name} (Fotograma #${idx + 1}${sampleNote} · Con ajustes propios)`
+      : `${frame.name} (Fotograma #${idx + 1}${sampleNote})`;
     thumb.setAttribute("tabindex", "0");
 
     if (custom) {
@@ -753,22 +872,43 @@ function renderFilmStrip() {
       thumb.appendChild(dot);
     }
 
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "frame-remove-btn";
+    removeBtn.title = "Quitar este fotograma del rollo";
+    removeBtn.setAttribute("aria-label", `Quitar ${frame.name}`);
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeFrameByIndex(idx);
+    });
+    thumb.appendChild(removeBtn);
+
     const img = document.createElement("img");
     img.src = frame.thumb_url || `/api/thumbnail/${encodeURIComponent(frame.filename)}`;
     img.alt = frame.name;
     img.loading = "lazy";
+
+    const scrim = document.createElement("div");
+    scrim.className = "frame-bottom-scrim";
+
+    const nameCap = document.createElement("div");
+    nameCap.className = "frame-name-caption";
+    nameCap.textContent = frame.name;
 
     const badge = document.createElement("div");
     badge.className = "frame-number-badge";
     const numSpan = document.createElement("span");
     numSpan.textContent = `${String(idx + 1).padStart(2, "0")}A`;
     const typeSpan = document.createElement("span");
-    typeSpan.textContent = frame.is_raw ? "RAW" : "SCAN";
+    typeSpan.textContent = frame.is_sample ? `DEMO · ${frame.is_raw ? "RAW" : "SCAN"}` : frame.is_raw ? "RAW" : "SCAN";
     badge.appendChild(numSpan);
     badge.appendChild(typeSpan);
 
+    scrim.appendChild(nameCap);
+    scrim.appendChild(badge);
     thumb.appendChild(img);
-    thumb.appendChild(badge);
+    thumb.appendChild(scrim);
 
     const activate = () => activateFrameByIndex(idx, "split");
 
@@ -793,6 +933,17 @@ function renderFilmStrip() {
     document.getElementById("fileInput")?.click();
   });
   strip.appendChild(addBtn);
+
+  if (state.frames.length > 0) {
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "film-frame-clear";
+    clearBtn.id = "clearRollBtn";
+    clearBtn.title = "Retirar todos los fotogramas de la tira (no borra archivos originales)";
+    clearBtn.innerHTML = `<span style="font-size:13px;line-height:1;">✕</span><span>Vaciar</span>`;
+    clearBtn.addEventListener("click", clearRollFrames);
+    strip.appendChild(clearBtn);
+  }
 }
 
 // =============================================================
@@ -825,9 +976,15 @@ async function switchStudioMode(mode) {
   if (simRight) simRight.style.display = isNeg ? "none" : "block";
   if (negRight) negRight.style.display = isNeg ? "block" : "none";
 
-  const sampleLabel = document.getElementById("loadSampleLabel");
-  if (sampleLabel) {
-    sampleLabel.textContent = isNeg ? "Muestra negativo" : "Cargar muestra RAW";
+  const sampleBtn = document.getElementById("loadSampleBtn");
+  if (sampleBtn) {
+    sampleBtn.title = isNeg
+      ? "Cargar escaneo de negativo C-41 de prueba"
+      : "Cargar fotografía Canon RAW de prueba";
+  }
+  const emptySampleBtn = document.getElementById("emptySampleBtn");
+  if (emptySampleBtn) {
+    emptySampleBtn.textContent = isNeg ? "Cargar muestra negativo" : "Cargar foto de prueba RAW";
   }
 
   const origLabel = document.getElementById("originalLabel");
@@ -842,15 +999,30 @@ async function switchStudioMode(mode) {
 
   updateActiveRecipeBanner();
 
-  // If switching to Negative mode and only SAMPLE.CR2 is loaded, load sample negative automatically
-  const activeFrame = state.frames[state.activeFrameIndex];
-  if (isNeg && (!activeFrame || activeFrame.filename === "SAMPLE.CR2")) {
-    await loadNegativeSample();
+  // Swap demo sample cleanly per mode when the roll only holds built-in demo frames
+  const onlySamples = state.frames.length > 0 && state.frames.every((f) => f.is_sample);
+  if (onlySamples) {
+    state.frames = [];
+    state.activeFrameIndex = 0;
+    state.contactSheetCache = null;
+    if (isNeg) {
+      await loadNegativeSample();
+    } else {
+      await loadSamplePhoto(false);
+    }
+    if (state.viewMode === "sheet") {
+      generateContactSheetPreview();
+    }
     return;
   }
 
   state.lastOriginalKey = "";
+  syncEmptyRollButtons(state.frames.length === 0);
   renderFilmStrip();
+  if (state.frames.length === 0) {
+    renderEmptyRollUI();
+    return;
+  }
   if (isNeg && negativeState.baseColor === null) {
     await autoDetectBaseColor(false);
   }
@@ -1166,6 +1338,78 @@ function snapshotNegRecipe() {
   };
 }
 
+function clonePlain(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function ensureFrameHistory(frame) {
+  if (!frame.undoStack) frame.undoStack = { simulation: [], negative: [] };
+  if (!frame.redoStack) frame.redoStack = { simulation: [], negative: [] };
+}
+
+function captureModeRecipeSnapshot(mode = state.appMode) {
+  return clonePlain(mode === "negative" ? snapshotNegRecipe() : snapshotSimRecipe());
+}
+
+function pushUndoSnapshotForFrame(
+  frame = state.frames[state.activeFrameIndex],
+  mode = state.appMode,
+  explicitSnap = null
+) {
+  if (!frame) return;
+  ensureFrameHistory(frame);
+  const stack = frame.undoStack[mode] || (frame.undoStack[mode] = []);
+  const snap = clonePlain(explicitSnap || captureModeRecipeSnapshot(mode));
+  if (stack.length > 0 && JSON.stringify(stack[stack.length - 1]) === JSON.stringify(snap)) {
+    return;
+  }
+  stack.push(snap);
+  if (stack.length > 40) stack.shift();
+  frame.redoStack[mode] = [];
+}
+
+function applyRecipeHistorySnapshot(snap, mode) {
+  if (!snap) return;
+  if (mode === "negative") {
+    applyNegRecipeToUI(clonePlain(snap), false);
+  } else {
+    applySimRecipeToUI(clonePlain(snap));
+  }
+  saveActiveFrameRecipe();
+  state.lastOriginalKey = "";
+  requestPreview(true);
+}
+
+function performUndo() {
+  const frame = state.frames[state.activeFrameIndex];
+  if (!frame) return;
+  ensureFrameHistory(frame);
+  const mode = state.appMode;
+  const undoStack = frame.undoStack[mode];
+  if (!undoStack || undoStack.length === 0) return;
+
+  const currentSnap = captureModeRecipeSnapshot(mode);
+  const prevSnap = undoStack.pop();
+  frame.redoStack[mode].push(currentSnap);
+  applyRecipeHistorySnapshot(prevSnap, mode);
+  showToast("Deshecho", "Se restauró el ajuste anterior de este fotograma.");
+}
+
+function performRedo() {
+  const frame = state.frames[state.activeFrameIndex];
+  if (!frame) return;
+  ensureFrameHistory(frame);
+  const mode = state.appMode;
+  const redoStack = frame.redoStack[mode];
+  if (!redoStack || redoStack.length === 0) return;
+
+  const currentSnap = captureModeRecipeSnapshot(mode);
+  const nextSnap = redoStack.pop();
+  frame.undoStack[mode].push(currentSnap);
+  applyRecipeHistorySnapshot(nextSnap, mode);
+  showToast("Rehecho", "Se volvió a aplicar el ajuste.");
+}
+
 function saveActiveFrameRecipe() {
   const frame = state.frames[state.activeFrameIndex];
   if (!frame) return;
@@ -1398,6 +1642,7 @@ async function pasteCopiedRecipe() {
   if (state.copiedRecipe.mode !== state.appMode) {
     await switchStudioMode(state.copiedRecipe.mode);
   }
+  pushUndoSnapshotForFrame();
   if (state.copiedRecipe.mode === "negative") {
     // Keep active frame's own rotation/flip unless needed, apply grading + base
     const merged = {
@@ -1426,7 +1671,11 @@ function syncRecipeToRoll() {
   const isNeg = state.appMode === "negative";
   const baseSnap = isNeg ? snapshotNegRecipe() : snapshotSimRecipe();
 
-  state.frames.forEach((f) => {
+  state.frames.forEach((f, idx) => {
+    const prevRec = isNeg ? f.negRecipe : f.simRecipe;
+    if (prevRec && idx !== state.activeFrameIndex) {
+      pushUndoSnapshotForFrame(f, state.appMode, prevRec);
+    }
     if (isNeg) {
       const prevRot = f.negRecipe?.rotate ?? state.rotate;
       const prevFlip = f.negRecipe?.flip_h ?? state.flip_h;
@@ -1507,13 +1756,22 @@ async function autoDetectBaseColor(triggerPreviewAfter = true) {
     });
     const data = await res.json();
     if (res.ok && data.base_color) {
+      if (triggerPreviewAfter) {
+        pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], "negative");
+      }
       setBaseColor(data.base_color, data.base_hex || data.hex, "Auto D-min");
       if (triggerPreviewAfter) {
+        saveActiveFrameRecipe();
         requestPreview(false);
       }
+    } else if (triggerPreviewAfter) {
+      showToast("No se pudo detectar D-min", data.error || "Usa el cuentagotas manual (I) sobre el borde sin exponer.");
     }
   } catch (err) {
     console.error("Auto base error:", err);
+    if (triggerPreviewAfter) {
+      showToast("Error al detectar soporte", err.message || "Intenta muestrear manualmente el borde.");
+    }
   }
 }
 
@@ -1536,6 +1794,11 @@ async function analyzeFullRoll() {
     if (!res.ok || !data.base_color || !data.roll_bounds) {
       throw new Error(data.error || "No se pudo calibrar el rollo");
     }
+
+    state.frames.forEach((f) => {
+      if (f.negRecipe) pushUndoSnapshotForFrame(f, "negative", f.negRecipe);
+    });
+    pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], "negative");
 
     negativeState.rollBounds = {
       d_min: [...data.roll_bounds.d_min],
@@ -1787,13 +2050,16 @@ async function autoBalanceSceneWb() {
       }),
     });
     const data = await res.json();
-    if (res.ok && Array.isArray(data.printer_cmy)) {
-      applySolvedCmy(data.printer_cmy);
-      await requestPreview(false);
-      showToast("Auto WB aplicado", "Luces de ampliadora equilibradas sobre los medios tonos.");
+    if (!res.ok || !Array.isArray(data.printer_cmy)) {
+      throw new Error(data?.error || "No se pudo equilibrar la escena automáticamente.");
     }
+    pushUndoSnapshotForFrame(activeFrame, "negative");
+    applySolvedCmy(data.printer_cmy);
+    await requestPreview(false);
+    showToast("Equilibrio aplicado", "Luces de ampliadora ajustadas sobre los tonos medios.");
   } catch (err) {
     console.error("Auto scene WB error:", err);
+    showToast("Error al equilibrar color", err.message || "Prueba muestrear manualmente un punto gris neutro (W).");
   } finally {
     setRenderBusy(false);
   }
@@ -1883,15 +2149,18 @@ function initEyedropperViewport() {
           }),
         });
         const data = await res.json();
-        if (res.ok && Array.isArray(data.printer_cmy)) {
-          applySolvedCmy(data.printer_cmy);
-          setEyedropperMode(null);
-          await requestPreview(false);
-          showToast("Gris neutro calibrado", "Luces CMY ajustadas sobre el punto muestreado.");
+        if (!res.ok || !Array.isArray(data.printer_cmy)) {
+          throw new Error(data?.error || "No se pudo calcular el gris neutro en ese punto.");
         }
+        pushUndoSnapshotForFrame(activeFrame, "negative");
+        applySolvedCmy(data.printer_cmy);
+        setEyedropperMode(null);
+        await requestPreview(false);
+        showToast("Gris neutro calibrado", "Luces CMY ajustadas sobre el punto muestreado.");
       } catch (err) {
         console.error("Scene WB sample error:", err);
         setEyedropperMode(null);
+        showToast("No se pudo muestrear gris", err.message || "Intenta hacer clic sobre un tono neutro sin quemar.");
       }
       return;
     }
@@ -1909,16 +2178,19 @@ function initEyedropperViewport() {
         }),
       });
       const data = await res.json();
-      if (res.ok && data.base_color) {
-        setBaseColor(data.base_color, data.base_hex || data.hex, "Muestra manual");
-        saveActiveFrameRecipe();
-        setEyedropperMode(null);
-        await requestPreview(false);
-        showToast("Soporte calibrado", `D-min neutralizado en ${data.base_hex || ""}`);
+      if (!res.ok || !data.base_color) {
+        throw new Error(data?.error || "No se pudo leer el soporte base en ese punto.");
       }
+      pushUndoSnapshotForFrame(activeFrame, "negative");
+      setBaseColor(data.base_color, data.base_hex || data.hex, "Muestra manual");
+      saveActiveFrameRecipe();
+      setEyedropperMode(null);
+      await requestPreview(false);
+      showToast("Soporte calibrado", `D-min neutralizado en ${data.base_hex || ""}`);
     } catch (err) {
       console.error("Eyedropper sample error:", err);
       setEyedropperMode(null);
+      showToast("Error al muestrear soporte", err.message || "Intenta hacer clic sobre el borde sin exponer.");
     }
   });
 }
@@ -2144,7 +2416,7 @@ function updateContextualExportBar() {
     if (saveLbl) saveLbl.textContent = "Guardar";
     if (saveBtn) saveBtn.title = `Guardar fotografía a resolución completa en Descargas (${copy.saveKbd})`;
     if (saveAsBtn) saveAsBtn.title = `Elegir carpeta y nombre con diálogo nativo (${copy.saveAsKbd})`;
-    if (saveSheetBtn) saveSheetBtn.style.display = "inline-flex";
+    if (saveSheetBtn) saveSheetBtn.style.display = "flex";
   }
 }
 
@@ -2157,6 +2429,12 @@ function setViewMode(mode) {
   document.getElementById("viewSheetBtn")?.classList.toggle("active", mode === "sheet");
 
   updateContextualExportBar();
+
+  if (state.frames.length === 0) {
+    syncEmptyRollButtons(true);
+    return;
+  }
+  syncEmptyRollButtons(false);
 
   const splitWrapper = document.getElementById("splitWrapper");
   const sheetContainer = document.getElementById("sheetContainer");
@@ -2348,6 +2626,7 @@ function applyZoomTransform() {
 }
 
 function rotateCurrentFrame(deltaDeg) {
+  pushUndoSnapshotForFrame();
   state.rotate = (((state.rotate + deltaDeg) % 360) + 360) % 360;
   saveActiveFrameRecipe();
   state.lastOriginalKey = "";
@@ -2355,6 +2634,7 @@ function rotateCurrentFrame(deltaDeg) {
 }
 
 function toggleHorizontalFlip() {
+  pushUndoSnapshotForFrame();
   state.flip_h = !state.flip_h;
   document.getElementById("flipHBtn")?.classList.toggle("active", state.flip_h);
   saveActiveFrameRecipe();
@@ -2417,101 +2697,110 @@ function initDoubleClickReset() {
   });
 }
 
-function resetSimulationControls() {
-  const defaults = [
-    ["evSlider", "0.0"],
-    ["halationSlider", "1.0"],
-    ["grainSlider", "1.0"],
-    ["vignetteSlider", "1.0"],
-  ];
-  defaults.forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.value = val;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-  });
-  const dateToggle = document.getElementById("dateToggle");
-  if (dateToggle && dateToggle.checked) {
-    dateToggle.checked = false;
-    dateToggle.dispatchEvent(new Event("change", { bubbles: true }));
+function resetSlidersWithUndo(ids, postHook = null) {
+  const beforeSnap = captureModeRecipeSnapshot();
+  suppressAutoSliderUndo = true;
+  try {
+    ids.forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.value = val;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+    if (postHook) postHook();
+  } finally {
+    suppressAutoSliderUndo = false;
   }
+  const afterSnap = captureModeRecipeSnapshot();
+  if (JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap)) {
+    pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], state.appMode, beforeSnap);
+  }
+}
+
+function resetSimulationControls() {
+  resetSlidersWithUndo(
+    [
+      ["evSlider", "0.0"],
+      ["halationSlider", "1.0"],
+      ["grainSlider", "1.0"],
+      ["vignetteSlider", "1.0"],
+    ],
+    () => {
+      const dateToggle = document.getElementById("dateToggle");
+      if (dateToggle && dateToggle.checked) {
+        dateToggle.checked = false;
+        dateToggle.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  );
 }
 
 function resetNegativeTonalControls() {
-  const ids = [
-    ["negBrightnessSlider", "0.0"],
-    ["negMidtoneNdSlider", "0.0"],
-    ["negContrastSlider", "0.0"],
-    ["negPushPullSlider", "0.0"],
-    ["negLightsSlider", "0.0"],
-    ["negDarksSlider", "0.0"],
-    ["negWhitesSlider", "0.0"],
-    ["negBlacksSlider", "0.0"],
-    ["negBlackClipSlider", "0.00"],
-    ["negWhiteClipSlider", "0.00"],
-    ["negInkyBlacksSlider", "0.0"],
-    ["negRpToneSlider", "0.0"],
-    ["negSatSlider", "1.0"],
-  ];
-  ids.forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.value = val;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
+  resetSlidersWithUndo(
+    [
+      ["negBrightnessSlider", "0.0"],
+      ["negMidtoneNdSlider", "0.0"],
+      ["negContrastSlider", "0.0"],
+      ["negPushPullSlider", "0.0"],
+      ["negLightsSlider", "0.0"],
+      ["negDarksSlider", "0.0"],
+      ["negWhitesSlider", "0.0"],
+      ["negBlacksSlider", "0.0"],
+      ["negBlackClipSlider", "0.00"],
+      ["negWhiteClipSlider", "0.00"],
+      ["negInkyBlacksSlider", "0.0"],
+      ["negRpToneSlider", "0.0"],
+      ["negSatSlider", "1.0"],
+    ],
+    () => {
+      const cpToggle = document.getElementById("negClipProtectToggle");
+      if (cpToggle && !cpToggle.checked) {
+        cpToggle.checked = true;
+        cpToggle.dispatchEvent(new Event("change", { bubbles: true }));
+      }
     }
-  });
-  const cpToggle = document.getElementById("negClipProtectToggle");
-  if (cpToggle && !cpToggle.checked) {
-    cpToggle.checked = true;
-    cpToggle.dispatchEvent(new Event("change", { bubbles: true }));
-  }
+  );
 }
 
 function resetNegativeOpticalControls() {
-  negativeState.sharpenMode = "off";
-  document.querySelectorAll("#negSharpenModeBar .seg-btn").forEach((b) => {
-    b.classList.toggle("active", b.dataset.sharpen === "off");
-  });
-  const ids = [
-    ["negSharpenAmountSlider", "100"],
-    ["negWarming85Slider", "0.0"],
-    ["negSkylightSlider", "0.0"],
-    ["negShadeSlider", "0.0"],
-    ["negGlowSlider", "1.0"],
-    ["negFadeSlider", "1.0"],
-  ];
-  ids.forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.value = val;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
+  resetSlidersWithUndo(
+    [
+      ["negSharpenAmountSlider", "100"],
+      ["negWarming85Slider", "0.0"],
+      ["negSkylightSlider", "0.0"],
+      ["negShadeSlider", "0.0"],
+      ["negGlowSlider", "1.0"],
+      ["negFadeSlider", "1.0"],
+    ],
+    () => {
+      negativeState.sharpenMode = "off";
+      document.querySelectorAll("#negSharpenModeBar .seg-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.sharpen === "off");
+      });
+      syncNegProcessPanels();
     }
-  });
-  syncNegProcessPanels();
+  );
 }
 
 function resetNegativeColorControls() {
-  negativeState.shadowsTint = [0.0, 0.0, 0.0];
-  negativeState.midsTint = [0.0, 0.0, 0.0];
-  negativeState.highsTint = [0.0, 0.0, 0.0];
-  const ids = [
-    ["cmyRedSlider", "0.0"],
-    ["cmyGreenSlider", "0.0"],
-    ["cmyBlueSlider", "0.0"],
-    ["negTempSlider", "0.0"],
-    ["negTintSlider", "0.0"],
-    ["negShadowsRangeSlider", "50"],
-    ["negHighsRangeSlider", "50"],
-  ];
-  ids.forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.value = val;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
+  resetSlidersWithUndo(
+    [
+      ["cmyRedSlider", "0.0"],
+      ["cmyGreenSlider", "0.0"],
+      ["cmyBlueSlider", "0.0"],
+      ["negTempSlider", "0.0"],
+      ["negTintSlider", "0.0"],
+      ["negShadowsRangeSlider", "50"],
+      ["negHighsRangeSlider", "50"],
+    ],
+    () => {
+      negativeState.shadowsTint = [0.0, 0.0, 0.0];
+      negativeState.midsTint = [0.0, 0.0, 0.0];
+      negativeState.highsTint = [0.0, 0.0, 0.0];
+      selectCmyZone(negativeState.activeCmyZone);
     }
-  });
-  selectCmyZone(negativeState.activeCmyZone);
+  );
 }
 
 // =============================================================
@@ -2529,8 +2818,14 @@ function initKeyboardShortcuts() {
         e.target.type !== "checkbox" &&
         e.target.type !== "file");
 
-    // Escape closes active eyedropper or dismissible open modals
+    // Escape closes export menu, active eyedropper, or dismissible open modals
     if (e.key === "Escape") {
+      const exportMenu = document.getElementById("exportMenu");
+      if (exportMenu?.classList.contains("open")) {
+        exportMenu.classList.remove("open");
+        document.getElementById("exportMoreBtn")?.setAttribute("aria-expanded", "false");
+        return;
+      }
       if (negativeState.eyedropperActive) {
         setEyedropperMode(null);
         return;
@@ -2541,9 +2836,20 @@ function initKeyboardShortcuts() {
       return;
     }
 
-    // Cmd/Ctrl + S / Shift+Cmd+S / Cmd+O / Shift+Cmd+C / Shift+Cmd+V
+    // Cmd/Ctrl + S / Shift+Cmd+S / Cmd+O / Cmd+Z / Shift+Cmd+Z / Shift+Cmd+C / Shift+Cmd+V
     if (e.metaKey || e.ctrlKey) {
       const k = e.key.toLowerCase();
+      if (k === "z" && !inTextInput) {
+        e.preventDefault();
+        if (e.shiftKey) performRedo();
+        else performUndo();
+        return;
+      }
+      if (k === "y" && !e.shiftKey && !inTextInput) {
+        e.preventDefault();
+        performRedo();
+        return;
+      }
       if (k === "s") {
         e.preventDefault();
         if (e.shiftKey) saveAsWithDialog();
@@ -2568,6 +2874,25 @@ function initKeyboardShortcuts() {
     }
 
     if (inTextInput) return;
+
+    if (
+      (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      state.frames.length > 1
+    ) {
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.target?.id === "splitDivider") {
+        return;
+      }
+      e.preventDefault();
+      const delta = e.key === "ArrowRight" ? 1 : -1;
+      const nextIdx = Math.max(0, Math.min(state.frames.length - 1, state.activeFrameIndex + delta));
+      if (nextIdx !== state.activeFrameIndex) {
+        activateFrameByIndex(nextIdx, state.viewMode === "sheet" ? "full" : state.viewMode);
+      }
+      return;
+    }
 
     // Hold '\' for quick before/after original inspection
     if (e.key === "\\" && !state.holdingOriginal && state.viewMode !== "sheet") {
@@ -3237,6 +3562,10 @@ function initUIListeners() {
 
   // Top bar utilities & export
   document.getElementById("loadSampleBtn")?.addEventListener("click", () => loadSamplePhoto());
+  document.getElementById("emptyImportBtn")?.addEventListener("click", () => {
+    document.getElementById("fileInput")?.click();
+  });
+  document.getElementById("emptySampleBtn")?.addEventListener("click", () => loadSamplePhoto());
   document.getElementById("fileInput")?.addEventListener("change", (e) => {
     importFiles(e.target.files);
     e.target.value = "";
@@ -3257,10 +3586,39 @@ function initUIListeners() {
   document.getElementById("btnCheckUpdateManual")?.addEventListener("click", () => checkForUpdates(true));
   document.getElementById("btnDownloadUpdate")?.addEventListener("click", triggerUpdateDownload);
 
-  document.getElementById("saveDownloadsBtn")?.addEventListener("click", saveDirectToDownloads);
-  document.getElementById("saveAsBtn")?.addEventListener("click", saveAsWithDialog);
-  document.getElementById("saveSheetBtn")?.addEventListener("click", () => saveContactSheetOnly(false));
-  document.getElementById("developFullBtn")?.addEventListener("click", developFullRoll);
+  const exportMenu = document.getElementById("exportMenu");
+  const exportMoreBtn = document.getElementById("exportMoreBtn");
+  const closeExportMenu = () => {
+    exportMenu?.classList.remove("open");
+    exportMoreBtn?.setAttribute("aria-expanded", "false");
+  };
+
+  exportMoreBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = exportMenu?.classList.toggle("open");
+    exportMoreBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#exportSplit")) closeExportMenu();
+  });
+
+  document.getElementById("saveDownloadsBtn")?.addEventListener("click", () => {
+    closeExportMenu();
+    saveDirectToDownloads();
+  });
+  document.getElementById("saveAsBtn")?.addEventListener("click", () => {
+    closeExportMenu();
+    saveAsWithDialog();
+  });
+  document.getElementById("saveSheetBtn")?.addEventListener("click", () => {
+    closeExportMenu();
+    saveContactSheetOnly(false);
+  });
+  document.getElementById("developFullBtn")?.addEventListener("click", () => {
+    closeExportMenu();
+    developFullRoll();
+  });
 
   document.getElementById("btnCancelBatch")?.addEventListener("click", async () => {
     if (!activeBatchJobId) return;
@@ -3361,7 +3719,34 @@ function initUIListeners() {
     const el = document.getElementById(sliderId);
     const lbl = document.getElementById(labelId);
     if (!el) return;
+    let armedBeforeSnap = null;
+    const armBeforeSnap = () => {
+      if (!suppressAutoSliderUndo && !armedBeforeSnap) {
+        armedBeforeSnap = captureModeRecipeSnapshot();
+      }
+    };
+    el.addEventListener("pointerdown", armBeforeSnap);
+    el.addEventListener("dblclick", armBeforeSnap);
+    el.addEventListener("keydown", (ev) => {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(ev.key)) {
+        armBeforeSnap();
+      }
+    });
+    el.addEventListener("change", () => {
+      armedBeforeSnap = null;
+    });
+    el.addEventListener("pointerup", () => {
+      armedBeforeSnap = null;
+    });
     el.addEventListener("input", (e) => {
+      if (!suppressAutoSliderUndo) {
+        pushUndoSnapshotForFrame(
+          state.frames[state.activeFrameIndex],
+          state.appMode,
+          armedBeforeSnap || captureModeRecipeSnapshot()
+        );
+        armedBeforeSnap = null;
+      }
       const val = parseFloat(e.target.value);
       if (lbl) lbl.textContent = formatter(val);
       onValue(val);
@@ -3386,6 +3771,7 @@ function initUIListeners() {
   });
 
   document.getElementById("dateToggle")?.addEventListener("change", (e) => {
+    if (!suppressAutoSliderUndo) pushUndoSnapshotForFrame();
     state.date = e.target.checked;
     saveActiveFrameRecipe();
     requestPreview(false);
@@ -3393,13 +3779,15 @@ function initUIListeners() {
 
   // Negative Lab left sidebar controls
   document.getElementById("btnTypeColor")?.addEventListener("click", () => {
+    if (negativeState.filmType === "color") return;
+    pushUndoSnapshotForFrame();
     negativeState.filmType = "color";
     document.getElementById("btnTypeColor")?.classList.add("active");
     document.getElementById("btnTypeBW")?.classList.remove("active");
     syncNegProcessPanels();
     updateActiveRecipeBanner();
     if (negativeState.profile === "bw") {
-      selectNegativeProfile("frontier");
+      selectNegativeProfile("frontier", true);
     } else {
       saveActiveFrameRecipe();
       requestPreview(false);
@@ -3407,18 +3795,23 @@ function initUIListeners() {
   });
 
   document.getElementById("btnTypeBW")?.addEventListener("click", () => {
+    if (negativeState.filmType === "bw") return;
+    pushUndoSnapshotForFrame();
     negativeState.filmType = "bw";
     document.getElementById("btnTypeBW")?.classList.add("active");
     document.getElementById("btnTypeColor")?.classList.remove("active");
     syncNegProcessPanels();
-    selectNegativeProfile("bw");
+    selectNegativeProfile("bw", true);
   });
 
   document.querySelectorAll("#negScanSourceBar .seg-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const nextSrc = btn.dataset.source || "camera_raw";
+      if (nextSrc === negativeState.scanSource) return;
+      pushUndoSnapshotForFrame();
       document.querySelectorAll("#negScanSourceBar .seg-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      negativeState.scanSource = btn.dataset.source || "camera_raw";
+      negativeState.scanSource = nextSrc;
       saveActiveFrameRecipe();
       requestPreview(false);
     });
@@ -3430,9 +3823,12 @@ function initUIListeners() {
 
   document.querySelectorAll("#negLightSourceBar .seg-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const nextLight = btn.dataset.light || "standard";
+      if (nextLight === negativeState.lightSource) return;
+      pushUndoSnapshotForFrame();
       document.querySelectorAll("#negLightSourceBar .seg-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      negativeState.lightSource = btn.dataset.light || "standard";
+      negativeState.lightSource = nextLight;
       saveActiveFrameRecipe();
       requestPreview(false);
     });
@@ -3440,9 +3836,12 @@ function initUIListeners() {
 
   document.querySelectorAll("#negColorMethodBar .seg-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const nextMethod = btn.dataset.method || "dynamic";
+      if (nextMethod === negativeState.colorMethod) return;
+      pushUndoSnapshotForFrame();
       document.querySelectorAll("#negColorMethodBar .seg-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      negativeState.colorMethod = btn.dataset.method || "dynamic";
+      negativeState.colorMethod = nextMethod;
       syncNegProcessPanels();
       saveActiveFrameRecipe();
       if (negativeState.colorMethod === "roll_locked" && !negativeState.rollBounds) {
@@ -3457,15 +3856,19 @@ function initUIListeners() {
 
   document.querySelectorAll("#negToneVariantBar .seg-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const nextTone = btn.dataset.tone || "standard";
+      if (nextTone === negativeState.toneVariant) return;
+      pushUndoSnapshotForFrame();
       document.querySelectorAll("#negToneVariantBar .seg-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      negativeState.toneVariant = btn.dataset.tone || "standard";
+      negativeState.toneVariant = nextTone;
       saveActiveFrameRecipe();
       requestPreview(false);
     });
   });
 
   document.getElementById("negPrintFinishSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
     negativeState.printFinish = e.target.value || "none";
     syncNegProcessPanels();
     saveActiveFrameRecipe();
@@ -3477,6 +3880,7 @@ function initUIListeners() {
   });
 
   document.getElementById("negBwTonerSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
     negativeState.bwToner = e.target.value || "neutral";
     syncNegProcessPanels();
     updateActiveRecipeBanner();
@@ -3553,6 +3957,7 @@ function initUIListeners() {
     negativeState.whiteClip = v;
   });
   document.getElementById("negClipProtectToggle")?.addEventListener("change", (e) => {
+    if (!suppressAutoSliderUndo) pushUndoSnapshotForFrame();
     negativeState.clipProtect = Boolean(e.target.checked);
     saveActiveFrameRecipe();
     requestPreview(false);
@@ -3609,9 +4014,12 @@ function initUIListeners() {
 
   document.querySelectorAll("#negSharpenModeBar .seg-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const nextMode = btn.dataset.sharpen || "off";
+      if (nextMode === negativeState.sharpenMode) return;
+      pushUndoSnapshotForFrame();
       document.querySelectorAll("#negSharpenModeBar .seg-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      negativeState.sharpenMode = btn.dataset.sharpen || "off";
+      negativeState.sharpenMode = nextMode;
       syncNegProcessPanels();
       saveActiveFrameRecipe();
       requestPreview(false);
@@ -3670,7 +4078,7 @@ function initUIListeners() {
   });
   document.getElementById("btnCopyAboutInfo")?.addEventListener("click", () => {
     const text =
-      "Haluro — Laboratorio Analógico Digital (v2.4.4)\n" +
+      "Haluro — Laboratorio Analógico Digital (v2.4.5)\n" +
       "Desarrollador: Fotógrafo César Fernández Ardiles (Oregano, Chile)\n" +
       "Licencia: MIT (Software libre y gratuito)\n" +
       "Emulación: 72 películas químicas + Inversión óptica C-41 / B&N\n" +
@@ -3709,8 +4117,11 @@ function initUIListeners() {
   });
 }
 
-function selectNegativeProfile(profileKey) {
+function selectNegativeProfile(profileKey, skipUndo = false) {
   if (!profileKey) return;
+  if (!skipUndo && profileKey !== negativeState.profile) {
+    pushUndoSnapshotForFrame();
+  }
   negativeState.profile = profileKey;
   document.querySelectorAll("#negProfileList .profile-card").forEach((c) => {
     c.classList.toggle("selected", c.dataset.profile === profileKey);

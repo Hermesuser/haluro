@@ -437,13 +437,13 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_api_health_and_security_headers(client) -> None:
-    assert __version__ == "2.4.4"
+    assert __version__ == "2.4.5"
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
-    assert body["version"] == "2.4.4"
+    assert body["version"] == "2.4.5"
     assert body["films_count"] == 72
     assert body["platform"] in {"macos", "windows", "linux"}
 
@@ -460,7 +460,7 @@ def test_api_about_manifest(client) -> None:
     assert resp.status_code == 200
     info = resp.get_json()
     assert info["app"] == "Haluro"
-    assert info["version"] == "2.4.4"
+    assert info["version"] == "2.4.5"
     assert info["license"] == "MIT"
     assert "César Fernández Ardiles" in info["developer"]["name"]
     assert "Chile" in info["developer"]["country"]
@@ -924,7 +924,7 @@ def test_macos_application_identity_and_about_panel():
 
         assert _MACOS_ABOUT_OPTIONS is not None
         assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
-        assert "2.4.4" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        assert "2.4.5" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
         credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
         assert "César Fernández Ardiles" in credits_str
         assert "Chile" in credits_str
