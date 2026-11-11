@@ -4,12 +4,13 @@ real-time cached previews, lossless multi-format export, and contact sheets.
 """
 
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import functools
 import io
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 import zipfile
@@ -541,7 +542,9 @@ def api_develop_full():
     flip_h = bool(data.get("flip_h", False))
     gen_sheet = bool(data.get("sheet", True))
     out_ext = _normalize_ext(data.get("format", "jpg"))
-    roll_name = secure_filename(data.get("roll_name", "ROLL_001")) or "ROLL_001"
+    raw_roll_name = str(data.get("roll_name", "ROLL 001")).strip()[:40] or "ROLL 001"
+    roll_name = secure_filename(raw_roll_name) or "ROLL_001"
+    columns = int(data.get("columns", 4))
 
     film_info = get_film(film_key)
     out_roll_dir = DEVELOPED_DIR / f"{roll_name}_{film_key}"
@@ -610,8 +613,9 @@ def api_develop_full():
     if gen_sheet and developed_images:
         sheet = generate_contact_sheet(
             developed_images,
-            roll_name=roll_name,
+            roll_name=raw_roll_name,
             film_name=film_info["name"],
+            columns=columns,
         )
         sheet_path = out_roll_dir / "SHEET.jpg"
         sheet.save(sheet_path, quality=93, subsampling=0)
@@ -643,7 +647,8 @@ def api_contact_sheet_preview():
     add_date = bool(data.get("date", False))
     rotate = int(data.get("rotate", 0))
     flip_h = bool(data.get("flip_h", False))
-    roll_name = secure_filename(data.get("roll_name", "PREVIEW")) or "PREVIEW"
+    raw_roll_name = str(data.get("roll_name", "PREVIEW")).strip()[:40] or "PREVIEW"
+    columns = int(data.get("columns", 4))
 
     film_info = get_film(film_key)
     per_frame_recipes = data.get("per_frame_recipes") or {}
@@ -686,11 +691,13 @@ def api_contact_sheet_preview():
     if not rendered_images:
         return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
 
-    sheet = generate_contact_sheet(
+    sheet, layout_boxes = generate_contact_sheet(
         rendered_images,
-        roll_name=roll_name,
+        roll_name=raw_roll_name,
         film_name=film_info["name"],
+        columns=columns,
         thumb_width=480,
+        return_layout=True,
     )
 
     cache_dir = DEVELOPED_DIR / "cache"
@@ -703,6 +710,7 @@ def api_contact_sheet_preview():
         "success": True,
         "sheet": True,
         "sheet_url": f"/api/image/cache/sheet_preview.jpg?t={int(time.time() * 1000)}",
+        "layout": layout_boxes,
         "total_frames": len(rendered_images),
         "width": sheet.width,
         "height": sheet.height,
@@ -724,7 +732,9 @@ def api_save_contact_sheet():
     rotate = int(data.get("rotate", 0))
     flip_h = bool(data.get("flip_h", False))
     reveal = bool(data.get("reveal", True))
-    roll_name = secure_filename(data.get("roll_name", "HALURO_ROLL")) or "HALURO_ROLL"
+    raw_roll_name = str(data.get("roll_name", "HALURO ROLL")).strip()[:40] or "HALURO ROLL"
+    roll_name = secure_filename(raw_roll_name) or "HALURO_ROLL"
+    columns = int(data.get("columns", 4))
 
     dest_path = data.get("dest_path")
     if dest_path:
@@ -783,8 +793,9 @@ def api_save_contact_sheet():
 
     sheet = generate_contact_sheet(
         rendered_images,
-        roll_name=roll_name,
+        roll_name=raw_roll_name,
         film_name=film_info["name"],
+        columns=columns,
         thumb_width=960,
     )
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1557,7 +1568,9 @@ def api_negative_develop_full():
     filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
     gen_sheet = bool(data.get("sheet", True))
     out_ext = _normalize_ext(data.get("format", "jpg"))
-    roll_name = secure_filename(data.get("roll_name", "NEG_ROLL_001")) or "NEG_ROLL_001"
+    raw_roll_name = str(data.get("roll_name", "NEG ROLL 001")).strip()[:40] or "NEG ROLL 001"
+    roll_name = secure_filename(raw_roll_name) or "NEG_ROLL_001"
+    columns = int(data.get("columns", 4))
 
     params = _parse_negative_params(data)
     analog_meta = _parse_analog_meta(data)
@@ -1614,8 +1627,9 @@ def api_negative_develop_full():
     if gen_sheet and developed_images:
         sheet = generate_contact_sheet(
             developed_images,
-            roll_name=roll_name,
+            roll_name=raw_roll_name,
             film_name=f"Negativo · {profile_info['name']}",
+            columns=columns,
         )
         sheet_path = out_roll_dir / "SHEET.jpg"
         sheet.save(sheet_path, quality=93, subsampling=0)
@@ -1639,7 +1653,8 @@ def api_negative_contact_sheet_preview():
     """Ultra-fast concurrent preview of negative inversion contact sheet without disk writes."""
     data = request.json or {}
     filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
-    roll_name = secure_filename(data.get("roll_name", "PREVIEW_NEG")) or "PREVIEW_NEG"
+    raw_roll_name = str(data.get("roll_name", "PREVIEW NEG")).strip()[:40] or "PREVIEW NEG"
+    columns = int(data.get("columns", 4))
 
     params = _parse_negative_params(data)
     profile_key = params["profile_key"]
@@ -1670,11 +1685,13 @@ def api_negative_contact_sheet_preview():
     if not rendered_images:
         return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
 
-    sheet = generate_contact_sheet(
+    sheet, layout_boxes = generate_contact_sheet(
         rendered_images,
-        roll_name=roll_name,
+        roll_name=raw_roll_name,
         film_name=f"Negativo · {profile_info['name']}",
+        columns=columns,
         thumb_width=480,
+        return_layout=True,
     )
 
     cache_dir = DEVELOPED_DIR / "cache"
@@ -1687,6 +1704,7 @@ def api_negative_contact_sheet_preview():
         "success": True,
         "sheet": True,
         "sheet_url": f"/api/image/cache/sheet_preview.jpg?t={int(time.time() * 1000)}",
+        "layout": layout_boxes,
         "total_frames": len(rendered_images),
         "width": sheet.width,
         "height": sheet.height,
@@ -1699,7 +1717,9 @@ def api_negative_save_contact_sheet():
     """Render archival high-resolution negative contact sheet only and save directly or to chosen path."""
     data = request.json or {}
     filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
-    roll_name = secure_filename(data.get("roll_name", "HALURO_NEG")) or "HALURO_NEG"
+    raw_roll_name = str(data.get("roll_name", "HALURO NEG")).strip()[:40] or "HALURO NEG"
+    roll_name = secure_filename(raw_roll_name) or "HALURO_NEG"
+    columns = int(data.get("columns", 4))
     reveal = bool(data.get("reveal", True))
 
     params = _parse_negative_params(data)
@@ -1747,8 +1767,9 @@ def api_negative_save_contact_sheet():
 
     sheet = generate_contact_sheet(
         rendered_images,
-        roll_name=roll_name,
+        roll_name=raw_roll_name,
         film_name=f"Negativo · {profile_info['name']}",
+        columns=columns,
         thumb_width=960,
     )
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1773,6 +1794,265 @@ def api_negative_save_contact_sheet():
         "height": sheet.height,
         "elapsed_seconds": elapsed,
     })
+
+
+# -------------------------------------------------------------
+# ASYNC BATCH ROLL PROGRESS & CANCELLATION ENDPOINTS
+# -------------------------------------------------------------
+
+_batch_jobs_lock = threading.Lock()
+_batch_jobs = {}
+
+
+def _update_batch_job(job_id, **kwargs):
+    with _batch_jobs_lock:
+        if job_id in _batch_jobs:
+            _batch_jobs[job_id].update(kwargs)
+
+
+def _run_batch_roll_worker(job_id, data):
+    job = _batch_jobs[job_id]
+    cancel_event = job["cancel_event"]
+    t_start = time.time()
+
+    try:
+        app_mode = data.get("app_mode", "simulation")
+        filenames = data.get("filenames", [])
+        gen_sheet = bool(data.get("sheet", True))
+        out_ext = _normalize_ext(data.get("format", "jpg"))
+        raw_roll_name = str(data.get("roll_name", "HALURO ROLL")).strip()[:40] or "HALURO ROLL"
+        roll_name = secure_filename(raw_roll_name) or "HALURO_ROLL"
+        columns = int(data.get("columns", 4))
+        analog_meta = _parse_analog_meta(data)
+        per_frame_recipes = data.get("per_frame_recipes") or {}
+
+        is_neg = app_mode == "negative"
+        if is_neg:
+            params = _parse_negative_params(data)
+            profile_key = params["profile_key"]
+            profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
+            roll_folder = f"{roll_name}_neg_{profile_key}"
+            sheet_film_name = f"Negativo · {profile_info['name']}"
+        else:
+            film_key = data.get("film", "portra400")
+            ev = float(data.get("ev", 0.0))
+            halation = float(data.get("halation", 1.0))
+            grain = float(data.get("grain", 1.0))
+            vignette = float(data.get("vignette", 1.0))
+            add_date = bool(data.get("date", False))
+            rotate = int(data.get("rotate", 0))
+            flip_h = bool(data.get("flip_h", False))
+            film_info = get_film(film_key)
+            roll_folder = f"{roll_name}_{film_key}"
+            sheet_film_name = film_info["name"]
+
+        out_roll_dir = DEVELOPED_DIR / roll_folder
+        out_roll_dir.mkdir(parents=True, exist_ok=True)
+
+        total = len(filenames)
+        indexed_results = {}
+        completed_count = 0
+        progress_lock = threading.Lock()
+
+        def _worker_task(idx_and_name):
+            idx, fname = idx_and_name
+            if cancel_event.is_set():
+                return None
+
+            fpath = _resolve_source_file(fname)
+            if not fpath:
+                return None
+
+            if is_neg:
+                fr_raw = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
+                frame_params = _parse_negative_params({**data, **fr_raw}) if isinstance(fr_raw, dict) else params
+                f_prof_key = frame_params["profile_key"]
+                img, srgb_f = process_negative_to_image(fpath, max_dim=None, return_float=True, **frame_params)
+                out_name = f"{fpath.stem}_positive_{f_prof_key}{out_ext}"
+            else:
+                fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
+                f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
+                f_ev = float(fr.get("ev", ev)) if isinstance(fr, dict) else ev
+                f_hal = float(fr.get("halation", halation)) if isinstance(fr, dict) else halation
+                f_grn = float(fr.get("grain", grain)) if isinstance(fr, dict) else grain
+                f_vig = float(fr.get("vignette", vignette)) if isinstance(fr, dict) else vignette
+                f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
+                f_rot = int(fr.get("rotate", rotate)) if isinstance(fr, dict) else rotate
+                f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
+                img, srgb_f = develop_frame(
+                    fpath,
+                    film_key=f_film,
+                    ev_adjust=f_ev,
+                    halation_mult=f_hal,
+                    grain_mult=f_grn,
+                    vignette_mult=f_vig,
+                    add_date=f_date,
+                    max_dim=None,
+                    rotate=f_rot,
+                    flip_h=f_flip,
+                    return_float=True,
+                )
+                out_name = f"{fpath.stem}_{f_film}{out_ext}"
+
+            if cancel_event.is_set():
+                return None
+
+            target_path = out_roll_dir / out_name
+            save_output_image(
+                img,
+                target_path,
+                source_path=fpath,
+                quality=96,
+                float_srgb=srgb_f,
+                analog_meta=analog_meta,
+            )
+            return (idx, fpath.name, out_name, img)
+
+        max_workers = min(4, max(1, os.cpu_count() or 1))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(_worker_task, (i, fn)) for i, fn in enumerate(filenames)]
+            for fut in as_completed(futures):
+                if cancel_event.is_set():
+                    for pending_f in futures:
+                        pending_f.cancel()
+                    _update_batch_job(
+                        job_id,
+                        status="cancelled",
+                        current_file="Proceso cancelado por el usuario.",
+                        elapsed_seconds=round(time.time() - t_start, 1),
+                    )
+                    return
+
+                res = fut.result()
+                if res:
+                    idx, src_name, out_name, img = res
+                    indexed_results[idx] = (out_name, img)
+                    with progress_lock:
+                        completed_count += 1
+                        pct = int(round((completed_count / max(1, total)) * 90))
+                        _update_batch_job(
+                            job_id,
+                            completed=completed_count,
+                            percent=pct,
+                            current_file=src_name,
+                            elapsed_seconds=round(time.time() - t_start, 1),
+                        )
+
+        if cancel_event.is_set():
+            _update_batch_job(
+                job_id,
+                status="cancelled",
+                current_file="Proceso cancelado por el usuario.",
+                elapsed_seconds=round(time.time() - t_start, 1),
+            )
+            return
+
+        developed_images = []
+        output_files = []
+        for idx in sorted(indexed_results.keys()):
+            out_name, img = indexed_results[idx]
+            output_files.append(out_name)
+            developed_images.append(img)
+
+        sheet_created = False
+        if gen_sheet and developed_images:
+            _update_batch_job(
+                job_id,
+                percent=94,
+                current_file="Componiendo hoja de contactos de archivo…",
+                elapsed_seconds=round(time.time() - t_start, 1),
+            )
+            sheet = generate_contact_sheet(
+                developed_images,
+                roll_name=raw_roll_name,
+                film_name=sheet_film_name,
+                columns=columns,
+            )
+            sheet_path = out_roll_dir / "SHEET.jpg"
+            sheet.save(sheet_path, quality=93, subsampling=0)
+            output_files.append("SHEET.jpg")
+            sheet_created = True
+
+        elapsed = round(time.time() - t_start, 2)
+        _update_batch_job(
+            job_id,
+            status="completed",
+            completed=len(developed_images),
+            percent=100,
+            current_file="¡Rollo completado!",
+            elapsed_seconds=elapsed,
+            result={
+                "success": True,
+                "roll_dir": str(out_roll_dir),
+                "roll_folder": roll_folder,
+                "files": output_files,
+                "sheet": sheet_created,
+                "total_frames": len(developed_images),
+                "elapsed_seconds": elapsed,
+            },
+        )
+    except Exception as exc:
+        logger.exception("Batch roll job failed: %s", exc)
+        _update_batch_job(
+            job_id,
+            status="error",
+            error=str(exc),
+            elapsed_seconds=round(time.time() - t_start, 1),
+        )
+
+
+@app.route("/api/batch/develop_roll_start", methods=["POST"])
+def api_batch_develop_roll_start():
+    data = request.json or {}
+    filenames = data.get("filenames", [])
+    if not filenames:
+        return jsonify({"error": "No hay fotogramas para procesar"}), 400
+
+    job_id = str(uuid.uuid4())[:10]
+    with _batch_jobs_lock:
+        if len(_batch_jobs) > 20:
+            oldest = list(_batch_jobs.keys())[:-10]
+            for k in oldest:
+                _batch_jobs.pop(k, None)
+        _batch_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "running",
+            "total": len(filenames),
+            "completed": 0,
+            "percent": 2,
+            "current_file": "Preparando cámara oscura…",
+            "elapsed_seconds": 0.0,
+            "result": None,
+            "error": None,
+            "cancel_event": threading.Event(),
+        }
+
+    t = threading.Thread(target=_run_batch_roll_worker, args=(job_id, data), daemon=True)
+    t.start()
+    return jsonify({"success": True, "job_id": job_id, "total": len(filenames)})
+
+
+@app.route("/api/batch/develop_status/<job_id>", methods=["GET"])
+def api_batch_develop_status(job_id):
+    with _batch_jobs_lock:
+        job = _batch_jobs.get(job_id)
+        if not job:
+            return jsonify({"status": "not_found", "error": "Trabajo no encontrado"}), 404
+        payload = {k: v for k, v in job.items() if k != "cancel_event"}
+    return jsonify(payload)
+
+
+@app.route("/api/batch/develop_cancel/<job_id>", methods=["POST"])
+def api_batch_develop_cancel(job_id):
+    with _batch_jobs_lock:
+        job = _batch_jobs.get(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "Trabajo no encontrado"}), 404
+        job["cancel_event"].set()
+        if job["status"] == "running":
+            job["status"] = "cancelling"
+            job["current_file"] = "Deteniendo hilos de procesamiento…"
+    return jsonify({"success": True})
 
 
 # -------------------------------------------------------------

@@ -15,17 +15,26 @@ def generate_contact_sheet(
     film_name="Kodak Portra 400",
     date_str=None,
     columns=4,
-    thumb_width=480
+    thumb_width=480,
+    return_layout=False,
 ):
     """frame_images: list of PIL Images or file paths.
-    Returns: PIL Image of the contact sheet.
+    columns: integer number of columns (typically 3, 4, 5, or 6).
+    return_layout: bool, if True returns tuple (sheet_image, layout_boxes).
+    Returns: PIL Image of the contact sheet (or tuple if return_layout=True).
     """
     if not date_str:
         import datetime
         date_str = datetime.datetime.now().strftime("%Y-%m-%d")
 
+    try:
+        columns = max(2, min(8, int(columns)))
+    except (ValueError, TypeError):
+        columns = 4
+
     if not frame_images:
-        return Image.new("RGB", (800, 600), (14, 14, 16))
+        empty = Image.new("RGB", (800, 600), (14, 14, 16))
+        return (empty, []) if return_layout else empty
         
     loaded_frames = []
     for item in frame_images:
@@ -76,6 +85,7 @@ def generate_contact_sheet(
     
     # Draw Frames
     border_pad = max(2, int(round(4 * scale)))
+    layout_boxes = []
     for idx, frame in enumerate(loaded_frames):
         r = idx // columns
         c = idx % columns
@@ -106,5 +116,13 @@ def generate_contact_sheet(
         # Frame Number Marker (e.g. "01", "02")
         frame_str = f"▶ {idx + 1:02d}A  DX"
         draw.text((px, py + thumb.height + int(round(6 * scale))), frame_str, font=frame_font, fill=(190, 120, 20))
+
+        layout_boxes.append({
+            "index": idx,
+            "x_pct": round(px / total_w, 5),
+            "y_pct": round(py / total_h, 5),
+            "w_pct": round(thumb.width / total_w, 5),
+            "h_pct": round(thumb.height / total_h, 5),
+        })
         
-    return sheet
+    return (sheet, layout_boxes) if return_layout else sheet

@@ -117,9 +117,9 @@
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          <span>Guardar</span>
+          <span id="saveDownloadsLabel">Guardar</span>
         </button>
-        <button class="btn btn-secondary btn-sm" id="saveAsBtn" title="Elegir carpeta y nombre con diálogo nativo de macOS (⇧⌘S)">
+        <button class="btn btn-secondary btn-sm" id="saveAsBtn" title="Elegir carpeta y nombre con diálogo nativo (⇧⌘S)">
           Guardar como…
         </button>
         <button class="btn btn-secondary btn-sm" id="saveSheetBtn" title="Guardar únicamente la hoja de contactos analógica en alta resolución">
@@ -485,22 +485,35 @@
           </div>
         </div>
 
-        <!-- Contact Sheet Container -->
+        <!-- Contact Sheet Container (Interactive Light Table) -->
         <div class="sheet-container" id="sheetContainer" style="display: none;">
-          <div class="sheet-floating-actions" id="sheetFloatingActions">
-            <button class="btn btn-primary btn-sm" id="sheetQuickSaveBtn" title="Guardar hoja de contactos en Descargas (JPG alta resolución)">
-              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>Guardar hoja de contactos</span>
-            </button>
-            <button class="btn btn-secondary btn-sm" id="sheetSaveAsBtn" title="Guardar hoja de contactos eligiendo carpeta y nombre">
-              Guardar como…
-            </button>
+          <div class="sheet-toolbar" id="sheetToolbar">
+            <div class="sheet-meta-controls">
+              <label class="sheet-control-item" title="Personaliza el nombre del rollo impreso en la cabecera de la hoja">
+                <span class="sheet-control-label">Rollo:</span>
+                <input type="text" id="sheetRollNameInput" class="sheet-input-sm" maxlength="40" placeholder="HALURO ROLL">
+              </label>
+              <div class="sheet-control-item">
+                <span class="sheet-control-label">Columnas:</span>
+                <div class="sheet-cols-group" id="sheetColumnsBar" role="radiogroup" aria-label="Columnas de la hoja de contactos">
+                  <button class="sheet-col-btn" data-cols="3" title="3 columnas (miniaturas grandes)">3</button>
+                  <button class="sheet-col-btn active" data-cols="4" title="4 columnas (estándar 35mm)">4</button>
+                  <button class="sheet-col-btn" data-cols="5" title="5 columnas (rollos de 24-36 fotos)">5</button>
+                  <button class="sheet-col-btn" data-cols="6" title="6 columnas (alta densidad)">6</button>
+                </div>
+              </div>
+            </div>
+            <span class="sheet-interactive-hint" title="Haz clic en cualquier fotograma de la hoja para editarlo o usa la rueda del ratón para hacer zoom">
+              Clic en foto para editar · Rueda para lupa
+            </span>
           </div>
-          <img id="sheetPreview" src="" alt="Hoja de contactos analógica">
+
+          <div class="sheet-stage" id="sheetStage">
+            <div class="sheet-wrapper" id="sheetWrapper">
+              <img id="sheetPreview" src="" alt="Hoja de contactos analógica" draggable="false">
+              <div class="sheet-overlay-grid" id="sheetOverlayGrid" aria-label="Fotogramas interactivos de la hoja"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Heavy Batch / Initial Import Overlay (Never triggered on slider drags) -->
@@ -1055,6 +1068,36 @@
     </aside>
   </main>
 
+  <!-- Modal: Live Batch Progress & Cancellation -->
+  <div class="modal-backdrop" id="batchProgressModal" role="dialog" aria-modal="true" aria-labelledby="batchProgressTitle">
+    <div class="modal-box modal-batch-box">
+      <div class="modal-header">
+        <div class="batch-title-row">
+          <span class="batch-pulse-bulb" aria-hidden="true"></span>
+          <h3 id="batchProgressTitle">Revelando rollo en laboratorio</h3>
+        </div>
+      </div>
+      <div class="modal-body modal-body-left">
+        <div class="batch-progress-header">
+          <span class="batch-counter-text" id="batchCounterText">Preparando fotogramas…</span>
+          <span class="batch-percent-text" id="batchPercentText">0%</span>
+        </div>
+        <div class="batch-progress-track" id="batchProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="batch-progress-fill" id="batchProgressFill" style="width: 0%;"></div>
+        </div>
+        <div class="batch-detail-row">
+          <span class="batch-filename-text" id="batchCurrentFile">Iniciando procesado de 16 bits…</span>
+          <span class="batch-timer-text" id="batchTimerText">0.0s</span>
+        </div>
+        <div class="batch-actions-row">
+          <button class="btn btn-outline btn-sm" id="btnCancelBatch">
+            Cancelar revelado
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Batch Roll Development Result -->
   <div class="modal-backdrop" id="resultModal" role="dialog" aria-modal="true" aria-labelledby="resultModalTitle">
     <div class="modal-box">
@@ -1135,7 +1178,7 @@
           </div>
           <div>
             <h3 id="aboutModalTitle">Haluro — Laboratorio Analógico Digital</h3>
-            <span class="about-version-badge">Versión 2.4.3 · Distribución Libre y Gratuita</span>
+            <span class="about-version-badge">Versión 2.4.4 · Distribución Libre y Gratuita</span>
           </div>
         </div>
         <button class="modal-close" id="closeAboutBtn" aria-label="Cerrar acerca de">&times;</button>
@@ -1162,7 +1205,7 @@
         <div class="about-update-card">
           <div class="about-update-info">
             <span class="about-update-title">Actualizaciones de software</span>
-            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.3 instalada</span>
+            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.4 instalada</span>
           </div>
           <button class="btn btn-secondary btn-sm" id="btnCheckUpdateManual">
             <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">

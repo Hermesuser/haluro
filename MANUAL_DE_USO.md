@@ -1,4 +1,4 @@
-# Haluro 2.4.3 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
+# Haluro 2.4.4 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
 
 Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfica concebida desde la práctica y los principios de la fotoquímica analógica. Esta guía detalla cada módulo, herramienta, atajo de teclado y proceso de calibración para obtener el máximo rendimiento tanto en la inversión de negativos digitalizados con cámara como en la emulación de emulsiones cinematográficas y fotográficas clásicas.
 
@@ -43,8 +43,8 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 | Arquitectura de Mac | Archivo a Descargar |
 | :--- | :--- |
-| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.4.3-macOS-arm64.dmg` |
-| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.4.3-macOS-x86_64.dmg` |
+| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.4.4-macOS-arm64.dmg` |
+| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.4.4-macOS-x86_64.dmg` |
 
 #### Pasos de Instalación:
 1. Haz doble clic sobre el archivo `.dmg` correspondiente a tu procesador.
@@ -64,7 +64,7 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 ### Windows 11
 
-* **Archivo requerido:** `Haluro-Setup-2.4.3-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.4.3-Win11-x64.zip`).
+* **Archivo requerido:** `Haluro-Setup-2.4.4-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.4.4-Win11-x64.zip`).
 * **Instalación:** Ejecuta el instalador. No requiere permisos de administrador forzados (instalación limpia por usuario) y se integra automáticamente con el motor **Microsoft Edge WebView2** preinstalado en Windows 11.
 
 ---
@@ -294,19 +294,20 @@ Haluro permite exportar en dos estándares profesionales:
 
 ---
 
-### Procesamiento por Lotes y Hoja de Contactos
+### Procesamiento por Lotes y Mesa de Luz de Contactos
 
-Haluro incluye dos métodos optimizados para trabajar con rollos fotográficos completos:
+Haluro incluye herramientas interactivas y optimizadas para trabajar con rollos fotográficos completos:
 
-1. **Hoja de Contactos Analógica en 1 Clic (Tecla `3`):**
-   - Pulsa la pestaña **«Contactos»** para previsualizar al instante una cuadrícula de estilo laboratorio clásico con tipografía de emulsión, borde de chasis y numeración de fotogramas (DX 01A, 02A...).
-   - **Composición instantánea:** Se procesa concurrentemente en memoria en menos de 1 segundo sin tocar el disco.
+1. **Mesa de Luz Viva en Contactos (Tecla `3`):**
+   - Pulsa la pestaña **«Contactos»** para previsualizar al instante una cuadrícula de estilo laboratorio clásico con tipografía de emulsión, borde de chasis y numeración de fotogramas (`01A`, `02A`...).
+   - **Interactiva con lupa:** Haz clic directamente sobre cualquier fotografía dentro de la hoja de contactos para abrirla de inmediato en el editor, o usa la rueda del ratón / botones `+`/`−` para inspeccionar detalles con zoom y arrastre panorámico.
+   - **Personalizable:** Edita el nombre del **Rollo** para estamparlo en la cabecera de la hoja y alterna la disposición entre **3, 4, 5 o 6 columnas**. Los fotogramas con ajustes propios muestran un punto ámbar en la tira inferior de 35 mm.
 
-2. **Guardar Exclusivamente la Hoja de Contactos:**
-   - Si solo deseas archivar o compartir la hoja de contactos sin tener que exportar cada fotograma individual a tu disco, utiliza el botón **«Guardar contactos»** en la barra superior o los botones flotantes sobre la hoja. Se exportará un archivo JPEG de alta resolución de archivo (`Haluro_Contactos_...jpg`).
+2. **Barra Contextual y Guardar Exclusivamente la Hoja de Contactos:**
+   - Al entrar en **«Contactos»**, el botón principal naranja superior cambia automáticamente a **«Guardar contactos»** (y también permanece accesible desde cualquier vista con **«Guardar contactos»** / `Guardar como…`). Exporta la hoja completa en alta resolución sin procesar fotogramas sueltos en disco.
 
-3. **Revelar Rollo Completo (Motor Multinúcleo):**
-   - El botón **«Revelar rollo»** procesa todos los fotogramas del carrete a máxima resolución nativa (TIFF 16-bit o JPEG) aprovechando todos los núcleos de tu procesador en paralelo, e incluye automáticamente la hoja de contactos `SHEET.jpg` dentro de la carpeta del rollo.
+3. **Revelar Rollo Completo con Progreso en Vivo (Motor Multinúcleo):**
+   - El botón **«Revelar rollo»** procesa todos los fotogramas del carrete en paralelo a máxima resolución nativa (TIFF 16-bit o JPEG), mostrando una barra de progreso en tiempo real por fotograma, archivo actual, cronómetro y opción de cancelar en cualquier momento, añadiendo automáticamente la hoja de contactos `SHEET.jpg` a la carpeta del rollo.
 
 ---
 
@@ -326,4 +327,4 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 2.4.3 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*
+*Haluro 2.4.4 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*

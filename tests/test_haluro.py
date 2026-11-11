@@ -437,13 +437,13 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_api_health_and_security_headers(client) -> None:
-    assert __version__ == "2.4.3"
+    assert __version__ == "2.4.4"
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
-    assert body["version"] == "2.4.3"
+    assert body["version"] == "2.4.4"
     assert body["films_count"] == 72
     assert body["platform"] in {"macos", "windows", "linux"}
 
@@ -460,7 +460,7 @@ def test_api_about_manifest(client) -> None:
     assert resp.status_code == 200
     info = resp.get_json()
     assert info["app"] == "Haluro"
-    assert info["version"] == "2.4.3"
+    assert info["version"] == "2.4.4"
     assert info["license"] == "MIT"
     assert "César Fernández Ardiles" in info["developer"]["name"]
     assert "Chile" in info["developer"]["country"]
@@ -924,7 +924,7 @@ def test_macos_application_identity_and_about_panel():
 
         assert _MACOS_ABOUT_OPTIONS is not None
         assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
-        assert "2.4.3" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        assert "2.4.4" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
         credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
         assert "César Fernández Ardiles" in credits_str
         assert "Chile" in credits_str
@@ -1165,6 +1165,119 @@ def test_contact_sheet_preview_and_save_negative(client, tmp_path):
     assert save_data["success"] is True
     assert dest_file.exists()
     assert dest_file.stat().st_size > 10000
+
+
+def test_contact_sheet_interactive_layout_and_columns() -> None:
+    imgs = [Image.new("RGB", (300, 200), (80 + i * 20, 90, 110)) for i in range(5)]
+
+    sheet_3, layout_3 = generate_contact_sheet(
+        imgs, roll_name="VALPARAISO 400", film_name="Kodak Portra 400", columns=3, thumb_width=320, return_layout=True
+    )
+    assert len(layout_3) == 5
+    for idx, box in enumerate(layout_3):
+        assert box["index"] == idx
+        assert 0.0 < box["x_pct"] < 1.0
+        assert 0.0 < box["y_pct"] < 1.0
+        assert 0.05 < box["w_pct"] < 0.40
+        assert 0.05 < box["h_pct"] < 0.60
+
+    # Clamping out-of-range columns works safely
+    sheet_6, layout_6 = generate_contact_sheet(imgs, columns=6, thumb_width=320, return_layout=True)
+    assert sheet_6.width > sheet_3.width
+    assert len(layout_6) == 5
+
+    sheet_min = generate_contact_sheet(imgs[:2], columns=0, thumb_width=240)
+    assert sheet_min.width > 0
+
+
+def test_contact_sheet_preview_returns_layout_and_columns(client) -> None:
+    client.post("/api/load_sample")
+    resp_3 = client.post(
+        "/api/contact_sheet_preview",
+        json={
+            "filenames": ["SAMPLE.CR2", "SAMPLE.CR2", "SAMPLE.CR2"],
+            "film": "portra400",
+            "roll_name": "ROLLO SUR 35MM",
+            "columns": 3,
+        },
+    )
+    assert resp_3.status_code == 200
+    d3 = resp_3.get_json()
+    assert d3["success"] is True
+    assert isinstance(d3.get("layout"), list)
+    assert len(d3["layout"]) == 3
+    assert d3["layout"][0]["index"] == 0
+
+    client.post("/api/negative/load_sample")
+    resp_neg = client.post(
+        "/api/negative/contact_sheet_preview",
+        json={
+            "filenames": ["SAMPLE_NEGATIVE.jpg", "SAMPLE_NEGATIVE.jpg", "SAMPLE_NEGATIVE.jpg", "SAMPLE_NEGATIVE.jpg"],
+            "profile": "frontier",
+            "roll_name": "NEGATIVO C41",
+            "columns": 4,
+        },
+    )
+    assert resp_neg.status_code == 200
+    dneg = resp_neg.get_json()
+    assert dneg["success"] is True
+    assert isinstance(dneg.get("layout"), list)
+    assert len(dneg["layout"]) == 4
+
+
+def test_batch_async_roll_progress_and_cancel(client) -> None:
+    import time
+
+    # Missing frames rejected cleanly
+    bad = client.post("/api/batch/develop_roll_start", json={"filenames": []})
+    assert bad.status_code == 400
+
+    # Non-existent job status returns 404
+    nf = client.get("/api/batch/develop_status/doesnotexist")
+    assert nf.status_code == 404
+
+    client.post("/api/load_sample")
+    start_resp = client.post(
+        "/api/batch/develop_roll_start",
+        json={
+            "app_mode": "simulation",
+            "filenames": ["SAMPLE.CR2"],
+            "film": "portra400",
+            "roll_name": "ASYNC ROLL TEST",
+            "columns": 3,
+            "sheet": True,
+            "format": "jpg",
+        },
+    )
+    assert start_resp.status_code == 200
+    job_id = start_resp.get_json()["job_id"]
+    assert job_id
+
+    status_data = None
+    deadline = time.time() + 30.0
+    while time.time() < deadline:
+        st_resp = client.get(f"/api/batch/develop_status/{job_id}")
+        assert st_resp.status_code == 200
+        status_data = st_resp.get_json()
+        if status_data["status"] in ("completed", "error", "cancelled"):
+            break
+        time.sleep(0.1)
+
+    assert status_data is not None
+    assert status_data["status"] == "completed"
+    assert status_data["percent"] == 100
+    res = status_data["result"]
+    assert res["success"] is True
+    assert res["total_frames"] == 1
+    assert "SHEET.jpg" in res["files"]
+
+    # Cancel endpoint works cleanly even on an existing job and 404 on unknown
+    cancel_bad = client.post("/api/batch/develop_cancel/unknown99")
+    assert cancel_bad.status_code == 404
+    cancel_ok = client.post(f"/api/batch/develop_cancel/{job_id}")
+    assert cancel_ok.status_code == 200
+    assert cancel_ok.get_json()["success"] is True
+
 
 
 

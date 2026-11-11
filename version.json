@@ -1,20 +1,20 @@
 {
-  "version": "2.4.3",
+  "version": "2.4.4",
   "release_date": "2026-11-10",
-  "name": "Haluro v2.4.3",
-  "title": "Aceleración de Hoja de Contactos y Revelado Multinúcleo",
-  "description": "Actualización que acelera hasta 75x la composición de la hoja de contactos, añade la opción de guardar exclusivamente la hoja analógica y optimiza el revelado de rollos mediante procesamiento multinúcleo en paralelo.",
+  "name": "Haluro v2.4.4",
+  "title": "Mesa de Luz Interactiva y Progreso de Revelado en Vivo",
+  "description": "Mejoras de interfaz y experiencia de usuario: hoja de contactos interactiva con zoom y selección directa por fotograma, barra de progreso en tiempo real al revelar el rollo con cancelación segura y barra superior adaptada al modo de trabajo.",
   "highlights": [
-    "Composición de hoja de contactos ultrarrápida en memoria: generación instantánea en menos de 0.5 segundos y caché local.",
-    "Opción de exportación exclusiva: botón 'Guardar contactos' para archivar solo la hoja analógica en alta resolución sin necesidad de procesar los fotogramas sueltos.",
-    "Motor de revelado de rollo multinúcleo (ThreadPoolExecutor): exportación paralela hasta 3.5x más rápida aprovechando todos los núcleos de la CPU.",
-    "Controles directos sobre la mesa de luz y atajos inteligentes para guardar la hoja analógica."
+    "Mesa de luz interactiva: haz clic sobre cualquier fotograma de la hoja de contactos para editarlo al instante, ajusta las columnas (3 a 6) y personaliza el título del rollo.",
+    "Progreso en vivo al revelar el rollo: indicador fotograma a fotograma con tiempo transcurrido y opción de cancelar limpiamente sin dejar copias a medias.",
+    "Barra superior contextual: distingue claramente entre guardar la foto activa, guardar solo la hoja de contactos o revelar todo el rollo.",
+    "Indicadores de fotogramas ajustados en la tira de película y mejor aprovechamiento de pantalla en portátiles."
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.3/Haluro-2.4.3-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.3/Haluro-2.4.3-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.3/Haluro-Setup-2.4.3-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.3/Haluro-Portable-2.4.3-Win11-x64.zip",
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-2.4.4-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-2.4.4-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-Setup-2.4.4-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.4/Haluro-Portable-2.4.4-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "min_supported_version": "2.0.0"

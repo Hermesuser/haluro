@@ -1,5 +1,5 @@
 /**
- * Haluro — Laboratorio Analógico Digital (v2.4.3)
+ * Haluro — Laboratorio Analógico Digital (v2.4.4)
  * Precision frontend controller: 72-stock film simulation, C-41/B&W optical negative
  * inversion (RA-4, ECP 2383, Minilab, V-Log), B&W chemical toners & fine-art papers,
  * unified multi-frame Roll Analysis, 3-Way CMY split-toning, color-protected soft clip,
@@ -84,6 +84,14 @@ const state = {
   panX: 0,
   panY: 0,
   safelight: false,
+
+  // Contact Sheet Light Table
+  sheetColumns: 4,
+  sheetRollName: "",
+  sheetZoom: 1.0,
+  sheetPanX: 0,
+  sheetPanY: 0,
+  sheetLayout: [],
 
   // Cache tracker so we don't re-request original base64 on every slider tick
   lastOriginalKey: "",
@@ -320,6 +328,8 @@ function applyPlatformUI() {
   const pasteBtn = document.getElementById("pasteRecipeBtn");
   if (copyBtn) copyBtn.title = `Copiar receta óptica del fotograma activo (${copy.copyRecipeKbd})`;
   if (pasteBtn) pasteBtn.title = `Pegar receta copiada en este fotograma (${copy.pasteRecipeKbd})`;
+
+  updateContextualExportBar();
 }
 
 async function syncRuntimePlatform() {
@@ -611,6 +621,9 @@ async function importFiles(fileList) {
         await autoDetectBaseColor(false);
       }
       await requestPreview(true);
+      if (state.viewMode === "sheet") {
+        generateContactSheetPreview();
+      }
       showToast(
         "Importación completada",
         `${importedCount} fotograma(s) listos en la mesa de luz (original intacto).`
@@ -624,6 +637,101 @@ async function importFiles(fileList) {
   }
 }
 
+function getEffectiveRollName() {
+  const custom = (state.sheetRollName || "").trim();
+  if (custom) return custom;
+  return state.appMode === "negative" ? "HALURO NEG" : "HALURO ROLL";
+}
+
+function isFrameCustomized(frame) {
+  if (!frame) return false;
+  if (state.appMode === "negative") {
+    const r = frame.negRecipe;
+    if (!r) return false;
+    return (
+      (r.profile && r.profile !== "frontier") ||
+      (r.tone_variant && r.tone_variant !== "standard") ||
+      (r.print_finish && r.print_finish !== "none") ||
+      (r.bw_toner && r.bw_toner !== "neutral") ||
+      Math.abs(r.brightness || 0) > 0.01 ||
+      Math.abs(r.midtone_nd || 0) > 0.01 ||
+      Math.abs(r.contrast || 0) > 0.01 ||
+      Math.abs(r.push_pull || 0) > 0.01 ||
+      Math.abs(r.lights || 0) > 0.01 ||
+      Math.abs(r.darks || 0) > 0.01 ||
+      Math.abs(r.whites || 0) > 0.01 ||
+      Math.abs(r.blacks || 0) > 0.01 ||
+      Math.abs(r.inky_blacks || 0) > 0.01 ||
+      Math.abs(r.rp_tone || 0) > 0.01 ||
+      Math.abs((r.saturation ?? 1.0) - 1.0) > 0.02 ||
+      (Array.isArray(r.printer_cmy) && r.printer_cmy.some((v) => Math.abs(v) > 0.01)) ||
+      (Array.isArray(r.shadows_tint) && r.shadows_tint.some((v) => Math.abs(v) > 0.01)) ||
+      (Array.isArray(r.mids_tint) && r.mids_tint.some((v) => Math.abs(v) > 0.01)) ||
+      (Array.isArray(r.highs_tint) && r.highs_tint.some((v) => Math.abs(v) > 0.01)) ||
+      Math.abs(r.temp || 0) > 0.01 ||
+      Math.abs(r.tint || 0) > 0.01 ||
+      Math.abs(r.warming_85 || 0) > 0.01 ||
+      Math.abs(r.skylight_filter || 0) > 0.01 ||
+      Math.abs(r.shade_filter || 0) > 0.01 ||
+      (r.sharpen_mode && r.sharpen_mode !== "off") ||
+      Math.abs((r.glow ?? 1.0) - 1.0) > 0.05 ||
+      Math.abs((r.fade ?? 1.0) - 1.0) > 0.05 ||
+      Boolean(r.rotate) ||
+      Boolean(r.flip_h)
+    );
+  }
+  const r = frame.simRecipe;
+  if (!r) return false;
+  return (
+    (r.film && r.film !== "portra400") ||
+    Math.abs(r.ev || 0) > 0.01 ||
+    Math.abs((r.halation ?? 1.0) - 1.0) > 0.05 ||
+    Math.abs((r.grain ?? 1.0) - 1.0) > 0.05 ||
+    Math.abs((r.vignette ?? 1.0) - 1.0) > 0.05 ||
+    Boolean(r.date) ||
+    Boolean(r.rotate) ||
+    Boolean(r.flip_h)
+  );
+}
+
+function updateActiveThumbEditedIndicator() {
+  const strip = document.getElementById("stripFrames");
+  if (!strip) return;
+  const thumbs = strip.querySelectorAll(".film-frame-thumb");
+  const activeThumb = thumbs[state.activeFrameIndex];
+  const activeFrame = state.frames[state.activeFrameIndex];
+  if (!activeThumb || !activeFrame) return;
+
+  const custom = isFrameCustomized(activeFrame);
+  let dot = activeThumb.querySelector(".frame-edited-dot");
+  if (custom && !dot) {
+    dot = document.createElement("span");
+    dot.className = "frame-edited-dot";
+    dot.title = "Fotograma con ajustes personalizados";
+    activeThumb.appendChild(dot);
+  } else if (!custom && dot) {
+    dot.remove();
+  }
+}
+
+async function activateFrameByIndex(idx, viewModeFromSheet = "full") {
+  if (idx < 0 || idx >= state.frames.length) return;
+  if (state.activeFrameIndex === idx && state.viewMode !== "sheet") return;
+  saveActiveFrameRecipe();
+  state.activeFrameIndex = idx;
+  state.lastOriginalKey = "";
+  const hadRecipe = loadFrameRecipe(idx);
+  renderFilmStrip();
+  const activeThumb = document.querySelectorAll("#stripFrames .film-frame-thumb")[idx];
+  activeThumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  if (state.viewMode === "sheet") setViewMode(viewModeFromSheet);
+  if (state.appMode === "negative" && (!hadRecipe || negativeState.baseColor === null)) {
+    await autoDetectBaseColor(false);
+  }
+  saveActiveFrameRecipe();
+  requestPreview(true);
+}
+
 function renderFilmStrip() {
   const strip = document.getElementById("stripFrames");
   if (!strip) return;
@@ -632,8 +740,18 @@ function renderFilmStrip() {
   state.frames.forEach((frame, idx) => {
     const thumb = document.createElement("div");
     thumb.className = `film-frame-thumb ${idx === state.activeFrameIndex ? "active" : ""}`;
-    thumb.title = `${frame.name} (Fotograma #${idx + 1})`;
+    const custom = isFrameCustomized(frame);
+    thumb.title = custom
+      ? `${frame.name} (Fotograma #${idx + 1} · Con ajustes propios)`
+      : `${frame.name} (Fotograma #${idx + 1})`;
     thumb.setAttribute("tabindex", "0");
+
+    if (custom) {
+      const dot = document.createElement("span");
+      dot.className = "frame-edited-dot";
+      dot.title = "Fotograma con ajustes personalizados";
+      thumb.appendChild(dot);
+    }
 
     const img = document.createElement("img");
     img.src = frame.thumb_url || `/api/thumbnail/${encodeURIComponent(frame.filename)}`;
@@ -652,20 +770,7 @@ function renderFilmStrip() {
     thumb.appendChild(img);
     thumb.appendChild(badge);
 
-    const activate = async () => {
-      if (state.activeFrameIndex === idx && state.viewMode !== "sheet") return;
-      saveActiveFrameRecipe();
-      state.activeFrameIndex = idx;
-      state.lastOriginalKey = "";
-      const hadRecipe = loadFrameRecipe(idx);
-      renderFilmStrip();
-      if (state.viewMode === "sheet") setViewMode("split");
-      if (state.appMode === "negative" && (!hadRecipe || negativeState.baseColor === null)) {
-        await autoDetectBaseColor(false);
-      }
-      saveActiveFrameRecipe();
-      requestPreview(true);
-    };
+    const activate = () => activateFrameByIndex(idx, "split");
 
     thumb.addEventListener("click", activate);
     thumb.addEventListener("keydown", (e) => {
@@ -730,6 +835,11 @@ async function switchStudioMode(mode) {
     origLabel.textContent = isNeg ? "Negativo escaneado" : "Original";
   }
 
+  const rollInput = document.getElementById("sheetRollNameInput");
+  if (rollInput) {
+    rollInput.placeholder = isNeg ? "HALURO NEG" : "HALURO ROLL";
+  }
+
   updateActiveRecipeBanner();
 
   // If switching to Negative mode and only SAMPLE.CR2 is loaded, load sample negative automatically
@@ -740,8 +850,12 @@ async function switchStudioMode(mode) {
   }
 
   state.lastOriginalKey = "";
+  renderFilmStrip();
   if (isNeg && negativeState.baseColor === null) {
     await autoDetectBaseColor(false);
+  }
+  if (state.viewMode === "sheet") {
+    generateContactSheetPreview();
   }
   requestPreview(true);
 }
@@ -1060,6 +1174,7 @@ function saveActiveFrameRecipe() {
   } else {
     frame.simRecipe = snapshotSimRecipe();
   }
+  updateActiveThumbEditedIndicator();
 }
 
 function setSliderSilent(sliderId, labelId, val, textVal) {
@@ -1322,6 +1437,11 @@ function syncRecipeToRoll() {
       f.simRecipe = { ...baseSnap, rotate: prevRot, flip_h: prevFlip };
     }
   });
+
+  renderFilmStrip();
+  if (state.viewMode === "sheet") {
+    generateContactSheetPreview();
+  }
 
   showToast(
     "Rollo sincronizado",
@@ -2007,6 +2127,27 @@ function applySplitPercent(pct) {
   }
 }
 
+function updateContextualExportBar() {
+  const isSheet = state.viewMode === "sheet";
+  const saveBtn = document.getElementById("saveDownloadsBtn");
+  const saveLbl = document.getElementById("saveDownloadsLabel");
+  const saveSheetBtn = document.getElementById("saveSheetBtn");
+  const saveAsBtn = document.getElementById("saveAsBtn");
+  const copy = getOsCopy();
+
+  if (isSheet) {
+    if (saveLbl) saveLbl.textContent = "Guardar contactos";
+    if (saveBtn) saveBtn.title = `Guardar hoja de contactos en alta resolución (${copy.saveKbd})`;
+    if (saveAsBtn) saveAsBtn.title = `Elegir carpeta y nombre para la hoja de contactos (${copy.saveAsKbd})`;
+    if (saveSheetBtn) saveSheetBtn.style.display = "none";
+  } else {
+    if (saveLbl) saveLbl.textContent = "Guardar";
+    if (saveBtn) saveBtn.title = `Guardar fotografía a resolución completa en Descargas (${copy.saveKbd})`;
+    if (saveAsBtn) saveAsBtn.title = `Elegir carpeta y nombre con diálogo nativo (${copy.saveAsKbd})`;
+    if (saveSheetBtn) saveSheetBtn.style.display = "inline-flex";
+  }
+}
+
 function setViewMode(mode) {
   state.viewMode = mode;
 
@@ -2014,6 +2155,8 @@ function setViewMode(mode) {
   document.getElementById("viewFullBtn")?.classList.toggle("active", mode === "full");
   document.getElementById("viewOrigBtn")?.classList.toggle("active", mode === "original");
   document.getElementById("viewSheetBtn")?.classList.toggle("active", mode === "sheet");
+
+  updateContextualExportBar();
 
   const splitWrapper = document.getElementById("splitWrapper");
   const sheetContainer = document.getElementById("sheetContainer");
@@ -2024,13 +2167,19 @@ function setViewMode(mode) {
 
   if (mode === "sheet") {
     if (splitWrapper) splitWrapper.style.display = "none";
-    if (sheetContainer) sheetContainer.style.display = "block";
+    if (sheetContainer) sheetContainer.style.display = "flex";
+    const rollInput = document.getElementById("sheetRollNameInput");
+    if (rollInput) {
+      rollInput.placeholder = state.appMode === "negative" ? "HALURO NEG" : "HALURO ROLL";
+    }
+    applyZoomTransform();
     generateContactSheetPreview();
     return;
   }
 
   if (splitWrapper) splitWrapper.style.display = "block";
   if (sheetContainer) sheetContainer.style.display = "none";
+  applyZoomTransform();
 
   if (mode === "split") {
     if (divider) divider.style.display = "block";
@@ -2056,22 +2205,32 @@ function setViewMode(mode) {
   }
 }
 
+let sheetDragMoved = 0;
+
 function initZoomAndPan() {
   const container = document.getElementById("canvasContainer");
   const wrapper = document.getElementById("splitWrapper");
+  const sheetStage = document.getElementById("sheetStage");
+  const sheetWrapper = document.getElementById("sheetWrapper");
   if (!container || !wrapper) return;
 
   let panning = false;
+  let sheetPanning = false;
   let startX = 0;
   let startY = 0;
+  let downClientX = 0;
+  let downClientY = 0;
 
   container.addEventListener(
     "wheel",
     (e) => {
-      if (state.viewMode === "sheet") return;
       e.preventDefault();
       const delta = e.deltaY < 0 ? 0.2 : -0.2;
-      setZoom(state.zoom + delta);
+      if (state.viewMode === "sheet") {
+        setZoom(state.sheetZoom + delta);
+      } else {
+        setZoom(state.zoom + delta);
+      }
     },
     { passive: false }
   );
@@ -2085,11 +2244,31 @@ function initZoomAndPan() {
     wrapper.classList.add("is-panning");
   });
 
+  if (sheetStage && sheetWrapper) {
+    sheetStage.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      downClientX = e.clientX;
+      downClientY = e.clientY;
+      sheetDragMoved = 0;
+      if (state.sheetZoom <= 1.01) return;
+      sheetPanning = true;
+      startX = e.clientX - state.sheetPanX;
+      startY = e.clientY - state.sheetPanY;
+      sheetWrapper.classList.add("is-panning");
+    });
+  }
+
   window.addEventListener("mousemove", (e) => {
-    if (!panning) return;
-    state.panX = e.clientX - startX;
-    state.panY = e.clientY - startY;
-    applyZoomTransform();
+    if (panning) {
+      state.panX = e.clientX - startX;
+      state.panY = e.clientY - startY;
+      applyZoomTransform();
+    } else if (sheetPanning) {
+      sheetDragMoved = Math.hypot(e.clientX - downClientX, e.clientY - downClientY);
+      state.sheetPanX = e.clientX - startX;
+      state.sheetPanY = e.clientY - startY;
+      applyZoomTransform();
+    }
   });
 
   window.addEventListener("mouseup", () => {
@@ -2097,29 +2276,66 @@ function initZoomAndPan() {
       panning = false;
       wrapper.classList.remove("is-panning");
     }
+    if (sheetPanning) {
+      sheetPanning = false;
+      sheetWrapper?.classList.remove("is-panning");
+    }
   });
 }
 
 function setZoom(nextZoom) {
   const clamped = Math.max(1.0, Math.min(4.0, Math.round(nextZoom * 100) / 100));
-  state.zoom = clamped;
-  if (clamped <= 1.01) {
+  if (state.viewMode === "sheet") {
+    state.sheetZoom = clamped;
+    if (clamped <= 1.01) {
+      state.sheetPanX = 0;
+      state.sheetPanY = 0;
+    }
+  } else {
+    state.zoom = clamped;
+    if (clamped <= 1.01) {
+      state.panX = 0;
+      state.panY = 0;
+    }
+  }
+  applyZoomTransform();
+}
+
+function resetZoom() {
+  if (state.viewMode === "sheet") {
+    state.sheetZoom = 1.0;
+    state.sheetPanX = 0;
+    state.sheetPanY = 0;
+  } else {
+    state.zoom = 1.0;
     state.panX = 0;
     state.panY = 0;
   }
   applyZoomTransform();
 }
 
-function resetZoom() {
-  state.zoom = 1.0;
-  state.panX = 0;
-  state.panY = 0;
-  applyZoomTransform();
-}
-
 function applyZoomTransform() {
   const wrapper = document.getElementById("splitWrapper");
+  const sheetWrapper = document.getElementById("sheetWrapper");
+  const sheetStage = document.getElementById("sheetStage");
   const readout = document.getElementById("zoomResetBtn");
+
+  if (state.viewMode === "sheet") {
+    if (sheetWrapper) {
+      sheetWrapper.style.transform =
+        state.sheetZoom <= 1.01
+          ? "none"
+          : `translate(${state.sheetPanX}px, ${state.sheetPanY}px) scale(${state.sheetZoom})`;
+    }
+    if (sheetStage) {
+      sheetStage.classList.toggle("can-pan", state.sheetZoom > 1.01);
+    }
+    if (readout) {
+      readout.textContent = state.sheetZoom <= 1.01 ? "Ajustar" : `${Math.round(state.sheetZoom * 100)}%`;
+    }
+    return;
+  }
+
   if (wrapper) {
     wrapper.style.transform =
       state.zoom <= 1.01
@@ -2313,13 +2529,15 @@ function initKeyboardShortcuts() {
         e.target.type !== "checkbox" &&
         e.target.type !== "file");
 
-    // Escape closes active eyedropper or open modals
+    // Escape closes active eyedropper or dismissible open modals
     if (e.key === "Escape") {
       if (negativeState.eyedropperActive) {
         setEyedropperMode(null);
         return;
       }
-      document.querySelectorAll(".modal-backdrop.active").forEach((m) => m.classList.remove("active"));
+      document
+        .querySelectorAll(".modal-backdrop.active:not(#batchProgressModal)")
+        .forEach((m) => m.classList.remove("active"));
       return;
     }
 
@@ -2363,8 +2581,11 @@ function initKeyboardShortcuts() {
     else if (e.key === "2") setViewMode("full");
     else if (e.key === "3") setViewMode("sheet");
     else if (e.key === "0") resetZoom();
-    else if (e.key === "+" || e.key === "=") setZoom(state.zoom + 0.25);
-    else if (e.key === "-") setZoom(state.zoom - 0.25);
+    else if (e.key === "+" || e.key === "=") {
+      setZoom((state.viewMode === "sheet" ? state.sheetZoom : state.zoom) + 0.25);
+    } else if (e.key === "-") {
+      setZoom((state.viewMode === "sheet" ? state.sheetZoom : state.zoom) - 0.25);
+    }
     else if (e.key === "r" || e.key === "R") {
       rotateCurrentFrame(e.shiftKey ? -90 : 90);
     } else if (e.key === "f" || e.key === "F") {
@@ -2545,75 +2766,182 @@ async function saveAsWithDialog() {
   }
 }
 
+let activeBatchPollTimer = null;
+let activeBatchJobId = null;
+
 async function developFullRoll() {
-  if (state.frames.length === 0) return;
-  showLoading(
-    true,
-    `Revelando ${state.frames.length} fotograma(s) a máxima resolución y creando hoja de contactos…`
-  );
+  if (state.frames.length === 0 || activeBatchJobId) return;
+
+  const filenames = state.frames.map((f) => f.filename);
+  const perFrameRecipes = buildPerFrameRecipesMap();
+  const analogMeta = buildAnalogMetaPayload();
+  const isNeg = state.appMode === "negative";
+  const rollName = getEffectiveRollName();
+  const payload = isNeg
+    ? {
+        app_mode: "negative",
+        filenames,
+        sheet: true,
+        columns: state.sheetColumns,
+        format: state.outputFormat,
+        roll_name: rollName,
+        per_frame_recipes: perFrameRecipes,
+        analog_meta: analogMeta,
+        ...buildNegativePayload(),
+      }
+    : {
+        app_mode: "simulation",
+        filenames,
+        film: state.selectedFilm,
+        ev: state.ev,
+        halation: state.halation,
+        grain: state.grain,
+        vignette: state.vignette,
+        date: state.date,
+        rotate: state.rotate,
+        flip_h: state.flip_h,
+        format: state.outputFormat,
+        sheet: true,
+        columns: state.sheetColumns,
+        roll_name: rollName,
+        per_frame_recipes: perFrameRecipes,
+        analog_meta: analogMeta,
+      };
+
+  const progressModal = document.getElementById("batchProgressModal");
+  const counterEl = document.getElementById("batchCounterText");
+  const percentEl = document.getElementById("batchPercentText");
+  const fillEl = document.getElementById("batchProgressFill");
+  const trackEl = document.getElementById("batchProgressTrack");
+  const fileEl = document.getElementById("batchCurrentFile");
+  const timerEl = document.getElementById("batchTimerText");
+  const cancelBtn = document.getElementById("btnCancelBatch");
+
+  if (counterEl) counterEl.textContent = `Preparando ${filenames.length} fotograma(s)…`;
+  if (percentEl) percentEl.textContent = "0%";
+  if (fillEl) fillEl.style.width = "0%";
+  if (trackEl) trackEl.setAttribute("aria-valuenow", "0");
+  if (fileEl) fileEl.textContent = "Iniciando cámara oscura de 16 bits…";
+  if (timerEl) timerEl.textContent = "0.0s";
+  if (cancelBtn) {
+    cancelBtn.disabled = false;
+    cancelBtn.textContent = "Cancelar revelado";
+  }
+  progressModal?.classList.add("active");
 
   try {
-    const filenames = state.frames.map((f) => f.filename);
-    const perFrameRecipes = buildPerFrameRecipesMap();
-    const analogMeta = buildAnalogMetaPayload();
-    const isNeg = state.appMode === "negative";
-    const endpoint = isNeg ? "/api/negative/develop_full" : "/api/develop_full";
-    const payload = isNeg
-      ? {
-          filenames,
-          sheet: true,
-          format: state.outputFormat,
-          roll_name: "HALURO_NEG",
-          per_frame_recipes: perFrameRecipes,
-          analog_meta: analogMeta,
-          ...buildNegativePayload(),
-        }
-      : {
-          filenames,
-          film: state.selectedFilm,
-          ev: state.ev,
-          halation: state.halation,
-          grain: state.grain,
-          vignette: state.vignette,
-          date: state.date,
-          rotate: state.rotate,
-          flip_h: state.flip_h,
-          format: state.outputFormat,
-          sheet: true,
-          roll_name: "HALURO_ROLL",
-          per_frame_recipes: perFrameRecipes,
-          analog_meta: analogMeta,
-        };
-
-    const res = await fetch(endpoint, {
+    const startRes = await fetch("/api/batch/develop_roll_start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || "Fallo al procesar rollo");
-
-    state.lastRollResult = data;
-    const summary = document.getElementById("modalSummary");
-    if (summary) {
-      summary.textContent = `Se procesaron ${data.total_frames} fotograma(s) en ${data.elapsed_seconds}s sin tocar tus archivos originales. Incluye hoja de contactos de archivo.`;
+    const startData = await startRes.json();
+    if (!startRes.ok || !startData.success || !startData.job_id) {
+      throw new Error(startData.error || "Fallo al iniciar el revelado del rollo");
     }
-    document.getElementById("resultModal")?.classList.add("active");
+
+    activeBatchJobId = startData.job_id;
+    const pollStatus = async () => {
+      if (!activeBatchJobId) return;
+      try {
+        const stRes = await fetch(`/api/batch/develop_status/${encodeURIComponent(activeBatchJobId)}`);
+        const st = await stRes.json();
+        const pct = Math.max(0, Math.min(100, Number(st.percent || 0)));
+
+        if (counterEl) {
+          if (st.status === "completed") {
+            counterEl.textContent = `¡${st.total} fotograma(s) revelados!`;
+          } else {
+            counterEl.textContent = `Fotograma ${st.completed || 0} de ${st.total || filenames.length}`;
+          }
+        }
+        if (percentEl) percentEl.textContent = `${pct}%`;
+        if (fillEl) fillEl.style.width = `${pct}%`;
+        if (trackEl) trackEl.setAttribute("aria-valuenow", String(pct));
+        if (fileEl && st.current_file) fileEl.textContent = st.current_file;
+        if (timerEl && st.elapsed_seconds != null) timerEl.textContent = `${Number(st.elapsed_seconds).toFixed(1)}s`;
+
+        if (st.status === "completed") {
+          clearInterval(activeBatchPollTimer);
+          activeBatchPollTimer = null;
+          activeBatchJobId = null;
+          progressModal?.classList.remove("active");
+          state.lastRollResult = st.result;
+          const summary = document.getElementById("modalSummary");
+          if (summary && st.result) {
+            summary.textContent = `Se procesaron ${st.result.total_frames} fotograma(s) en ${st.result.elapsed_seconds}s sin tocar tus archivos originales. Incluye hoja de contactos de archivo.`;
+          }
+          document.getElementById("resultModal")?.classList.add("active");
+        } else if (st.status === "cancelled") {
+          clearInterval(activeBatchPollTimer);
+          activeBatchPollTimer = null;
+          activeBatchJobId = null;
+          progressModal?.classList.remove("active");
+          showToast("Revelado cancelado", "Se detuvo el procesamiento por lotes.");
+        } else if (st.status === "error" || st.status === "not_found" || !stRes.ok) {
+          clearInterval(activeBatchPollTimer);
+          activeBatchPollTimer = null;
+          activeBatchJobId = null;
+          progressModal?.classList.remove("active");
+          showToast("Error en lote", st.error || "No se pudo completar el rollo.");
+        }
+      } catch (pollErr) {
+        console.error("Batch poll error:", pollErr);
+      }
+    };
+
+    if (activeBatchPollTimer) clearInterval(activeBatchPollTimer);
+    activeBatchPollTimer = setInterval(pollStatus, 300);
+    await pollStatus();
   } catch (err) {
+    progressModal?.classList.remove("active");
     console.error("Error revelando rollo:", err);
     showToast("Error en lote", err.message || "No se pudo completar el rollo.");
-  } finally {
-    showLoading(false);
   }
+}
+
+function renderContactSheetOverlay(layoutBoxes) {
+  const grid = document.getElementById("sheetOverlayGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  if (!Array.isArray(layoutBoxes)) return;
+
+  layoutBoxes.forEach((box) => {
+    const idx = box.index;
+    const frame = state.frames[idx];
+    const hotspot = document.createElement("div");
+    hotspot.className = "sheet-frame-hotspot";
+    hotspot.style.left = `${(box.x_pct * 100).toFixed(3)}%`;
+    hotspot.style.top = `${(box.y_pct * 100).toFixed(3)}%`;
+    hotspot.style.width = `${(box.w_pct * 100).toFixed(3)}%`;
+    hotspot.style.height = `${(box.h_pct * 100).toFixed(3)}%`;
+    hotspot.dataset.index = String(idx);
+    hotspot.title = frame ? `Clic para editar ${frame.name} (Fotograma ${String(idx + 1).padStart(2, "0")}A)` : `Clic para editar fotograma #${idx + 1}`;
+
+    const pill = document.createElement("span");
+    pill.className = "sheet-hotspot-pill";
+    pill.textContent = `▶ ${String(idx + 1).padStart(2, "0")}A · Editar`;
+    hotspot.appendChild(pill);
+
+    hotspot.addEventListener("click", (e) => {
+      if (sheetDragMoved > 5) return;
+      e.stopPropagation();
+      activateFrameByIndex(idx, "full");
+    });
+
+    grid.appendChild(hotspot);
+  });
 }
 
 function buildContactSheetSignature() {
   const filenames = state.frames.map((f) => f.filename).join(",");
   const recipes = JSON.stringify(buildPerFrameRecipesMap());
+  const roll = getEffectiveRollName();
+  const cols = state.sheetColumns || 4;
   if (state.appMode === "negative") {
-    return `neg_${filenames}_${recipes}_${JSON.stringify(buildNegativePayload())}`;
+    return `neg_${roll}_${cols}_${filenames}_${recipes}_${JSON.stringify(buildNegativePayload())}`;
   } else {
-    return `pos_${filenames}_${recipes}_${state.selectedFilm}_${state.ev}_${state.halation}_${state.grain}_${state.vignette}_${state.date}_${state.rotate}_${state.flip_h}`;
+    return `pos_${roll}_${cols}_${filenames}_${recipes}_${state.selectedFilm}_${state.ev}_${state.halation}_${state.grain}_${state.vignette}_${state.date}_${state.rotate}_${state.flip_h}`;
   }
 }
 
@@ -2627,6 +2955,10 @@ async function generateContactSheetPreview() {
     if (sheetImg) {
       sheetImg.src = state.contactSheetCache.url;
     }
+    if (state.contactSheetCache.layout) {
+      state.sheetLayout = state.contactSheetCache.layout;
+      renderContactSheetOverlay(state.sheetLayout);
+    }
     return;
   }
 
@@ -2636,10 +2968,12 @@ async function generateContactSheetPreview() {
     const perFrameRecipes = buildPerFrameRecipesMap();
     const isNeg = state.appMode === "negative";
     const endpoint = isNeg ? "/api/negative/contact_sheet_preview" : "/api/contact_sheet_preview";
+    const rollName = getEffectiveRollName();
     const payload = isNeg
       ? {
           filenames,
-          roll_name: "PREVIEW_NEG",
+          roll_name: rollName,
+          columns: state.sheetColumns,
           per_frame_recipes: perFrameRecipes,
           ...buildNegativePayload(),
         }
@@ -2653,7 +2987,8 @@ async function generateContactSheetPreview() {
           date: state.date,
           rotate: state.rotate,
           flip_h: state.flip_h,
-          roll_name: "PREVIEW",
+          roll_name: rollName,
+          columns: state.sheetColumns,
           per_frame_recipes: perFrameRecipes,
         };
 
@@ -2667,7 +3002,13 @@ async function generateContactSheetPreview() {
       if (sheetImg) {
         sheetImg.src = data.sheet_url;
       }
-      state.contactSheetCache = { signature: sig, url: data.sheet_url };
+      state.sheetLayout = data.layout || [];
+      renderContactSheetOverlay(state.sheetLayout);
+      state.contactSheetCache = {
+        signature: sig,
+        url: data.sheet_url,
+        layout: state.sheetLayout,
+      };
     }
   } catch (err) {
     console.error("Contact sheet preview error:", err);
@@ -2680,8 +3021,9 @@ async function generateContactSheetPreview() {
 async function saveContactSheetOnly(withDialog = false) {
   if (state.frames.length === 0) return;
   const isNeg = state.appMode === "negative";
-  const rollName = isNeg ? "HALURO_NEG" : "HALURO_ROLL";
-  const defaultName = `Haluro_Contactos_${rollName}.jpg`;
+  const rollName = getEffectiveRollName();
+  const safeFileRoll = rollName.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_") || (isNeg ? "HALURO_NEG" : "HALURO_ROLL");
+  const defaultName = `Haluro_Contactos_${safeFileRoll}.jpg`;
 
   try {
     let chosenPath = null;
@@ -2709,6 +3051,7 @@ async function saveContactSheetOnly(withDialog = false) {
       ? {
           filenames,
           roll_name: rollName,
+          columns: state.sheetColumns,
           dest_path: chosenPath,
           reveal: true,
           per_frame_recipes: perFrameRecipes,
@@ -2725,6 +3068,7 @@ async function saveContactSheetOnly(withDialog = false) {
           rotate: state.rotate,
           flip_h: state.flip_h,
           roll_name: rollName,
+          columns: state.sheetColumns,
           dest_path: chosenPath,
           reveal: true,
           per_frame_recipes: perFrameRecipes,
@@ -2916,9 +3260,59 @@ function initUIListeners() {
   document.getElementById("saveDownloadsBtn")?.addEventListener("click", saveDirectToDownloads);
   document.getElementById("saveAsBtn")?.addEventListener("click", saveAsWithDialog);
   document.getElementById("saveSheetBtn")?.addEventListener("click", () => saveContactSheetOnly(false));
-  document.getElementById("sheetQuickSaveBtn")?.addEventListener("click", () => saveContactSheetOnly(false));
-  document.getElementById("sheetSaveAsBtn")?.addEventListener("click", () => saveContactSheetOnly(true));
   document.getElementById("developFullBtn")?.addEventListener("click", developFullRoll);
+
+  document.getElementById("btnCancelBatch")?.addEventListener("click", async () => {
+    if (!activeBatchJobId) return;
+    const cancelBtn = document.getElementById("btnCancelBatch");
+    if (cancelBtn) {
+      cancelBtn.disabled = true;
+      cancelBtn.textContent = "Cancelando…";
+    }
+    try {
+      await fetch(`/api/batch/develop_cancel/${encodeURIComponent(activeBatchJobId)}`, {
+        method: "POST",
+      });
+    } catch (err) {
+      console.error("Error cancelando lote:", err);
+    }
+  });
+
+  // Contact Sheet interactive toolbar (roll name & columns)
+  let sheetRollDebounce = null;
+  document.getElementById("sheetRollNameInput")?.addEventListener("input", (e) => {
+    state.sheetRollName = e.target.value || "";
+    clearTimeout(sheetRollDebounce);
+    sheetRollDebounce = setTimeout(() => {
+      if (state.viewMode === "sheet" && state.frames.length > 0) {
+        generateContactSheetPreview();
+      }
+    }, 380);
+  });
+  document.getElementById("sheetRollNameInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      clearTimeout(sheetRollDebounce);
+      state.sheetRollName = e.target.value || "";
+      if (state.viewMode === "sheet" && state.frames.length > 0) {
+        generateContactSheetPreview();
+      }
+      e.target.blur();
+    }
+  });
+
+  document.querySelectorAll("#sheetColumnsBar .sheet-col-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cols = parseInt(btn.dataset.cols, 10) || 4;
+      if (cols === state.sheetColumns) return;
+      state.sheetColumns = cols;
+      document.querySelectorAll("#sheetColumnsBar .sheet-col-btn").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+      });
+      if (state.viewMode === "sheet" && state.frames.length > 0) {
+        generateContactSheetPreview();
+      }
+    });
+  });
 
   // Catalog search & category filter pills
   document.getElementById("filmSearch")?.addEventListener("input", (e) => {
@@ -2945,8 +3339,14 @@ function initUIListeners() {
   document.getElementById("rotateRightBtn")?.addEventListener("click", () => rotateCurrentFrame(90));
   document.getElementById("flipHBtn")?.addEventListener("click", toggleHorizontalFlip);
 
-  document.getElementById("zoomInBtn")?.addEventListener("click", () => setZoom(state.zoom + 0.25));
-  document.getElementById("zoomOutBtn")?.addEventListener("click", () => setZoom(state.zoom - 0.25));
+  document.getElementById("zoomInBtn")?.addEventListener("click", () => {
+    const base = state.viewMode === "sheet" ? state.sheetZoom : state.zoom;
+    setZoom(base + 0.25);
+  });
+  document.getElementById("zoomOutBtn")?.addEventListener("click", () => {
+    const base = state.viewMode === "sheet" ? state.sheetZoom : state.zoom;
+    setZoom(base - 0.25);
+  });
   document.getElementById("zoomResetBtn")?.addEventListener("click", resetZoom);
 
   // Per-frame recipe copy / paste / roll sync
@@ -2987,6 +3387,7 @@ function initUIListeners() {
 
   document.getElementById("dateToggle")?.addEventListener("change", (e) => {
     state.date = e.target.checked;
+    saveActiveFrameRecipe();
     requestPreview(false);
   });
 
@@ -3269,7 +3670,7 @@ function initUIListeners() {
   });
   document.getElementById("btnCopyAboutInfo")?.addEventListener("click", () => {
     const text =
-      "Haluro — Laboratorio Analógico Digital (v2.4.3)\n" +
+      "Haluro — Laboratorio Analógico Digital (v2.4.4)\n" +
       "Desarrollador: Fotógrafo César Fernández Ardiles (Oregano, Chile)\n" +
       "Licencia: MIT (Software libre y gratuito)\n" +
       "Emulación: 72 películas químicas + Inversión óptica C-41 / B&N\n" +
@@ -3282,6 +3683,7 @@ function initUIListeners() {
 
   document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
     backdrop.addEventListener("click", (e) => {
+      if (backdrop.id === "batchProgressModal") return;
       if (e.target === backdrop) backdrop.classList.remove("active");
     });
   });
