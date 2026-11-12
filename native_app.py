@@ -280,6 +280,14 @@ def _show_native_fatal_error(title: str, message: str) -> None:
 
 def run_smoke_test() -> int:
     """Boot backend, verify `/api/health`, validate native bridge, and exit cleanly."""
+    # The Windows CI runner uses a cp1252 console; make the streams tolerant
+    # so a path with non-ASCII characters cannot break the smoke test.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):  # pragma: no cover
+            pass
+
     configure_logging()
     port = find_free_port(5150)
     server_thread = threading.Thread(target=run_backend, args=(port,), daemon=True)
@@ -293,7 +301,8 @@ def run_smoke_test() -> int:
 
     api = AppApi()
     payload["bridge"] = api.get_platform_info()
-    print(json.dumps(payload, ensure_ascii=False))
+    # ensure_ascii keeps the JSON line printable on any console codepage.
+    print(json.dumps(payload, ensure_ascii=True))
     return 0 if payload.get("status") == "ok" and payload.get("films_count", 0) >= 72 else 1
 
 

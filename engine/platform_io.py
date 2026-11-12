@@ -161,6 +161,12 @@ def configure_logging(level: int = logging.INFO) -> Path:
 
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(fmt)
+    # The console of a Windows CI runner uses cp1252; make sure a Spanish log
+    # message can never raise a UnicodeEncodeError inside the handler.
+    try:
+        stream_handler.stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):  # pragma: no cover
+        pass
 
     root_logger.setLevel(level)
     root_logger.addHandler(file_handler)

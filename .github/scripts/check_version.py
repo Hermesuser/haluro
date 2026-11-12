@@ -15,6 +15,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# The script also runs on the Windows CI runner, whose console uses cp1252 and
+# cannot encode symbols such as U+2713. Keep the output ASCII-safe.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):  # pragma: no cover - very old interpreters
+        pass
+
 
 def read_version() -> str:
     source = (ROOT / "engine" / "__init__.py").read_text(encoding="utf-8")
@@ -62,12 +70,12 @@ def main() -> int:
         problems.append("build_macos.sh no resuelve la versión desde engine/__init__.py")
 
     if problems:
-        print("\n✗ Versión inconsistente:", file=sys.stderr)
+        print("\n[x] Versión inconsistente:", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    print(f"✓ Versión {version} consistente en todo el repositorio")
+    print(f"[ok] Versión {version} consistente en todo el repositorio")
     return 0
 
 
