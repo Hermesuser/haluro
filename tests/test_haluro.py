@@ -18,16 +18,18 @@ Covers:
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 import subprocess
 import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
-from PIL import Image
 import pytest
+from PIL import Image
 
-from engine import APP_NAME, __version__
+from engine import APP_NAME, __version__, platform_io
 from engine.contact_sheet import generate_contact_sheet
 from engine.films import LUT_DIR, get_film, list_films
 from engine.lut import CubeLUT
@@ -52,8 +54,16 @@ from engine.pipeline import (
     save_output_image,
     srgb_to_linear,
 )
-from engine import platform_io
 
+# The expected version is resolved from the package metadata, so the suite does
+# not need editing on every release bump.
+try:
+    __EXPECTED_VERSION = _pkg_version("haluro")
+except PackageNotFoundError:  # pragma: no cover - running from a source checkout
+    __EXPECTED_VERSION = __version__
+
+# A version that is always newer than the current one, used by the updater test.
+_NEWER_VERSION = "99.0.0"
 
 # =============================================================================
 # 1. CROSS-PLATFORM OS ABSTRACTION (macOS & WINDOWS 11)
@@ -433,17 +443,19 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     haluro_app.app.config["TESTING"] = True
     with haluro_app.app.test_client() as test_client:
+        # Every state-changing request must carry the per-process session token.
+        test_client.environ_base["HTTP_X_HALURO_TOKEN"] = haluro_app.API_TOKEN
         yield test_client
 
 
 def test_api_health_and_security_headers(client) -> None:
-    assert __version__ == "2.4.6"
+    assert __version__ == __EXPECTED_VERSION
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
-    assert body["version"] == "2.4.6"
+    assert body["version"] == __EXPECTED_VERSION
     assert body["films_count"] == 72
     assert body["platform"] in {"macos", "windows", "linux"}
 
@@ -460,7 +472,7 @@ def test_api_about_manifest(client) -> None:
     assert resp.status_code == 200
     info = resp.get_json()
     assert info["app"] == "Haluro"
-    assert info["version"] == "2.4.6"
+    assert info["version"] == __EXPECTED_VERSION
     assert info["license"] == "MIT"
     assert "César Fernández Ardiles" in info["developer"]["name"]
     assert "Chile" in info["developer"]["country"]
@@ -924,7 +936,7 @@ def test_macos_application_identity_and_about_panel():
 
         assert _MACOS_ABOUT_OPTIONS is not None
         assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
-        assert "2.4.6" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        assert __EXPECTED_VERSION in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
         credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
         assert "César Fernández Ardiles" in credits_str
         assert "Chile" in credits_str
@@ -1014,19 +1026,20 @@ def test_updater_platform_detection():
 def test_updater_check_logic(monkeypatch):
     import json
     import urllib.request
+
     from engine.updater import check_for_updates
 
     # Case 1: Newer version available
     mock_newer = {
-        "version": "2.5.0",
+        "version": _NEWER_VERSION,
         "release_date": "2026-12-01",
-        "title": "Haluro v2.5.0",
+        "title": f"Haluro v{_NEWER_VERSION}",
         "description": "Nueva versión mayor con mejoras",
         "highlights": ["Mejora 1", "Mejora 2"],
         "download_urls": {
-            "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-arm64.dmg",
-            "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-x86_64.dmg",
-            "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-Windows-x64.zip",
+            "macos_arm64": f"https://github.com/Hermesuser/haluro/releases/download/v{_NEWER_VERSION}/Haluro-{_NEWER_VERSION}-macOS-arm64.dmg",
+            "macos_x86_64": f"https://github.com/Hermesuser/haluro/releases/download/v{_NEWER_VERSION}/Haluro-{_NEWER_VERSION}-macOS-x86_64.dmg",
+            "windows_x86_64": f"https://github.com/Hermesuser/haluro/releases/download/v{_NEWER_VERSION}/Haluro-{_NEWER_VERSION}-Windows-x64.zip",
             "all_releases": "https://github.com/Hermesuser/haluro/releases/latest",
         },
     }
@@ -1047,7 +1060,7 @@ def test_updater_check_logic(monkeypatch):
 
     res = check_for_updates(timeout=1.0)
     assert res["update_available"] is True
-    assert res["latest_version"] == "2.5.0"
+    assert res["latest_version"] == _NEWER_VERSION
     assert res["offline"] is False
     assert "https://github.com/Hermesuser/haluro/releases" in res["download_url"]
     assert len(res["highlights"]) == 2
@@ -1326,6 +1339,7 @@ def test_save_output_embeds_srgb_icc_and_transliterates_ascii(tmp_path: Path) ->
 
 def test_non_srgb_icc_input_converts_to_srgb_linear(tmp_path: Path) -> None:
     from PIL import ImageCms
+
     from engine.pipeline import _convert_pil_to_srgb, _is_srgb_icc_profile, get_srgb_icc_bytes
 
     assert _is_srgb_icc_profile(get_srgb_icc_bytes()) is True
@@ -1382,6 +1396,7 @@ def test_raw_sample_exif_preserved_and_colorspace_srgb(tmp_path: Path) -> None:
 
 def test_upload_deduplication_and_extension_rejection(client) -> None:
     import io
+
     import app as haluro_app
 
     buf1 = io.BytesIO()
@@ -1432,7 +1447,7 @@ def test_cinestill400d_alias_print_category_and_ui_contract(client) -> None:
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     for marker in (
-        "v2.4.6",
+        f"v{__EXPECTED_VERSION}",
         'id="undoBtn"',
         'id="redoBtn"',
         'id="zenToggleBtn"',

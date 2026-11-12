@@ -1,4 +1,4 @@
-# Haluro 2.4.5 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
+# Haluro 2.5.0 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
 
 Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfica concebida desde la práctica y los principios de la fotoquímica analógica. Esta guía detalla cada módulo, herramienta, atajo de teclado y proceso de calibración para obtener el máximo rendimiento tanto en la inversión de negativos digitalizados con cámara como en la emulación de emulsiones cinematográficas y fotográficas clásicas.
 
@@ -40,8 +40,8 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 | Arquitectura de Mac | Archivo a Descargar |
 | :--- | :--- |
-| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.4.5-macOS-arm64.dmg` |
-| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.4.5-macOS-x86_64.dmg` |
+| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.5.0-macOS-arm64.dmg` |
+| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.5.0-macOS-x86_64.dmg` |
 
 #### Pasos de Instalación:
 1. Haz doble clic sobre el archivo `.dmg` correspondiente a tu procesador.
@@ -61,7 +61,7 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 ### Windows 11
 
-* **Archivo requerido:** `Haluro-Setup-2.4.5-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.4.5-Win11-x64.zip`).
+* **Archivo requerido:** `Haluro-Setup-2.5.0-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.5.0-Win11-x64.zip`).
 * **Instalación:** Ejecuta el instalador. No requiere permisos de administrador forzados (instalación limpia por usuario) y se integra automáticamente con el motor **Microsoft Edge WebView2** preinstalado en Windows 11.
 
 ---
@@ -121,7 +121,8 @@ Para importar, basta con **arrastrar y soltar** uno o varios archivos directamen
 | `⌘ + S` | `Ctrl + S` | Guardar copia maestra (o contactos) en Descargas |
 | `⇧ + ⌘ + S` | `Ctrl + Shift + S` | Abrir diálogo **Guardar como…** |
 | `L` | `L` | Alternar **Luz roja** ambiental de cuarto oscuro |
-| `?` | `?` | Abrir o cerrar la guía de atajos de teclado |
+| `⌘ + ⌥ + Z` | `Ctrl + Alt + Z` | Modo mesa limpia: ocultar o mostrar los paneles laterales |
+| `Tab` | `Tab` | Recorre la interfaz con el teclado (nunca se intercepta) |
 | `Doble clic` | `Doble clic` | Restablecer un deslizador individual a su punto neutro |
 
 ---
@@ -334,4 +335,4 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 2.4.5 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*
+*Haluro 2.5.0 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*

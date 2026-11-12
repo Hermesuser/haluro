@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Haluro v2.4.6 — Reproducible macOS Native App & DMG Build Pipeline
+# Haluro — Reproducible macOS Native App & DMG Build Pipeline
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
-
-VERSION="2.4.6"
 
 if [[ -n "${PYTHON_BIN:-}" ]]; then
   : # Use user-specified PYTHON_BIN
@@ -21,6 +19,10 @@ else
 fi
 
 ARCH="$("${PYTHON_BIN}" -c "import platform; print(platform.machine())")"
+
+# Single source of truth: the version lives in engine/__init__.py.
+VERSION="$("${PYTHON_BIN}" -c "import sys; sys.path.insert(0, '.'); from engine import __version__; print(__version__)")"
+echo "==> Construyendo Haluro v${VERSION} (${ARCH}) ..."
 
 echo "==> [1/4] Ejecutando suite de pruebas automatizadas (pytest) con ${PYTHON_BIN} ..."
 "${PYTHON_BIN}" -m pytest -v
@@ -63,5 +65,8 @@ hdiutil create \
 
 rm -rf "${STAGE_DIR}"
 
-(cd dist && shasum -a 256 Haluro-*.dmg > "SHA256SUMS-macOS.txt")
+# Only checksum the artefact produced by this run: globbing every *.dmg in
+# dist/ used to include the artefacts of previous releases.
+(cd dist && shasum -a 256 "$(basename "${DMG_PATH}")" > "SHA256SUMS-macOS.txt")
 echo "Construcción macOS completada: ${DMG_PATH}"
+cat "dist/SHA256SUMS-macOS.txt"

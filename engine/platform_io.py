@@ -16,10 +16,11 @@ from __future__ import annotations
 import ctypes
 import logging
 import os
-from pathlib import Path
 import platform
 import subprocess
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Literal
 
 from PIL import ImageFont
@@ -62,7 +63,7 @@ def get_resource_root() -> Path:
     Works identically in source checkouts and frozen PyInstaller executables.
     """
     if is_frozen():
-        return Path(getattr(sys, "_MEIPASS")).resolve()
+        return Path(sys._MEIPASS).resolve()
     return Path(__file__).resolve().parent.parent
 
 
@@ -151,7 +152,11 @@ def configure_logging(level: int = logging.INFO) -> Path:
         fmt="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    # Rotate the log: this is a long-running desktop application and a plain
+    # FileHandler would grow the file without bound.
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
     file_handler.setFormatter(fmt)
 
     stream_handler = logging.StreamHandler()
@@ -259,7 +264,10 @@ def choose_save_path_dialog(
             "$dlg.Title = 'Guardar imagen revelada en Haluro'; "
             "$dlg.InitialDirectory = $env:HALURO_SAVE_DIR; "
             "$dlg.FileName = $env:HALURO_SAVE_NAME; "
-            "$dlg.Filter = 'JPEG 4:4:4 (*.jpg;*.jpeg)|*.jpg;*.jpeg|PNG sin pérdida (*.png)|*.png|TIFF de archivo (*.tiff;*.tif)|*.tiff;*.tif|Todos los archivos (*.*)|*.*'; "
+            "$dlg.Filter = 'JPEG 4:4:4 (*.jpg;*.jpeg)|*.jpg;*.jpeg"
+            "|PNG sin pérdida (*.png)|*.png"
+            "|TIFF de archivo (*.tiff;*.tif)|*.tiff;*.tif"
+            "|Todos los archivos (*.*)|*.*'; "
             "if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { "
             "  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
             "  Write-Output $dlg.FileName "

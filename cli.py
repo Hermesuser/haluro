@@ -6,17 +6,17 @@ import sys
 import time
 from pathlib import Path
 
-from engine import __version__, APP_NAME, about_payload
-from engine.films import list_films, get_film
-from engine.pipeline import develop_frame, save_output_image
+from engine import APP_NAME, __version__, about_payload
+from engine.contact_sheet import generate_contact_sheet
+from engine.films import get_film, list_films
 from engine.negative_inverter import (
-    process_negative_to_image,
+    BW_TONING_PROFILES,
     MINILAB_PROFILES,
     PRINT_FINISHES,
-    BW_TONING_PROFILES,
     SCAN_SOURCES,
+    process_negative_to_image,
 )
-from engine.contact_sheet import generate_contact_sheet
+from engine.pipeline import develop_frame, save_output_image
 
 VALID_INPUT_EXTS = {
     ".cr2", ".cr3", ".dng", ".nef", ".arw", ".orf", ".rw2", ".raf", ".pef",
@@ -123,7 +123,12 @@ def main():
     inv_p.add_argument("--film-stock", default="", help="Película original disparada para EXIF")
     inv_p.add_argument("--iso", default="", help="ISO disparado para EXIF")
     inv_p.add_argument("--out", default="./developed", help="Carpeta de salida")
-    inv_p.add_argument("--format", choices=["jpg", "png", "tiff"], default="jpg", help="Formato maestro (tiff = 16-bit)")
+    inv_p.add_argument(
+        "--format",
+        choices=["jpg", "png", "tiff"],
+        default="jpg",
+        help="Formato maestro (tiff = 16-bit)",
+    )
     inv_p.add_argument("--brightness", type=float, default=0.0, help="Ajuste de brillo (-1.0 a 1.0)")
     inv_p.add_argument("--midtone-nd", type=float, default=0.0, help="Densidad neutra en medios tonos (-1.0 a 1.0)")
     inv_p.add_argument("--contrast", type=float, default=0.0, help="Ajuste de contraste (-1.0 a 1.0)")
@@ -187,7 +192,8 @@ def main():
             "film_stock": args.film_stock or film_info["name"],
             "shot_iso": args.iso,
         }
-        dev_analog_meta = {k: v for k, v in dev_analog_meta.items() if v} if (args.camera or args.lens or args.film_stock or args.iso) else {}
+        has_analog_meta = bool(args.camera or args.lens or args.film_stock or args.iso)
+        dev_analog_meta = {k: v for k, v in dev_analog_meta.items() if v} if has_analog_meta else {}
 
         for idx, file_p in enumerate(files, 1):
             t0 = time.time()

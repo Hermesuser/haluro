@@ -1,9 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Cross-platform PyInstaller specification for Haluro v2.4.6.
+"""Cross-platform PyInstaller specification for Haluro.
 
 Targets:
   - Windows 11 x64 / ARM64 -> `dist/Haluro/Haluro.exe` (Edge WebView2, Win32 PE metadata, High-DPI)
   - macOS Apple Silicon / Intel -> `dist/Haluro.app` (Cocoa WebKit, Retina, studio.haluro.lab)
+
+The version is read from `engine/__init__.py`, the single source of truth.
 """
 
 from pathlib import Path
@@ -18,6 +20,9 @@ from PyInstaller.utils.hooks import (
 SPEC_ROOT = Path(SPECPATH).resolve()
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
+
+sys.path.insert(0, str(SPEC_ROOT))
+from engine import __version__ as HALURO_VERSION  # noqa: E402
 
 # Bundle read-only optical assets into `sys._MEIPASS`
 added_datas = [
@@ -121,8 +126,8 @@ if IS_MACOS:
         info_plist={
             "CFBundleName": "Haluro",
             "CFBundleDisplayName": "Haluro",
-            "CFBundleVersion": "2.4.6",
-            "CFBundleShortVersionString": "2.4.6",
+            "CFBundleVersion": HALURO_VERSION,
+            "CFBundleShortVersionString": HALURO_VERSION,
             "LSMinimumSystemVersion": "12.0" if platform.machine() == "x86_64" else "14.0",
             "NSHighResolutionCapable": True,
             "NSSupportsAutomaticGraphicsSwitching": True,

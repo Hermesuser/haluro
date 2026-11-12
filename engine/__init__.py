@@ -3,9 +3,14 @@
 Single source of truth for product identity, authorship and licensing metadata.
 Consumed by the Flask backend (`/api/about`), the native launcher, the CLI
 (`--version` / `about`), and the macOS / Windows 11 packaging scripts.
+
+This module is also the **single source of truth for the version number**: the
+packaging pipelines read `__version__` from here instead of carrying their own
+hardcoded copy, which previously drifted (the Windows build kept shipping 2.4.5
+artefacts for a 2.4.6 release).
 """
 
-__version__ = "2.4.6"
+__version__ = "2.5.0"
 APP_NAME = "Haluro"
 APP_FULL_NAME = "Haluro — Laboratorio Analógico Digital"
 APP_TAGLINE = (
@@ -24,7 +29,10 @@ DEVELOPER = {
 
 __author__ = DEVELOPER["name"]
 __license__ = "MIT"
-__copyright__ = f"Copyright (c) {APP_COPYRIGHT_YEAR} {DEVELOPER['name']} · {DEVELOPER['studio']} · {DEVELOPER['country']}"
+__copyright__ = (
+    f"Copyright (c) {APP_COPYRIGHT_YEAR} {DEVELOPER['name']} "
+    f"· {DEVELOPER['studio']} · {DEVELOPER['country']}"
+)
 
 # Credits for bundled third-party assets & runtime components (see THIRD_PARTY_NOTICES.md).
 THIRD_PARTY_CREDITS = (

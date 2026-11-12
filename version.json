@@ -1,21 +1,24 @@
 {
-  "version": "2.4.6",
-  "release_date": "2026-11-11",
-  "name": "Haluro v2.4.6",
-  "title": "Pulido Integral de Interfaz: Tipografía, Iconografía SVG y Móvil Foto-Primero",
-  "description": "Auditoría completa de UI/UX aplicada de punta a punta: escala tipográfica unificada sin texto bajo 11px, iconografía vectorial nativa en todo el flujo de fotogramas, jerarquía de superficies sin sombras flotantes, y layout móvil que abre la pantalla con la fotografía.",
+  "version": "2.5.0",
+  "release_date": "2026-11-12",
+  "name": "Haluro v2.5.0",
+  "title": "Local-Session Hardening, Deterministic Grain and Measured Hurter–Driffield Transfer",
+  "description": "Auditoría de seguridad y calidad aplicada de punta a punta: protección de sesión local con token CSRF y validación de origen, eliminación del path traversal en las rutas de salida, grano determinista que hace coincidir la previsualización con la exportación, escala correcta de TIFF de 16 bits, transferencia Hurter–Driffield basada en la densidad medida, y una cadena de empaquetado con versión única.",
   "highlights": [
-    "Escala tipográfica unificada en seis tamaños (11/12/13/14/16/20px): ninguna etiqueta, badge ni dato por debajo de 11px en escritorio, hoja de contactos y catálogo.",
-    "Iconografía SVG en línea para favoritas, selección y descarte de fotogramas: estrella y aspa nítidas en cualquier densidad de píxeles, sin glifos tipográficos.",
-    "Jerarquía de superficies calibrada: el visor y la hoja de contactos descansan sobre su borde de 1px sin sombras flotantes, y los controles activos usan anillo por contorno.",
-    "En pantallas angostas la fotografía abre la vista con áreas táctiles de 40–44px, la telemetría de escritorio cede su lugar y el estado vacío deja de filtrar texto alterno.",
-    "Respiros y márgenes revisados en cabeceras de panel, histograma, barra de herramientas y pie del inspector, con transiciones nombradas y valores numéricos tabulares."
+    "Sesión local protegida: token CSRF por proceso, cabecera Host restringida a loopback y comprobación de Origin en cada petición que modifica estado (bloquea DNS rebinding y POST desde páginas ajenas).",
+    "Path traversal corregido: las claves de película y de perfil negativo se canonicalizan contra el catálogo y toda ruta de salida se valida dentro de su directorio, de modo que ningún parámetro puede escribir fuera de la aplicación.",
+    "Grano determinista: la previsualización y el archivo exportado comparten ahora exactamente el mismo patrón de grano; antes el RNG global lo re-sorteaba en cada render y bajo concurrencia cambiaba entre fotogramas.",
+    "TIFF de 16 bits corregido: la escala se deriva de la profundidad declarada y no del contenido, lo que evita un error de 2.430x en escaneos subexpuestos que quedan por debajo de 255.",
+    "Transferencia Hurter–Driffield real: el rango de densidad óptica medido determina ahora la curva de reconstrucción, de modo que un rollo empujado y uno plano ya no comparten la misma respuesta tonal.",
+    "Memoria: la hoja de contactos reduce cada fotograma a miniatura al cargarlo y las conversiones de espacio de color ya no duplican sus arrays temporales.",
+    "Accesibilidad: la tecla Tab vuelve a recorrer la interfaz, el modo mesa limpia se mueve a Cmd/Ctrl+Alt+Z y el fondo de los modales se marca inerte de forma compatible con WebKit antiguo.",
+    "Empaquetado: la versión se resuelve desde engine/__init__.py en macOS y Windows, con un trabajo de CI para ambas plataformas y comprobación de lint en cada compilación."
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-2.4.6-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-2.4.6-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-Setup-2.4.6-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-Portable-2.4.6-Win11-x64.zip",
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-Setup-2.5.0-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-Portable-2.5.0-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "min_supported_version": "2.0.0"

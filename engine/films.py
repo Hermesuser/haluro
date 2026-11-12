@@ -2,8 +2,6 @@
 Includes color parameters, grain, halation, contrast, LUT mappings and UI metadata.
 """
 
-from pathlib import Path
-import re
 
 from .platform_io import get_resource_root
 
@@ -228,7 +226,8 @@ FILMS = {
         desc=DESCRIPTIONS.get("portra400", "")
     ),
     "cinestill800t": dict(
-        key="cinestill800t", brand="CineStill", name="CineStill 800T", iso=800, kind="cine", balance=3200, ev=0.0, sat=0.95,
+        key="cinestill800t", brand="CineStill", name="CineStill 800T", iso=800, kind="cine",
+        balance=3200, ev=0.0, sat=0.95,
         contrast=(0.18, 0.18, 0.172), pivot=(-0.05, 0.0, -0.05),
         black=(0.02, 0.032, 0.045), white=(0.97, 0.96, 0.95),
         hues=[("cyan", "blue", 0.1, 1.0), ("red", "orange", 0.08, 1.05)],
@@ -252,7 +251,8 @@ FILMS = {
         desc=DESCRIPTIONS.get("gold200", "")
     ),
     "superia400": dict(
-        key="superia400", brand="Fujifilm", name="Fujicolor Superia 400", iso=400, kind="neg", balance=5500, ev=0.1, sat=1.05,
+        key="superia400", brand="Fujifilm", name="Fujicolor Superia 400", iso=400, kind="neg",
+        balance=5500, ev=0.1, sat=1.05,
         contrast=(0.18, 0.183, 0.178), pivot=(0.05, -0.1, 0.0),
         black=(0.022, 0.036, 0.032), white=(0.96, 0.97, 0.95),
         hues=[("green", "cyan", 0.18, 1.05), ("red", "magenta", 0.06, 1.0),
@@ -261,7 +261,8 @@ FILMS = {
         desc=DESCRIPTIONS.get("superia400", "")
     ),
     "velvia50": dict(
-        key="velvia50", brand="Fujifilm", name="Fujichrome Velvia 50", iso=50, kind="slide", balance=5500, slide=True, ev=-0.3, sat=1.45,
+        key="velvia50", brand="Fujifilm", name="Fujichrome Velvia 50", iso=50, kind="slide",
+        balance=5500, slide=True, ev=-0.3, sat=1.45,
         contrast=(0.25, 0.25, 0.25), pivot=(0.0, 0.0, -0.05),
         black=(0.01, 0.01, 0.015), white=(0.98, 0.98, 0.98),
         hues=[("green", "green", 0.0, 1.15), ("blue", "magenta", 0.06, 1.15),
@@ -284,7 +285,8 @@ FILMS = {
         desc=DESCRIPTIONS.get("trix400", "")
     ),
     "cinestill400d": dict(
-        key="cinestill400d", brand="CineStill", name="CineStill 400D", iso=400, kind="cine", balance=5500, ev=0.0, sat=0.95,
+        key="cinestill400d", brand="CineStill", name="CineStill 400D", iso=400, kind="cine",
+        balance=5500, ev=0.0, sat=0.95,
         contrast=(0.175, 0.175, 0.168), pivot=(-0.05, 0.0, -0.05),
         black=(0.02, 0.03, 0.04), white=(0.97, 0.96, 0.95),
         hues=[("cyan", "blue", 0.1, 1.0), ("red", "orange", 0.08, 1.05)],

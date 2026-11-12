@@ -2,19 +2,23 @@
 Implements exposure, vignette, halation, 3D LUTs, film response curves, and grain.
 """
 
-from pathlib import Path
 import functools
+import hashlib
 import io
+import logging
 import math
+import os
 import struct
 import unicodedata
 import zlib
+from pathlib import Path
+
 import numpy as np
-from PIL import Image, ImageCms, ImageDraw, ImageFont, ImageOps
 import scipy.ndimage
+from PIL import Image, ImageCms, ImageDraw, ImageOps
 
 from . import __version__
-from .films import get_film, LUT_DIR
+from .films import LUT_DIR, get_film
 from .lut import load_lut
 from .platform_io import is_macos, load_ui_font
 
@@ -24,6 +28,8 @@ try:
     pillow_heif.register_heif_opener()
 except ImportError:
     pillow_heif = None
+
+logger = logging.getLogger(__name__)
 
 LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
@@ -56,15 +62,38 @@ def wrap_angle(a):
 
 
 def srgb_to_linear(srgb):
-    """Convert sRGB [0..1] to scene-linear [0..inf]."""
-    srgb = np.maximum(srgb, 0.0)
-    return np.where(srgb <= 0.04045, srgb / 12.92, np.power((srgb + 0.055) / 1.055, 2.4)).astype(np.float32)
+    """Convert sRGB [0..1] to scene-linear [0..inf].
+
+    Implemented with a single branch instead of ``np.where``: ``np.where``
+    evaluates *both* arms, so a 24 MP frame allocated four extra float32
+    temporaries (≈1.2 GB of peak RSS) on every conversion, and the engine
+    converts 4-8 times per frame.
+    """
+    srgb = np.maximum(np.asarray(srgb, dtype=np.float32), 0.0)
+    out = np.empty_like(srgb, dtype=np.float32)
+    low = srgb <= 0.04045
+    np.divide(srgb, 12.92, out=out, where=low)
+    high = ~low
+    if high.any():
+        out[high] = np.power((srgb[high] + 0.055) / 1.055, 2.4)
+    return out
 
 
-def linear_to_srgb(lin):
-    """Convert scene-linear to sRGB [0..1]."""
-    lin = np.clip(lin, 0.0, 1.0)
-    return np.where(lin <= 0.0031308, 12.92 * lin, 1.055 * np.power(lin, 1 / 2.4) - 0.055).astype(np.float32)
+def linear_to_srgb(lin, clip=True):
+    """Convert scene-linear to sRGB [0..1].
+
+    ``clip=False`` keeps values above 1.0 so intermediate operations (halation,
+    glow) are not truncated before they are encoded.
+    """
+    lin = np.asarray(lin, dtype=np.float32)
+    lin = np.clip(lin, 0.0, 1.0) if clip else np.maximum(lin, 0.0)
+    out = np.empty_like(lin, dtype=np.float32)
+    low = lin <= 0.0031308
+    np.multiply(lin, 12.92, out=out, where=low)
+    high = ~low
+    if high.any():
+        out[high] = 1.055 * np.power(lin[high], 1 / 2.4) - 0.055
+    return out
 
 
 def apply_characteristic_curve(x, slope, pivot, black, white):
@@ -253,10 +282,20 @@ def _resize_float32_rgb(arr, max_dim):
     return np.stack(channels, axis=-1)
 
 
-@functools.lru_cache(maxsize=14)
+@functools.lru_cache(maxsize=6)
 def _load_image_linear_cached(resolved_path_str, mtime_ns, max_dim):
-    """LRU-cached linear RGB loader for instant slider responsiveness."""
+    """LRU-cached linear RGB loader for instant slider responsiveness.
+
+    The cache holds complete float32 arrays, so a large ``max_dim`` costs
+    hundreds of megabytes per entry. It is therefore restricted to preview
+    sizes; full-resolution development always decodes straight from disk.
+    """
     return _decode_image_linear_uncached(Path(resolved_path_str), max_dim=max_dim)
+
+
+def _cacheable_preview(max_dim) -> bool:
+    """Only preview-sized decodes are worth keeping in the LRU cache."""
+    return max_dim is not None and int(max_dim) <= 1600
 
 
 def _decode_image_linear_uncached(path, max_dim=None):
@@ -311,7 +350,7 @@ def _decode_image_linear_uncached(path, max_dim=None):
         img = ImageOps.exif_transpose(src)
         if img.mode in ("I;16", "I;16L", "I;16B", "I"):
             arr16 = np.asarray(img, dtype=np.float32)
-            max_v = 65535.0 if arr16.max() > 255.0 else 255.0
+            max_v = _declared_16bit_scale(img, src)
             gray = np.clip(arr16 / max_v, 0.0, 1.0)
             arr_srgb = np.stack([gray, gray, gray], axis=-1)
             arr_srgb = _resize_float32_rgb(arr_srgb, max_dim)
@@ -324,6 +363,29 @@ def _decode_image_linear_uncached(path, max_dim=None):
             img = img.resize(new_size, Image.Resampling.LANCZOS)
         arr_srgb = np.asarray(img, dtype=np.float32) / 255.0
         return srgb_to_linear(arr_srgb)
+
+
+def _declared_16bit_scale(img, src=None) -> float:
+    """Return the correct full-scale value for a monochrome image with a declared 16-bit depth.
+
+    The scale MUST be derived from the *declared* bit depth, never from the image
+    content. A sub-exposed 16-bit film scan routinely stays entirely below 255;
+    scaling it by 255 instead of 65535 crushes the image by a factor of ~187 and
+    the error is unrecoverable afterwards because the clipping already happened
+    in the decoder.
+    """
+    if img.mode in ("I;16", "I;16L", "I;16B"):
+        return 65535.0
+    tags = getattr(src if src is not None else img, "tag_v2", None)
+    if tags:
+        bps = tags.get(258)
+        if isinstance(bps, (tuple, list)):
+            bps = bps[0] if bps else None
+        if bps == 16:
+            return 65535.0
+    # 32-bit integer container without a declared depth: fall back to content range.
+    arr = np.asarray(img)
+    return 65535.0 if float(arr.max()) > 255.0 else 255.0
 
 
 def _try_read_tiff16_rgb(path: Path, pil_src: Image.Image):
@@ -356,7 +418,7 @@ def _try_read_tiff16_rgb(path: Path, pil_src: Image.Image):
             head = f.read(2)
             endian = "<" if head == b"II" else ">"
             raw_chunks = []
-            for off, bc in zip(offsets, byte_counts):
+            for off, bc in zip(offsets, byte_counts, strict=False):
                 f.seek(int(off))
                 chunk = f.read(int(bc))
                 if compression in (8, 32946):
@@ -401,7 +463,7 @@ def apply_geometry(arr, rotate=0, flip_h=False):
 def load_image_linear(path, max_dim=None, rotate=0, flip_h=False):
     """Loads a RAW or standard image into scene-linear float32 RGB, utilizing RAM cache for previews."""
     path = Path(path).resolve()
-    if max_dim is not None and path.is_file():
+    if max_dim is not None and path.is_file() and _cacheable_preview(max_dim):
         mtime_ns = path.stat().st_mtime_ns
         base = _load_image_linear_cached(str(path), mtime_ns, int(max_dim)).copy()
     else:
@@ -498,8 +560,8 @@ def build_export_exif_bytes(source_path=None, analog_meta: dict | None = None) -
                             for tag_id in _SAFE_EXIF_SUBIFD_TAGS:
                                 if tag_id in src_sub and src_sub[tag_id] not in (None, ""):
                                     dst_sub[tag_id] = src_sub[tag_id]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("No se pudo copiar el EXIF de origen: %s", exc)
 
     exif[0x0112] = 1  # Orientation normalized to top-left
     exif[0x0131] = f"Haluro {__version__}"
@@ -684,40 +746,53 @@ def save_output_image(
     float_srgb: np.ndarray | None = None,
     analog_meta: dict | None = None,
 ):
-    """Save developed image in JPG (4:4:4 + EXIF), PNG, or 16-bit (48-bit RGB) archival TIFF."""
+    """Save developed image in JPG (4:4:4 + EXIF), PNG, or 16-bit (48-bit RGB) archival TIFF.
+
+    The file is written to a temporary sibling and then moved into place, so an
+    interrupted export can never leave a truncated master behind.
+    """
     target_path = Path(target_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
     ext = target_path.suffix.lower()
 
-    if ext in (".tif", ".tiff"):
-        if float_srgb is not None:
-            save_tiff_16bit_rgb(float_srgb, target_path, analog_meta=analog_meta)
+    tmp_path = target_path.with_name(f".{target_path.name}.part")
+
+    try:
+        if ext in (".tif", ".tiff"):
+            if float_srgb is not None:
+                save_tiff_16bit_rgb(float_srgb, tmp_path, analog_meta=analog_meta)
+            else:
+                # Fallback when caller only passed 8-bit PIL Image (contact sheets, legacy call)
+                arr_f = np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0
+                save_tiff_16bit_rgb(arr_f, tmp_path, analog_meta=analog_meta)
+            os.replace(tmp_path, target_path)
             return
-        # Fallback when caller only passed 8-bit PIL Image (e.g. contact sheets or legacy call)
-        arr_f = np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0
-        save_tiff_16bit_rgb(arr_f, target_path, analog_meta=analog_meta)
-        return
 
-    exif_bytes = build_export_exif_bytes(source_path=source_path, analog_meta=analog_meta)
-    icc_bytes = _get_srgb_icc_bytes()
+        exif_bytes = build_export_exif_bytes(source_path=source_path, analog_meta=analog_meta)
+        icc_bytes = _get_srgb_icc_bytes()
 
-    if ext == ".png":
-        save_kwargs = {"format": "PNG", "compress_level": 4, "icc_profile": icc_bytes}
-        if exif_bytes:
-            save_kwargs["exif"] = exif_bytes
-        pil_img.save(target_path, **save_kwargs)
-    else:
-        # High-grade JPEG with 4:4:4 chroma subsampling=0 & embedded sRGB ICC to preserve grain and display gamut
-        save_kwargs = {
-            "format": "JPEG",
-            "quality": quality,
-            "subsampling": 0,
-            "optimize": True,
-            "icc_profile": icc_bytes,
-        }
-        if exif_bytes:
-            save_kwargs["exif"] = exif_bytes
-        pil_img.save(target_path, **save_kwargs)
+        if ext == ".png":
+            save_kwargs = {"format": "PNG", "compress_level": 4, "icc_profile": icc_bytes}
+            if exif_bytes:
+                save_kwargs["exif"] = exif_bytes
+            pil_img.save(tmp_path, **save_kwargs)
+        else:
+            # High-grade JPEG with 4:4:4 chroma subsampling=0 & embedded sRGB ICC to preserve grain and display gamut
+            save_kwargs = {
+                "format": "JPEG",
+                "quality": quality,
+                "subsampling": 0,
+                "optimize": True,
+                "icc_profile": icc_bytes,
+            }
+            if exif_bytes:
+                save_kwargs["exif"] = exif_bytes
+            pil_img.save(tmp_path, **save_kwargs)
+
+        os.replace(tmp_path, target_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def apply_optical_sharpen(srgb_arr: np.ndarray, mode: str = "off", amount: float = 1.0) -> np.ndarray:
@@ -789,23 +864,32 @@ def apply_halation(lin, strength=1.0, threshold=0.70, tint=(1.0, 0.28, 0.06)):
     return lin + glow_rgb
 
 
-def apply_grain(rgb, amount=0.02, size=1.0):
-    """Adds natural midtone-peaking analog film grain."""
+def apply_grain(rgb, amount=0.02, size=1.0, seed=None):
+    """Adds natural midtone-peaking analog film grain.
+
+    The RNG is local and optionally seeded. The previous implementation drew
+    from NumPy's *global* RNG, which meant every re-render produced a different
+    grain pattern: the preview visibly "boiled" while dragging a slider and the
+    exported master never matched the frame the photographer had approved. Worse,
+    under ThreadPoolExecutor the pattern of a given frame depended on thread
+    scheduling, so two exports of the same roll differed from each other.
+    """
     if amount <= 0.001:
         return rgb
-        
+
+    rng = np.random.default_rng(seed)
     h, w = rgb.shape[:2]
     if size > 1.05:
         nh, nw = max(1, int(h / size)), max(1, int(w / size))
-        small_noise = np.random.normal(0.0, 1.0, (nh, nw)).astype(np.float32)
+        small_noise = rng.normal(0.0, 1.0, (nh, nw)).astype(np.float32)
         noise_img = Image.fromarray(small_noise)
         noise = np.asarray(noise_img.resize((w, h), Image.Resampling.BILINEAR), dtype=np.float32)
     else:
-        noise = np.random.normal(0.0, 1.0, (h, w)).astype(np.float32)
-        
+        noise = rng.normal(0.0, 1.0, (h, w)).astype(np.float32)
+
     luma = np.sum(rgb * LUMA, axis=-1, keepdims=True)
     weight = 4.0 * luma * np.maximum(0.0, 1.0 - luma)  # Mid-tone peaking
-    
+
     noisy_rgb = rgb + noise[..., None] * (amount * weight)
     return np.clip(noisy_rgb, 0.0, 1.0)
 
@@ -835,6 +919,22 @@ def draw_date_stamp(image, date_str=None):
     return image
 
 
+def _stable_grain_seed(image_input, film_key) -> int:
+    """Derive a deterministic grain seed from the source identity and the film stock.
+
+    The seed must depend only on *what* is being developed, never on *when*:
+    that is what guarantees that the interactive preview and the exported master
+    carry the exact same grain pattern, and that two exports of the same roll
+    are byte-identical.
+    """
+    if isinstance(image_input, (str, Path)):
+        identity = f"{Path(image_input).name}|{film_key}"
+    else:
+        identity = f"inline|{film_key}"
+    digest = hashlib.sha256(identity.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
 def develop_frame(
     image_input,
     film_key="portra400",
@@ -847,6 +947,7 @@ def develop_frame(
     rotate=0,
     flip_h=False,
     return_float=False,
+    grain_seed=None,
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     if isinstance(image_input, (str, Path)):
@@ -928,7 +1029,8 @@ def develop_frame(
     # 5. Film Grain
     grain_amt = film.get("grain", 0.015) * grain_mult
     if grain_amt > 0.001:
-        display = apply_grain(display, amount=grain_amt, size=film.get("grain_size", 1.0))
+        seed = grain_seed if grain_seed is not None else _stable_grain_seed(image_input, film_key)
+        display = apply_grain(display, amount=grain_amt, size=film.get("grain_size", 1.0), seed=seed)
         
     # 6. Optical Softness
     soft = film.get("soft", 0.0)
@@ -936,7 +1038,9 @@ def develop_frame(
         display = scipy.ndimage.gaussian_filter(display, sigma=[soft * 0.4, soft * 0.4, 0.0])
         
     display_clamped = np.clip(display, 0.0, 1.0).astype(np.float32)
-    out_img = Image.fromarray((display_clamped * 255.0).astype(np.uint8))
+    # np.rint rounds to nearest; a plain astype(uint8) truncates and applies a
+    # systematic -0.5 LSB bias to every pixel of every exported master.
+    out_img = Image.fromarray(np.rint(display_clamped * 255.0).astype(np.uint8))
 
     if add_date:
         out_img = draw_date_stamp(out_img)

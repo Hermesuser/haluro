@@ -2,9 +2,9 @@
 """Web launcher for Haluro — Laboratorio Analógico Digital."""
 
 import socket
-import webbrowser
 import threading
 import time
+import webbrowser
 
 
 def find_free_port(start_port=5050):
@@ -40,4 +40,9 @@ if __name__ == "__main__":
 
     from app import app
 
-    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+    try:
+        from waitress import serve
+    except ImportError:
+        app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+    else:
+        serve(app, host="127.0.0.1", port=port, threads=8, connection_limit=64, ident="Haluro")

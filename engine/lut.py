@@ -2,8 +2,9 @@
 Supports .cube format (1D shaper + 3D mesh) with trilinear interpolation in NumPy.
 """
 
-from pathlib import Path
 import functools
+from pathlib import Path
+
 import numpy as np
 
 # Linear Rec.709 / sRGB primaries (D65) <-> ARRI Wide Gamut 3
@@ -60,8 +61,12 @@ def encode(lin, space="srgb"):
         x = _rolloff(lin)
         return np.where(x < 0.018, 4.5 * x, 1.099 * np.power(np.maximum(x, 0), 0.45) - 0.099)
     if space == "srgb":
-        x = _rolloff(lin)
-        return np.where(x <= 0.0031308, 12.92 * x, 1.055 * np.power(np.maximum(x, 0), 1 / 2.4) - 0.055)
+        # NOTE: sRGB has no shoulder. Applying a Reinhard roll-off here compressed
+        # pure white to 0.967 (247/255) for every film in the catalogue, and no
+        # .cube declares a compensating DOMAIN_MAX. The 3D LUTs are authored for
+        # the standard sRGB OETF, so they must receive standard sRGB-encoded input.
+        x = np.maximum(lin, 0)
+        return np.where(x <= 0.0031308, 12.92 * x, 1.055 * np.power(x, 1 / 2.4) - 0.055)
     if space == "linear":
         return lin
     return lin
@@ -100,7 +105,7 @@ class CubeLUT:
         self.domain_max = np.array([1.0, 1.0, 1.0], dtype=np.float32)
         rows = []
         
-        with open(self.path, "r", encoding="utf-8-sig", errors="replace") as f:
+        with open(self.path, encoding="utf-8-sig", errors="replace") as f:
             for line in f:
                 line = line.split("#", 1)[0].strip()
                 if not line:

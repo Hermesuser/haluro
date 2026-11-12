@@ -1,8 +1,8 @@
-# Haluro — Laboratorio Analógico Digital (v2.4.5)
+# Haluro — Laboratorio Analógico Digital (v2.5.0)
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2011-blue.svg)](#requisitos-técnicos)
-[![Tests](https://img.shields.io/badge/Tests-37%20Passing-emerald.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-70%20Passing-emerald.svg)](tests/)
 [![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades-brightgreen.svg)](#seguridad-y-privacidad)
 [![Privacidad](https://img.shields.io/badge/Privacidad-100%25%20Local%20%26%20Offline-success.svg)](#seguridad-y-privacidad)
 [![Edición](https://img.shields.io/badge/Edición-100%25%20No%20Destructiva-blueviolet.svg)](#filosofía-de-diseño)
@@ -11,6 +11,35 @@
 > **Estudio / Origen:** Oregano · Chile  
 > **Propósito:** Software libre, gratuito y de código abierto para fotógrafos analógicos, laboratorios independientes y creadores visuales.  
 > **Documentación Oficial:** 📖 [Manual de Uso y Guía de Cuarto Oscuro](MANUAL_DE_USO.md) · 🖨️ [Guía Web Interactiva e Imprimible](manual.html)
+
+---
+
+## Novedades de la v2.5.0
+
+Esta versión es el resultado de una auditoría de seguridad y calidad de todo
+el código. El detalle completo está en el [CHANGELOG](CHANGELOG.md); los
+cambios que más se notan en el uso diario son:
+
+- **La previsualización y el archivo exportado coinciden por primera vez.** El
+  grano se sorteaba de nuevo en cada render, así que la imagen que veías al
+  ajustar un control nunca era exactamente la que se guardaba.
+- **Los escaneos de 16 bits ya no se destruyen.** Un TIFF subexpuesto (por
+  debajo de 255) se dividía por 255 en lugar de por 65535: un error de 2.430×
+  que entraba en la inversión sin posible corrección posterior.
+- **La inversión respeta el contraste real del negativo.** La transferencia
+  densitométrica usa ahora la ley Hurter–Driffield, de modo que un rollo
+  empujado y uno plano ya no se reconstruyen con la misma curva.
+- **El blanco vuelve a ser blanco.** El roll-off que se aplicaba al espacio
+  sRGB limitaba el papel blanco a 247/255 en las 63 películas del catálogo.
+- **La tecla `Tab` vuelve a funcionar.** Estaba secuestrada para plegar los
+  paneles y dejaba la interfaz entera sin acceso por teclado. El modo mesa
+  limpia se mueve a `⌘/Ctrl + Alt + Z`.
+- **Los lotes de 36 fotogramas de 24 MP ya no matan la aplicación.** La hoja de
+  contactos consumía cerca de 7 GB de RAM; ahora reduce cada fotograma a
+  miniatura al cargarlo.
+- **El revelador es una sesión local protegida:** token CSRF por proceso,
+  `Host` restringido a loopback, verificación de origen, validación de rutas y
+  de parámetros, y servidor de producción en lugar del de desarrollo.
 
 ---
 
@@ -39,7 +68,7 @@
 1. **Emulación Analógica Auténtica:** Simulación espectral de **72 películas químicas clásicas** (Kodak Portra, Tri-X, Ektachrome, Fuji Velvia, Provia, Neopan, Ilford HP5+, Delta, CineStill 800T, etc.) mediante matrices de interpolación tetraédrica 3D LUT, grano volumétrico no repetitivo, halo rojo de capa antihalo y viñeteo óptico.
 2. **Revelado Digital de Negativos:** Inversión sensitométrica basada en el modelo **Hurter–Driffield (H&D)** para negativos color (C-41) y blanco y negro digitalizados mediante escáner plano, escáner dedicado de película o cámara digital con fuente de luz LED. Elimina matemáticamente la máscara naranja (D-min), desacopla el balance de blancos de la escena y emula la respuesta tonal de papeles fotográficos tradicionales (**Fuji Crystal Archive RA-4**, **Kodak Vision 2383 ECP** de cine, Minilabs **Noritsu / Frontier** y perfil logarítmico **V-Log**).
 
-![Espacio de trabajo Haluro v2.4.5 en modo Emulación · 72 con Kodak Portra 400 y vista dividida](docs/images/02_espacio_trabajo_darkrooms.png)
+![Espacio de trabajo Haluro v2.5.0 en modo Emulación · 72 con Kodak Portra 400 y vista dividida](docs/images/02_espacio_trabajo_darkrooms.png)
 *Mesa de luz en modo **Emulación · 72** con vista dividida, catálogo en español e histograma Densitómetro RGB.*
 
 ![Inversión de negativo C-41 en modo Revelar negativo con soporte D-min, Densidad neutra y Auto equilibrio](docs/images/03_modo_negativo_inversion.png)
@@ -137,8 +166,8 @@
 
 #### Opción 1: Imagen de Disco Oficial (.dmg)
 1. Descarga la versión adecuada para tu procesador desde [Releases de GitHub](https://github.com/Hermesuser/haluro/releases):
-   - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.4.5-macOS-arm64.dmg`
-   - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.4.5-macOS-x86_64.dmg`
+   - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.5.0-macOS-arm64.dmg`
+   - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.5.0-macOS-x86_64.dmg`
 2. Haz doble clic sobre el archivo `.dmg` montado y arrastra el icono de **Haluro** hacia tu carpeta de **Aplicaciones**.
 3. Abre **Haluro** desde Launchpad, Spotlight o tu carpeta de **Aplicaciones**.
    > **Nota para el primer arranque en macOS Sequoia / Sonoma:**  
@@ -164,12 +193,12 @@ chmod +x run.sh
 ### B) Windows 11 (Nativo)
 
 #### Opción 1: Instalador Moderno (Setup .exe)
-1. Descarga `Haluro-Setup-2.4.5-Win11-x64.exe` desde las Releases de GitHub.
+1. Descarga `Haluro-Setup-2.5.0-Win11-x64.exe` desde las Releases de GitHub.
 2. Ejecuta el instalador. No requiere permisos de administrador obligatorios (instalación por usuario limpia y sin fricción UAC).
 3. Inicia Haluro desde el Menú Inicio o el acceso directo del Escritorio.
 
 #### Opción 2: Versión Portátil (.zip)
-1. Descarga `Haluro-Portable-2.4.5-Win11-x64.zip`.
+1. Descarga `Haluro-Portable-2.5.0-Win11-x64.zip`.
 2. Descomprime la carpeta en cualquier ubicación (por ejemplo, `C:\Programas\Haluro`).
 3. Ejecuta directamente `Haluro.exe`.
 
@@ -247,14 +276,19 @@ python cli.py invert negativo_01.tif \
 
 ## Seguridad, Privacidad y Rendimiento
 
-1. **Aislamiento de Red:** Haluro no realiza ninguna petición externa a Internet en tiempo de ejecución. Las tipografías (*Plus Jakarta Sans* y *JetBrains Mono*) están alojadas localmente en el paquete en formato WOFF2.
-2. **Política de Seguridad de Contenido (CSP):**
+1. **Aislamiento de Red:** Haluro no realiza ninguna petición externa a Internet en tiempo de ejecución, salvo la comprobación opcional de actualizaciones que el usuario puede iniciar desde el panel *Acerca de*. Las tipografías (*Plus Jakarta Sans* y *JetBrains Mono*) están alojadas localmente en el paquete en formato WOFF2.
+2. **Sesión Local Protegida:** El motor solo escucha en `127.0.0.1` y además aplica tres capas: cabecera `Host` restringida a direcciones de loopback (bloquea *DNS rebinding*), verificación del origen `Origin` en cada petición que modifica estado (bloquea el *cross-site POST* desde páginas ajenas) y un **token CSRF por proceso** que el frontend inyecta en cada petición y el servidor exige en todos los `POST`, `PUT`, `PATCH` y `DELETE`.
+3. **Política de Seguridad de Contenido (CSP):**
    ```http
-   Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self'; frame-ancestors 'none';
+   Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; frame-ancestors 'none';
    ```
-3. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de ejecución utiliza `Pillow >= 13.0.0` y `pytest >= 9.0.0`, resolviendo todas las advertencias y CVEs conocidas del ecosistema Python (resultado: **0 vulnerabilidades detectadas**).
-4. **Validación de Rutas Seguras:** Todas las rutas de importación y exportación son verificadas contra ataques de salto de directorio (*path traversal*) mediante resolución canónica y extensiones permitidas.
-5. **Calidad de Código y Pruebas Automatizadas:** Suite de **37 pruebas automatizadas (`pytest`)** que verifican matemáticamente la inversión H&D, el motor `Densidad neutra`, la hoja de contactos interactiva, el progreso de revelado por lotes, la integridad de 16 bits en TIFF y la persistencia EXIF.
+   Se acompañan de `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` y `Cross-Origin-Resource-Policy: same-origin`.
+4. **Validación de Rutas Seguras:** Las claves de película y de perfil negativo se canonicalizan contra el catálogo, nunca se interpolan sin verificar, y toda ruta de salida se comprueba contra su directorio permitted para impedir saltos de directorio (*path traversal*).
+5. **Validación de Entrada:** Todos los parámetros numéricos se acotan a rangos utilizables y se rechazan con **HTTP 400** los valores no numéricos, no finitos o fuera de rango. Las subidas se validan por contenido real, no solo por extensión.
+6. **Servidor de Producción:** El backend se sirve con **Waitress** (WSGI de producción) en lugar del servidor de desarrollo de Flask, sin *debugger* interactivo y con límites de conexión y tiempo de espera.
+7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de ejecución utiliza `Pillow >= 13.0.0`, resolviendo todas las advertencias y CVEs conocidas del ecosistema Python (resultado: **0 vulnerabilidades detectadas**).
+8. **Escrituras Atómicas:** Toda exportación se escribe en un archivo temporal y se mueve a su destino con `os.replace()`, de modo que una interrupción nunca deja un maestro truncado.
+9. **Calidad de Código y Pruebas Automatizadas:** Suite de **70 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la hoja de contactos, el progreso de revelado por lotes, la integridad de 16 bits en TIFF, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
 
 ---
 
@@ -263,6 +297,7 @@ python cli.py invert negativo_01.tif \
 Haluro ha sido desarrollado con estricto apego al marco legal internacional de software libre y propiedad intelectual:
 
 - **Código Fuente:** Licenciado bajo la **Licencia MIT** (Copyright &copy; 2026 César Fernández Ardiles, Oregano, Chile).
+- **Aviso sobre las tablas de color:** Los archivos `.cube` incluidos en `luts/` se distribuyen bajo **CC BY-SA 4.0**, una licencia *copyleft* que obliga a mantener la misma licencia y la atribución en las obras derivadas que los incluyan. El código fuente de Haluro es MIT y se mantiene independiente de ellos; si distribuyes una variante que incruste esas tablas, cargas con las obligaciones de BY-SA sobre el conjunto. Consulta [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) para el detalle de cada componente.
 - **Tablas de Emulación 3D (CLUTs):** Las tablas de color incluidas en `luts/` provienen de la colección de simulación de película de código abierto desarrollada por **Pat David (PIXLS.US)**, **GREYC/G'MIC** y **RawTherapee**, distribuidas bajo licencia **Creative Commons Atribución-CompartirIgual 4.0 Internacional (CC BY-SA 4.0)**.
 - **Tipografías:** Distribuidas bajo la licencia **SIL Open Font License 1.1** (OFL).
 - **Cláusula de Marcas Nominativas:** Nombres como *Kodak, Fujifilm, Ilford, Agfa, CineStill, Rollei, Noritsu, Frontier, Foma* o *Adobe* se citan exclusivamente de forma informativa (*nominative fair use*) para describir el tipo de material analógico que el software aproxima. Haluro es un proyecto independiente y no cuenta con afiliación, patrocinio ni respaldo de dichas compañías.
@@ -304,13 +339,13 @@ git push -u origin main
 ### 4. Publicar un Release Oficial con los Instaladores
 Haluro incluye un flujo de integración continua en `.github/workflows/release.yml`. Para compilar y publicar automáticamente los binarios nativos para macOS y Windows 11:
 ```bash
-# Crear la etiqueta de versión
-git tag -a v2.4.0 -m "Haluro v2.4.0 — Producción y Distribución Gratuita"
+# La versión se resuelve desde engine/__init__.py: no la escribas a mano aquí.
+git tag -a v2.5.0 -m "Haluro v2.5.0 — Sesión Local Segura y Revelado Determinista"
 
 # Subir la etiqueta a GitHub
-git push origin v2.4.0
+git push origin v2.5.0
 ```
-GitHub Actions ejecutará las pruebas automáticas (`pytest`), la auditoría de seguridad (`pip-audit`) y compilará los paquetes `.dmg` e instaladores `.exe` adjuntándolos automáticamente al Release en GitHub.
+GitHub Actions ejecutará la **puerta de calidad** (`ruff`, `pip-audit`, `pytest`, `--smoke-test` y el guardián de versión) y compilará los paquetes `.dmg` de macOS (Apple Silicon e Intel) y los instaladores `.exe` de Windows 11, adjuntándolos todos automáticamente al Release en GitHub con sus sumas SHA-256.
 
 ---
 

@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 import platform
-import sys
 import urllib.error
 import urllib.request
 import webbrowser
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -132,17 +131,18 @@ def check_for_updates(
     try:
         if target_url.startswith("file://"):
             local_path = Path(urlparse(target_url).path)
-            with open(local_path, "r", encoding="utf-8") as f:
+            with open(local_path, encoding="utf-8") as f:  # noqa: S310 - local file, staging only
                 remote = json.load(f)
         else:
-            req = urllib.request.Request(
+            req = urllib.request.Request(  # noqa: S310 - fixed GitHub manifest host, no credentials
                 target_url,
                 headers={
                     "User-Agent": f"Haluro/{current_ver} ({plat['label']})",
                     "Accept": "application/json",
                 },
             )
-            with urllib.request.urlopen(req, timeout=timeout) as response:
+            # The manifest host is fixed to GitHub and the request carries no credentials.
+            with urllib.request.urlopen(req, timeout=timeout) as response:  # noqa: S310
                 if response.status != 200:
                     logger.info("Update check HTTP status %d", response.status)
                     default_payload["offline"] = True

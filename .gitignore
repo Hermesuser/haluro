@@ -11,7 +11,14 @@ env/
 # Build & installer outputs
 build/
 dist/
+Haluro.app/
+AppIcon.icns
+.pkgmeta/
 *.egg-info/
+
+# Generated packaging metadata (rendered from *.in templates at build time)
+packaging/windows/version_info.txt
+packaging/windows/haluro_installer.iss
 
 # Runtime user state (non-destructive workspace buffers & logs)
 uploads/*

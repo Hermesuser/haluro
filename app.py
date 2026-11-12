@@ -3,56 +3,61 @@ Provides REST API for 72-stock film emulation, optical negative density inversio
 real-time cached previews, lossless multi-format export, and contact sheets.
 """
 
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import base64
 import functools
 import io
 import json
 import logging
+import math
 import os
+import secrets
 import threading
 import time
 import uuid
 import zipfile
-import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from urllib.parse import urlparse
+
 import numpy as np
-from flask import Flask, render_template, request, jsonify, send_file, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_file, send_from_directory
+from PIL import Image
 from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
-from PIL import Image
 
-from engine import __version__, APP_NAME, about_payload
-from engine.updater import check_for_updates, open_external_url
-from engine.films import list_films, get_film, LUT_DIR
+from engine import APP_NAME, __version__, about_payload
+from engine.contact_sheet import generate_contact_sheet
+from engine.films import LUT_DIR, get_film, list_films
+from engine.negative_inverter import (
+    BW_TONING_PROFILES,
+    COLOR_METHODS,
+    LIGHT_SOURCE_MATRICES,
+    MINILAB_PROFILES,
+    PRINT_FINISHES,
+    SCAN_SOURCES,
+    SHARPEN_MODES,
+    TONE_VARIANTS,
+    analyze_roll_calibration,
+    auto_balance_scene_wb,
+    auto_detect_film_base,
+    compute_neutral_wb_from_point,
+    linear_rgb_to_hex,
+    list_bw_toners,
+    list_print_finishes,
+    process_negative_to_image,
+)
+from engine.negative_inverter import (
+    list_profiles as list_negative_profiles,
+)
 from engine.pipeline import (
+    HEIF_EXTENSIONS,
+    RAW_EXTENSIONS,
     develop_frame,
     format_analog_caption,
     get_srgb_icc_bytes,
-    load_image_linear,
     linear_to_srgb,
+    load_image_linear,
     save_output_image,
-    RAW_EXTENSIONS,
-    HEIF_EXTENSIONS,
-)
-from engine.contact_sheet import generate_contact_sheet
-from engine.negative_inverter import (
-    process_negative_to_image,
-    auto_detect_film_base,
-    analyze_roll_calibration,
-    compute_neutral_wb_from_point,
-    auto_balance_scene_wb,
-    linear_rgb_to_hex,
-    list_profiles as list_negative_profiles,
-    list_print_finishes,
-    list_bw_toners,
-    MINILAB_PROFILES,
-    LIGHT_SOURCE_MATRICES,
-    TONE_VARIANTS,
-    SCAN_SOURCES,
-    COLOR_METHODS,
-    SHARPEN_MODES,
-    PRINT_FINISHES,
-    BW_TONING_PROFILES,
 )
 from engine.platform_io import (
     choose_save_path_dialog,
@@ -64,6 +69,7 @@ from engine.platform_io import (
     open_directory,
     reveal_in_file_manager,
 )
+from engine.updater import check_for_updates, open_external_url
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +84,78 @@ DEVELOPED_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_OUTPUT_EXTS = {"jpg": ".jpg", "jpeg": ".jpg", "png": ".png", "tiff": ".tiff", "tif": ".tiff"}
 ALLOWED_INPUT_EXTS = RAW_EXTENSIONS | HEIF_EXTENSIONS | {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"}
 
+# Workspace hygiene: uploads are transient working copies, not an archive.
+UPLOAD_RETENTION_DAYS = 30
+UPLOAD_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB
+
+
+def _prune_workspace() -> None:
+    """Drop stale uploads and trim the workspace to a size budget.
+
+    The upload folder grew without bound (467 MB on a single workstation) and
+    every export added another preview to the developed archive.
+    """
+    cutoff = time.time() - (UPLOAD_RETENTION_DAYS * 86400)
+    try:
+        entries = sorted(UPLOAD_DIR.glob("*"), key=lambda p: p.stat().st_mtime)
+    except OSError:
+        return
+
+    total = 0
+    survivors = []
+    for item in entries:
+        try:
+            st = item.stat()
+        except OSError:
+            continue
+        if item.is_file() and st.st_mtime < cutoff:
+            try:
+                item.unlink()
+            except OSError:
+                pass
+            continue
+        total += st.st_size if item.is_file() else 0
+        survivors.append((st.st_mtime, item))
+
+    for _mtime, item in survivors:
+        if total <= UPLOAD_MAX_BYTES:
+            break
+        try:
+            size = item.stat().st_size
+            item.unlink()
+            total -= size
+        except OSError:
+            continue
+
+
+_prune_workspace()
+
 app = Flask(
     __name__,
     template_folder=str(RESOURCE_ROOT / "templates"),
     static_folder=str(RESOURCE_ROOT / "static"),
 )
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # 300 MB max per upload
+
+# --- Local-only hardening ----------------------------------------------------
+# The backend only ever listens on 127.0.0.1, but a browser on the same machine
+# (or a malicious page) can still issue cross-site requests against it, and a
+# DNS-rebinding attack can make the browser believe the app lives on an
+# attacker-controlled origin. Both are neutralised here:
+#   * TRUSTED_HOSTS rejects any request whose Host header is not loopback.
+#   * API_TOKEN must be echoed in the X-Haluro-Token header on every
+#     state-changing call; the frontend injects it from a per-process secret.
+API_TOKEN = secrets.token_urlsafe(32)
+ALLOWED_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+app.config["TRUSTED_HOSTS"] = ["127.0.0.1", "localhost", "::1"]
+
+# Guard against decompression bombs: Pillow refuses images above this size.
+Image.MAX_IMAGE_PIXELS = 120_000_000  # 120 MP ≈ 480 MB per float32 RGB array
+
+# Maximum number of frames a single batch request may queue.
+MAX_BATCH_FRAMES = 200
+# Maximum number of concurrent full-resolution developments (memory bound).
+MAX_FULL_RES_WORKERS = 2
 
 
 @app.after_request
@@ -104,6 +176,10 @@ def _apply_security_headers(response):
         "font-src 'self' data:; "
         "script-src 'self'; "
         "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'none'; "
+        "form-action 'self'; "
+        "frame-src 'none'; "
         "frame-ancestors 'none';",
     )
     return response
@@ -112,6 +188,39 @@ def _apply_security_headers(response):
 @app.errorhandler(413)
 def _handle_payload_too_large(_err):
     return jsonify({"error": "El archivo supera el límite máximo permitido (300 MB)."}), 413
+
+
+class InvalidRequest(ValueError):
+    """Raised when a client-supplied parameter is malformed or out of range."""
+
+
+@app.errorhandler(InvalidRequest)
+def _handle_invalid_request(err):
+    """Malformed client input is a 400, never a 500."""
+    return jsonify({"error": str(err) or "Parámetro no válido."}), 400
+
+
+@app.before_request
+def _guard_local_only():
+    """Reject requests that do not come from the local application itself.
+
+    Blocks DNS rebinding (Host header is not loopback) and cross-site requests
+    forged from a page the photographer happens to have open in the same
+    browser (Origin header points somewhere else).
+    """
+    hostname = (request.host or "").split(":")[0].lower().strip("[]")
+    if hostname not in ALLOWED_LOOPBACK_HOSTS:
+        return jsonify({"error": "Origen no permitido."}), 403
+
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        origin = request.headers.get("Origin")
+        if origin:
+            origin_host = (urlparse(origin).hostname or "").lower()
+            if origin_host not in ALLOWED_LOOPBACK_HOSTS:
+                return jsonify({"error": "Origen no permitido."}), 403
+        if request.headers.get("X-Haluro-Token") != API_TOKEN:
+            return jsonify({"error": "Sesión local no válida. Recarga la aplicación."}), 403
+    return None
 
 
 @app.errorhandler(Exception)
@@ -159,6 +268,99 @@ def _is_within(child: Path, parent: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+# -------------------------------------------------------------
+# PARAMETER VALIDATION HELPERS
+# -------------------------------------------------------------
+
+def _num(source, key, default, lo=None, hi=None):
+    """Read a float from a mapping, rejecting non-numeric or non-finite values.
+
+    Raises InvalidRequest (HTTP 400) instead of letting a ValueError escape as
+    a 500, and clamps the result to the range the UI can actually produce.
+    """
+    raw = source.get(key, default) if isinstance(source, dict) else default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise InvalidRequest(f"El valor de «{key}» no es numérico.") from None
+    if not math.isfinite(value):
+        raise InvalidRequest(f"El valor de «{key}» debe ser un número finito.")
+    if lo is not None:
+        value = max(float(lo), value)
+    if hi is not None:
+        value = min(float(hi), value)
+    return value
+
+
+def _int(source, key, default, lo=None, hi=None):
+    """Read an int from a mapping with the same guarantees as :func:`_num`."""
+    raw = source.get(key, default) if isinstance(source, dict) else default
+    try:
+        value = int(float(raw))
+    except (TypeError, ValueError):
+        raise InvalidRequest(f"El valor de «{key}» no es un número entero.") from None
+    if lo is not None:
+        value = max(int(lo), value)
+    if hi is not None:
+        value = min(int(hi), value)
+    return value
+
+
+def _canonical_film_key(raw_key) -> str:
+    """Return the catalogue key for a film, never the raw client-supplied string.
+
+    The raw value used to be interpolated straight into output paths, which
+    allowed a traversal payload to write anywhere on the filesystem.
+    """
+    key = str(raw_key or "").strip()
+    film = get_film(key)
+    return str(film.get("key") or "portra400")
+
+
+def _canonical_profile_key(raw_key) -> str:
+    """Return a valid minilab/negative profile key or the safe default."""
+    key = str(raw_key or "").strip()
+    return key if key in MINILAB_PROFILES else "frontier"
+
+
+def _bounded_frames(raw_filenames):
+    """Normalise and cap the frame list of a batch request.
+
+    The list used to be forwarded verbatim, so a single request could queue
+    thousands of full-resolution developments and exhaust the machine's RAM.
+    """
+    if not isinstance(raw_filenames, (list, tuple)):
+        return []
+    frames = []
+    for item in raw_filenames:
+        if not isinstance(item, str):
+            continue
+        name = Path(item).name
+        if name:
+            frames.append(name)
+        if len(frames) >= MAX_BATCH_FRAMES:
+            break
+    return frames
+
+
+def _safe_output_path(base_dir: Path, *parts: str) -> Path:
+    """Join sanitised components onto a base directory, refusing to escape it.
+
+    Every component is reduced to a bare file name via ``secure_filename`` and
+    the result is verified to stay inside ``base_dir``.
+    """
+    safe_parts = []
+    for part in parts:
+        cleaned = secure_filename(str(part or "").strip())
+        if not cleaned or cleaned in (".", ".."):
+            raise InvalidRequest("Nombre de archivo de salida no válido.")
+        safe_parts.append(cleaned)
+    candidate = base_dir.joinpath(*safe_parts)
+    if not _is_within(candidate, base_dir):
+        raise InvalidRequest("Ruta de salida fuera del directorio permitido.")
+    return candidate
 
 
 def _resolve_source_file(filename, fallback_name=None):
@@ -308,51 +510,51 @@ def _parse_negative_params(data):
     return {
         "base_color": data.get("base_color"),
         "film_type": data.get("film_type", "color"),
-        "profile_key": data.get("profile", "frontier"),
+        "profile_key": _canonical_profile_key(data.get("profile", "frontier")),
         "light_source": light_src,
         "scan_source": scan_src,
-        "pre_saturation": float(data.get("pre_saturation", 1.0)),
+        "pre_saturation": _num(data, "pre_saturation", 1.0, 0.4, 1.8),
         "color_method": color_meth,
         "roll_bounds": roll_bounds,
         "tone_variant": tone_var,
         "print_finish": p_finish,
-        "finish_amount": float(data.get("finish_amount", 1.0)),
+        "finish_amount": _num(data, "finish_amount", 1.0, 0.0, 2.0),
         "bw_toner": bw_toner,
-        "bw_toner_strength": float(data.get("bw_toner_strength", 1.0)),
-        "brightness": float(data.get("brightness", 0.0)),
-        "midtone_nd": float(data.get("midtone_nd", 0.0)),
-        "contrast": float(data.get("contrast", 0.0)),
-        "push_pull": float(data.get("push_pull", 0.0)),
-        "lights": float(data.get("lights", 0.0)),
-        "darks": float(data.get("darks", 0.0)),
-        "whites": float(data.get("whites", 0.0)),
-        "blacks": float(data.get("blacks", 0.0)),
-        "black_clip": float(data.get("black_clip", 0.0)),
-        "white_clip": float(data.get("white_clip", 0.0)),
+        "bw_toner_strength": _num(data, "bw_toner_strength", 1.0, 0.0, 2.0),
+        "brightness": _num(data, "brightness", 0.0, -50.0, 50.0),
+        "midtone_nd": _num(data, "midtone_nd", 0.0, -1.0, 1.0),
+        "contrast": _num(data, "contrast", 0.0, -50.0, 50.0),
+        "push_pull": _num(data, "push_pull", 0.0, -3.0, 3.0),
+        "lights": _num(data, "lights", 0.0, -50.0, 50.0),
+        "darks": _num(data, "darks", 0.0, -50.0, 50.0),
+        "whites": _num(data, "whites", 0.0, -50.0, 50.0),
+        "blacks": _num(data, "blacks", 0.0, -50.0, 50.0),
+        "black_clip": _num(data, "black_clip", 0.0, -0.5, 0.5),
+        "white_clip": _num(data, "white_clip", 0.0, -0.5, 0.5),
         "clip_protect": bool(data.get("clip_protect", True)),
-        "inky_blacks": float(data.get("inky_blacks", 0.0)),
-        "sat_mult": float(data.get("saturation", 1.0)),
-        "rp_tone": float(data.get("rp_tone", 0.0)),
-        "border_buffer": float(data.get("border_buffer", 0.06)),
-        "crop_pct": float(data.get("crop_pct", 0.0)),
-        "glow_mult": float(data.get("glow", 1.0)),
-        "fade_mult": float(data.get("fade", 1.0)),
+        "inky_blacks": _num(data, "inky_blacks", 0.0, 0.0, 1.0),
+        "sat_mult": _num(data, "saturation", 1.0, 0.0, 3.0),
+        "rp_tone": _num(data, "rp_tone", 0.0, -0.5, 0.5),
+        "border_buffer": _num(data, "border_buffer", 0.06, 0.0, 0.45),
+        "crop_pct": _num(data, "crop_pct", 0.0, 0.0, 0.49),
+        "glow_mult": _num(data, "glow", 1.0, 0.0, 3.0),
+        "fade_mult": _num(data, "fade", 1.0, 0.0, 3.0),
         "printer_cyan_red": float(printer_cmy[0]),
         "printer_magenta_green": float(printer_cmy[1]),
         "printer_yellow_blue": float(printer_cmy[2]),
-        "temp": float(data.get("temp", 0.0)),
-        "tint": float(data.get("tint", 0.0)),
-        "warming_85": float(data.get("warming_85", 0.0)),
-        "skylight_filter": float(data.get("skylight_filter", 0.0)),
-        "shade_filter": float(data.get("shade_filter", 0.0)),
+        "temp": _num(data, "temp", 0.0, -1.0, 1.0),
+        "tint": _num(data, "tint", 0.0, -1.0, 1.0),
+        "warming_85": _num(data, "warming_85", 0.0, 0.0, 1.0),
+        "skylight_filter": _num(data, "skylight_filter", 0.0, 0.0, 1.0),
+        "shade_filter": _num(data, "shade_filter", 0.0, 0.0, 1.0),
         "shadows_tint": _parse_triplet(data.get("shadows_tint")),
         "mids_tint": _parse_triplet(data.get("mids_tint")),
         "highs_tint": _parse_triplet(data.get("highs_tint")),
-        "shadows_range": float(data.get("shadows_range", 0.5)),
-        "highs_range": float(data.get("highs_range", 0.5)),
+        "shadows_range": _num(data, "shadows_range", 0.5, 0.0, 1.0),
+        "highs_range": _num(data, "highs_range", 0.5, 0.0, 1.0),
         "sharpen_mode": sharp_mode,
-        "sharpen_amount": float(data.get("sharpen_amount", 1.0)),
-        "rotate": int(data.get("rotate", 0)),
+        "sharpen_amount": _num(data, "sharpen_amount", 1.0, 0.0, 3.0),
+        "rotate": _int(data, "rotate", 0, 0, 360),
         "flip_h": bool(data.get("flip_h", False)),
     }
 
@@ -361,7 +563,6 @@ def _record_history_entry(pil_img, final_saved_path: Path, meta: dict):
     """Save a preview JPEG & recipe sidecar in DEVELOPED_DIR for non-destructive version history."""
     preview_name = f"{final_saved_path.stem}.jpg"
     preview_copy = DEVELOPED_DIR / preview_name
-    pil_img.save(preview_copy, format="JPEG", quality=92)
     meta_out = {
         **meta,
         "saved_path": str(final_saved_path),
@@ -370,8 +571,21 @@ def _record_history_entry(pil_img, final_saved_path: Path, meta: dict):
         "developed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     meta_path = DEVELOPED_DIR / f"{final_saved_path.stem}.meta.json"
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta_out, f, indent=2, ensure_ascii=False)
+
+    # Write both files through temporary siblings so an interrupted save can
+    # never leave a truncated preview or a half-written sidecar behind.
+    preview_tmp = preview_copy.with_name(f".{preview_copy.name}.part")
+    meta_tmp = meta_path.with_name(f".{meta_path.name}.part")
+    try:
+        pil_img.save(preview_tmp, format="JPEG", quality=92)
+        with open(meta_tmp, "w", encoding="utf-8") as f:
+            json.dump(meta_out, f, indent=2, ensure_ascii=False)
+        os.replace(preview_tmp, preview_copy)
+        os.replace(meta_tmp, meta_path)
+    except Exception:
+        preview_tmp.unlink(missing_ok=True)
+        meta_tmp.unlink(missing_ok=True)
+        raise
     return meta_out
 
 
@@ -432,7 +646,7 @@ def _collect_sheet_frames(filenames, render_thumb_fn):
 
 @app.route("/")
 def index():
-    return render_template("index.html", about=about_payload())
+    return render_template("index.html", about=about_payload(), api_token=API_TOKEN)
 
 
 @app.route("/api/about")
@@ -509,6 +723,25 @@ def api_load_sample():
     })
 
 
+def _is_readable_media(path: Path, is_raw: bool, is_heif: bool) -> bool:
+    """Verify that a stored upload really contains decodable image data.
+
+    The extension alone is not evidence: a 10-byte text file named ".jpg" was
+    previously accepted, stored, and only failed later inside the engine.
+    """
+    try:
+        if is_raw:
+            import rawpy
+            with rawpy.imread(str(path)) as raw:
+                return int(raw.sizes.width) > 0 and int(raw.sizes.height) > 0
+        with Image.open(path) as img:
+            img.verify()
+        return True
+    except Exception:
+        # HEIF without the optional pillow-heif backend cannot be validated here.
+        return bool(is_heif)
+
+
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
     if "file" not in request.files:
@@ -519,7 +752,9 @@ def api_upload():
         return jsonify({"error": "Nombre de archivo vacío"}), 400
 
     raw_ext = Path(f.filename).suffix.lower()
-    if raw_ext and raw_ext not in ALLOWED_INPUT_EXTS:
+    if not raw_ext:
+        return jsonify({"error": "El archivo debe incluir una extensión (.cr2, .tif, .jpg…)."}), 400
+    if raw_ext not in ALLOWED_INPUT_EXTS:
         return jsonify({"error": f"Formato no compatible ({raw_ext}). Usa RAW, TIFF, JPG, PNG o HEIF."}), 400
 
     filename = _sanitize_filename(f.filename)
@@ -530,6 +765,11 @@ def api_upload():
     suffix_lower = save_path.suffix.lower()
     is_raw = suffix_lower in RAW_EXTENSIONS
     is_heif = suffix_lower in HEIF_EXTENSIONS
+
+    if not _is_readable_media(save_path, is_raw, is_heif):
+        save_path.unlink(missing_ok=True)
+        return jsonify({"error": "El archivo no contiene una imagen válida o está corrupto."}), 400
+
     return jsonify({
         "filename": stored_filename,
         "name": Path(f.filename).name,
@@ -553,13 +793,13 @@ def api_thumbnail(filename):
 def api_preview():
     data = request.json or {}
     filename = data.get("filename", "SAMPLE.CR2")
-    film_key = data.get("film", "portra400")
-    ev = float(data.get("ev", 0.0))
-    halation = float(data.get("halation", 1.0))
-    grain = float(data.get("grain", 1.0))
-    vignette = float(data.get("vignette", 1.0))
+    film_key = _canonical_film_key(data.get("film", "portra400"))
+    ev = _num(data, "ev", 0.0, -10.0, 10.0)
+    halation = _num(data, "halation", 1.0, 0.0, 5.0)
+    grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     add_date = bool(data.get("date", False))
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
     include_original = bool(data.get("include_original", True))
 
@@ -603,20 +843,20 @@ def api_preview():
 @app.route("/api/develop_full", methods=["POST"])
 def api_develop_full():
     data = request.json or {}
-    filenames = data.get("filenames", ["SAMPLE.CR2"])
-    film_key = data.get("film", "portra400")
-    ev = float(data.get("ev", 0.0))
-    halation = float(data.get("halation", 1.0))
-    grain = float(data.get("grain", 1.0))
-    vignette = float(data.get("vignette", 1.0))
+    filenames = _bounded_frames(data.get("filenames", ["SAMPLE.CR2"]))
+    film_key = _canonical_film_key(data.get("film", "portra400"))
+    ev = _num(data, "ev", 0.0, -10.0, 10.0)
+    halation = _num(data, "halation", 1.0, 0.0, 5.0)
+    grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     add_date = bool(data.get("date", False))
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
     gen_sheet = bool(data.get("sheet", True))
     out_ext = _normalize_ext(data.get("format", "jpg"))
     raw_roll_name = str(data.get("roll_name", "ROLL 001")).strip()[:40] or "ROLL 001"
     roll_name = secure_filename(raw_roll_name) or "ROLL_001"
-    columns = int(data.get("columns", 4))
+    columns = _int(data, "columns", 4, 2, 8)
 
     film_info = get_film(film_key)
     out_roll_dir = DEVELOPED_DIR / f"{roll_name}_{film_key}"
@@ -632,13 +872,13 @@ def api_develop_full():
             return None
 
         fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
-        f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
-        f_ev = float(fr.get("ev", ev)) if isinstance(fr, dict) else ev
-        f_hal = float(fr.get("halation", halation)) if isinstance(fr, dict) else halation
-        f_grn = float(fr.get("grain", grain)) if isinstance(fr, dict) else grain
-        f_vig = float(fr.get("vignette", vignette)) if isinstance(fr, dict) else vignette
+        f_film = _canonical_film_key(fr.get("film", film_key)) if isinstance(fr, dict) else film_key
+        f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
+        f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
+        f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
+        f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
-        f_rot = int(fr.get("rotate", rotate)) if isinstance(fr, dict) else rotate
+        f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
 
         dev_img, srgb_f = develop_frame(
@@ -666,7 +906,7 @@ def api_develop_full():
         )
         return (fname, out_name, dev_img)
 
-    max_workers = min(4, max(1, os.cpu_count() or 1))
+    max_workers = min(MAX_FULL_RES_WORKERS, max(1, os.cpu_count() or 1))
     if len(filenames) > 1 and max_workers > 1:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = list(executor.map(_develop_one, filenames))
@@ -716,17 +956,17 @@ def api_develop_full():
 def api_contact_sheet_preview():
     """Ultra-fast concurrent preview of film emulation contact sheet without disk writes."""
     data = request.json or {}
-    filenames = data.get("filenames", ["SAMPLE.CR2"])
-    film_key = data.get("film", "portra400")
-    ev = float(data.get("ev", 0.0))
-    halation = float(data.get("halation", 1.0))
-    grain = float(data.get("grain", 1.0))
-    vignette = float(data.get("vignette", 1.0))
+    filenames = _bounded_frames(data.get("filenames", ["SAMPLE.CR2"]))
+    film_key = _canonical_film_key(data.get("film", "portra400"))
+    ev = _num(data, "ev", 0.0, -10.0, 10.0)
+    halation = _num(data, "halation", 1.0, 0.0, 5.0)
+    grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     add_date = bool(data.get("date", False))
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
     raw_roll_name = str(data.get("roll_name", "PREVIEW")).strip()[:40] or "PREVIEW"
-    columns = int(data.get("columns", 4))
+    columns = _int(data, "columns", 4, 2, 8)
 
     film_info = get_film(film_key)
     per_frame_recipes = data.get("per_frame_recipes") or {}
@@ -737,13 +977,13 @@ def api_contact_sheet_preview():
         if not fpath:
             return None
         fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
-        f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
-        f_ev = float(fr.get("ev", ev)) if isinstance(fr, dict) else ev
-        f_hal = float(fr.get("halation", halation)) if isinstance(fr, dict) else halation
-        f_grn = float(fr.get("grain", grain)) if isinstance(fr, dict) else grain
-        f_vig = float(fr.get("vignette", vignette)) if isinstance(fr, dict) else vignette
+        f_film = _canonical_film_key(fr.get("film", film_key)) if isinstance(fr, dict) else film_key
+        f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
+        f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
+        f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
+        f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
-        f_rot = int(fr.get("rotate", rotate)) if isinstance(fr, dict) else rotate
+        f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
 
         return develop_frame(
@@ -779,14 +1019,17 @@ def api_contact_sheet_preview():
 
     cache_dir = DEVELOPED_DIR / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    sheet_cache_path = cache_dir / "sheet_preview.jpg"
+    # The cache file is namespaced per mode: simulation and negative sheets used
+    # to share one path, so two overlapping requests served each other's image.
+    _mode_tag = "simulation"
+    sheet_cache_path = cache_dir / f"sheet_preview_{_mode_tag}.jpg"
     sheet.save(sheet_cache_path, format="JPEG", quality=90)
 
     elapsed = round(time.time() - t_start, 2)
     return jsonify({
         "success": True,
         "sheet": True,
-        "sheet_url": f"/api/image/cache/sheet_preview.jpg?t={int(time.time() * 1000)}",
+        "sheet_url": f"/api/image/cache/{sheet_cache_path.name}?t={int(time.time() * 1000)}",
         "layout": layout_boxes,
         "total_frames": len(rendered_images),
         "width": sheet.width,
@@ -799,19 +1042,19 @@ def api_contact_sheet_preview():
 def api_save_contact_sheet():
     """Render archival high-resolution contact sheet only and save directly or to chosen path."""
     data = request.json or {}
-    filenames = data.get("filenames", ["SAMPLE.CR2"])
-    film_key = data.get("film", "portra400")
-    ev = float(data.get("ev", 0.0))
-    halation = float(data.get("halation", 1.0))
-    grain = float(data.get("grain", 1.0))
-    vignette = float(data.get("vignette", 1.0))
+    filenames = _bounded_frames(data.get("filenames", ["SAMPLE.CR2"]))
+    film_key = _canonical_film_key(data.get("film", "portra400"))
+    ev = _num(data, "ev", 0.0, -10.0, 10.0)
+    halation = _num(data, "halation", 1.0, 0.0, 5.0)
+    grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     add_date = bool(data.get("date", False))
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
     reveal = bool(data.get("reveal", True))
     raw_roll_name = str(data.get("roll_name", "HALURO ROLL")).strip()[:40] or "HALURO ROLL"
     roll_name = secure_filename(raw_roll_name) or "HALURO_ROLL"
-    columns = int(data.get("columns", 4))
+    columns = _int(data, "columns", 4, 2, 8)
 
     dest_path = data.get("dest_path")
     if dest_path:
@@ -836,13 +1079,13 @@ def api_save_contact_sheet():
         if not fpath:
             return None
         fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
-        f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
-        f_ev = float(fr.get("ev", ev)) if isinstance(fr, dict) else ev
-        f_hal = float(fr.get("halation", halation)) if isinstance(fr, dict) else halation
-        f_grn = float(fr.get("grain", grain)) if isinstance(fr, dict) else grain
-        f_vig = float(fr.get("vignette", vignette)) if isinstance(fr, dict) else vignette
+        f_film = _canonical_film_key(fr.get("film", film_key)) if isinstance(fr, dict) else film_key
+        f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
+        f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
+        f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
+        f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
-        f_rot = int(fr.get("rotate", rotate)) if isinstance(fr, dict) else rotate
+        f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
 
         return develop_frame(
@@ -903,13 +1146,13 @@ def api_export_single():
     """Export single frame at FULL resolution without touching original."""
     data = request.json or {}
     filename = data.get("filename", "SAMPLE.CR2")
-    film_key = data.get("film", "portra400")
-    ev = float(data.get("ev", 0.0))
-    halation = float(data.get("halation", 1.0))
-    grain = float(data.get("grain", 1.0))
-    vignette = float(data.get("vignette", 1.0))
+    film_key = _canonical_film_key(data.get("film", "portra400"))
+    ev = _num(data, "ev", 0.0, -10.0, 10.0)
+    halation = _num(data, "halation", 1.0, 0.0, 5.0)
+    grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     add_date = bool(data.get("date", False))
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
     out_ext = _normalize_ext(data.get("format", "jpg"))
 
@@ -1013,13 +1256,13 @@ def api_save_direct_to_downloads():
     """Save full-res developed photo directly to ~/Downloads and optionally reveal in Finder."""
     data = request.json or {}
     filename = data.get("filename", "SAMPLE.CR2")
-    film_key = data.get("film", "portra400")
-    ev = float(data.get("ev", 0.0))
-    halation = float(data.get("halation", 1.0))
-    grain = float(data.get("grain", 1.0))
-    vignette = float(data.get("vignette", 1.0))
+    film_key = _canonical_film_key(data.get("film", "portra400"))
+    ev = _num(data, "ev", 0.0, -10.0, 10.0)
+    halation = _num(data, "halation", 1.0, 0.0, 5.0)
+    grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     add_date = bool(data.get("date", False))
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
     out_ext = _normalize_ext(data.get("format", "jpg"))
     reveal = bool(data.get("reveal", True))
@@ -1111,7 +1354,7 @@ def api_native_save_dialog():
         return api_choose_save_path()
 
     filename = data.get("filename", "SAMPLE.CR2")
-    film_key = data.get("film", "portra400")
+    film_key = _canonical_film_key(data.get("film", "portra400"))
     out_ext = _normalize_ext(data.get("format", "jpg"))
 
     fpath = _resolve_source_file(filename)
@@ -1132,15 +1375,14 @@ def _save_simulation_to_dest(data, reveal=False):
     dest, err = _validate_destination_path(dest_path)
     if err:
         return jsonify({"error": err}), 400
-
     filename = data.get("filename", "SAMPLE.CR2")
-    film_key = data.get("film", "portra400")
-    ev = float(data.get("ev", 0.0))
-    halation = float(data.get("halation", 1.0))
-    grain = float(data.get("grain", 1.0))
-    vignette = float(data.get("vignette", 1.0))
+    film_key = _canonical_film_key(data.get("film", "portra400"))
+    ev = _num(data, "ev", 0.0, -10.0, 10.0)
+    halation = _num(data, "halation", 1.0, 0.0, 5.0)
+    grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     add_date = bool(data.get("date", False))
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
 
     fpath = _resolve_source_file(filename)
@@ -1163,7 +1405,9 @@ def _save_simulation_to_dest(data, reveal=False):
         flip_h=flip_h,
         return_float=True,
     )
-    dest = Path(dest_path)
+    # Use the *validated* destination. Re-deriving it from the raw payload
+    # discarded the expanduser()/resolve() normalisation and wrote to a literal
+    # "~" directory inside the working folder.
     save_output_image(
         dev_img,
         dest,
@@ -1247,8 +1491,8 @@ def api_history():
         if meta_file.is_file():
             try:
                 meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Historial: metadatos ilegibles en %s (%s)", meta_file.name, exc)
 
         saved_target = meta.get("saved_path") or str(item)
         history.append({
@@ -1289,7 +1533,7 @@ def api_negative_profiles():
 def api_negative_analyze_roll():
     """Analyze unified D-min film base and optical density bounds across an entire imported roll."""
     data = request.json or {}
-    filenames = data.get("filenames") or ["SAMPLE_NEGATIVE.jpg"]
+    filenames = _bounded_frames(data.get("filenames") or ["SAMPLE_NEGATIVE.jpg"])
     per_frame_recipes = data.get("per_frame_recipes") or {}
     params = _parse_negative_params(data)
 
@@ -1303,7 +1547,7 @@ def api_negative_analyze_roll():
         if not fpath:
             continue
         fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
-        rot = int(fr.get("rotate", params["rotate"])) if isinstance(fr, dict) else params["rotate"]
+        rot = _int(fr, "rotate", params["rotate"], 0, 360) if isinstance(fr, dict) else params["rotate"]
         flp = bool(fr.get("flip_h", params["flip_h"])) if isinstance(fr, dict) else params["flip_h"]
         lin = load_image_linear(fpath, max_dim=640, rotate=rot, flip_h=flp)
         linear_frames.append(lin)
@@ -1336,17 +1580,22 @@ def api_negative_load_sample():
     if not sample_file.is_file():
         return jsonify({"error": "Negativo de muestra no encontrado"}), 404
 
-    dest = UPLOAD_DIR / "SAMPLE_NEGATIVE.jpg"
+    # Use a dedicated, unmistakable name. The previous implementation reused
+    # "SAMPLE_NEGATIVE.jpg", so a photograph the user had uploaded under that
+    # name was silently returned as the sample (and could be overwritten by an
+    # app update).
+    sample_name = "__haluro_sample_negative__.jpg"
+    dest = UPLOAD_DIR / sample_name
     if not dest.is_file() or sample_file.stat().st_mtime > dest.stat().st_mtime:
         import shutil
         shutil.copy2(sample_file, dest)
 
     return jsonify({
-        "filename": "SAMPLE_NEGATIVE.jpg",
+        "filename": sample_name,
         "name": "Kodak Gold 200 (Escaneo C-41)",
         "is_raw": False,
         "size_bytes": dest.stat().st_size,
-        "thumb_url": "/api/thumbnail/SAMPLE_NEGATIVE.jpg",
+        "thumb_url": f"/api/thumbnail/{sample_name}",
     })
 
 
@@ -1354,7 +1603,7 @@ def api_negative_load_sample():
 def api_negative_auto_detect_base():
     data = request.json or {}
     filename = data.get("filename", "SAMPLE_NEGATIVE.jpg")
-    rotate = int(data.get("rotate", 0))
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
 
     fpath = _resolve_source_file(filename, fallback_name="SAMPLE_NEGATIVE.jpg")
@@ -1376,9 +1625,9 @@ def api_negative_sample_point():
     """Sample the exact film base mask from an (x_pct, y_pct) click."""
     data = request.json or {}
     filename = data.get("filename", "SAMPLE_NEGATIVE.jpg")
-    x_pct = float(data.get("x_pct", data.get("x", 0.5)))
-    y_pct = float(data.get("y_pct", data.get("y", 0.5)))
-    rotate = int(data.get("rotate", 0))
+    x_pct = _num(data, "x_pct", 0.5, 0.0, 1.0)
+    y_pct = _num(data, "y_pct", 0.5, 0.0, 1.0)
+    rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
 
     fpath = _resolve_source_file(filename, fallback_name="SAMPLE_NEGATIVE.jpg")
@@ -1410,8 +1659,8 @@ def api_negative_sample_neutral_wb():
     """Solve CMY printer lights to neutralize a sampled gray/shadow point directly on the positive preview."""
     data = request.json or {}
     filename = data.get("filename", "SAMPLE_NEGATIVE.jpg")
-    x_pct = float(data.get("x_pct", data.get("x", 0.5)))
-    y_pct = float(data.get("y_pct", data.get("y", 0.5)))
+    x_pct = _num(data, "x_pct", 0.5, 0.0, 1.0)
+    y_pct = _num(data, "y_pct", 0.5, 0.0, 1.0)
 
     fpath = _resolve_source_file(filename, fallback_name="SAMPLE_NEGATIVE.jpg")
     if not fpath:
@@ -1606,7 +1855,7 @@ def api_negative_save_to_downloads():
     """Save full-resolution inverted negative directly to ~/Downloads and reveal in file manager."""
     data = request.json or {}
     filename = data.get("filename", "SAMPLE_NEGATIVE.jpg")
-    profile_key = data.get("profile", "frontier")
+    profile_key = _canonical_profile_key(data.get("profile", "frontier"))
     out_ext = _normalize_ext(data.get("format", "jpg"))
     reveal = bool(data.get("reveal", True))
 
@@ -1641,12 +1890,12 @@ def api_negative_save_to_path():
 def api_negative_develop_full():
     """Batch-invert an entire roll of scanned negatives and generate a positive contact sheet."""
     data = request.json or {}
-    filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
+    filenames = _bounded_frames(data.get("filenames", ["SAMPLE_NEGATIVE.jpg"]))
     gen_sheet = bool(data.get("sheet", True))
     out_ext = _normalize_ext(data.get("format", "jpg"))
     raw_roll_name = str(data.get("roll_name", "NEG ROLL 001")).strip()[:40] or "NEG ROLL 001"
     roll_name = secure_filename(raw_roll_name) or "NEG_ROLL_001"
-    columns = int(data.get("columns", 4))
+    columns = _int(data, "columns", 4, 2, 8)
 
     params = _parse_negative_params(data)
     analog_meta = _parse_analog_meta(data)
@@ -1670,7 +1919,7 @@ def api_negative_develop_full():
         else:
             frame_params = params
 
-        f_prof_key = frame_params["profile_key"]
+        f_prof_key = _canonical_profile_key(frame_params["profile_key"])
         pos_img, srgb_f = process_negative_to_image(fpath, max_dim=None, return_float=True, **frame_params)
         out_name = f"{fpath.stem}_positive_{f_prof_key}{out_ext}"
         target_path = out_roll_dir / out_name
@@ -1684,7 +1933,7 @@ def api_negative_develop_full():
         )
         return (fname, out_name, pos_img)
 
-    max_workers = min(4, max(1, os.cpu_count() or 1))
+    max_workers = min(MAX_FULL_RES_WORKERS, max(1, os.cpu_count() or 1))
     if len(filenames) > 1 and max_workers > 1:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = list(executor.map(_develop_one, filenames))
@@ -1734,9 +1983,9 @@ def api_negative_develop_full():
 def api_negative_contact_sheet_preview():
     """Ultra-fast concurrent preview of negative inversion contact sheet without disk writes."""
     data = request.json or {}
-    filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
+    filenames = _bounded_frames(data.get("filenames", ["SAMPLE_NEGATIVE.jpg"]))
     raw_roll_name = str(data.get("roll_name", "PREVIEW NEG")).strip()[:40] or "PREVIEW NEG"
-    columns = int(data.get("columns", 4))
+    columns = _int(data, "columns", 4, 2, 8)
 
     params = _parse_negative_params(data)
     profile_key = params["profile_key"]
@@ -1777,14 +2026,15 @@ def api_negative_contact_sheet_preview():
 
     cache_dir = DEVELOPED_DIR / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    sheet_cache_path = cache_dir / "sheet_preview.jpg"
+    _mode_tag = "negative"
+    sheet_cache_path = cache_dir / f"sheet_preview_{_mode_tag}.jpg"
     sheet.save(sheet_cache_path, format="JPEG", quality=90)
 
     elapsed = round(time.time() - t_start, 2)
     return jsonify({
         "success": True,
         "sheet": True,
-        "sheet_url": f"/api/image/cache/sheet_preview.jpg?t={int(time.time() * 1000)}",
+        "sheet_url": f"/api/image/cache/{sheet_cache_path.name}?t={int(time.time() * 1000)}",
         "layout": layout_boxes,
         "total_frames": len(rendered_images),
         "width": sheet.width,
@@ -1797,10 +2047,10 @@ def api_negative_contact_sheet_preview():
 def api_negative_save_contact_sheet():
     """Render archival high-resolution negative contact sheet only and save directly or to chosen path."""
     data = request.json or {}
-    filenames = data.get("filenames", ["SAMPLE_NEGATIVE.jpg"])
+    filenames = _bounded_frames(data.get("filenames", ["SAMPLE_NEGATIVE.jpg"]))
     raw_roll_name = str(data.get("roll_name", "HALURO NEG")).strip()[:40] or "HALURO NEG"
     roll_name = secure_filename(raw_roll_name) or "HALURO_NEG"
-    columns = int(data.get("columns", 4))
+    columns = _int(data, "columns", 4, 2, 8)
     reveal = bool(data.get("reveal", True))
 
     params = _parse_negative_params(data)
@@ -1897,12 +2147,12 @@ def _run_batch_roll_worker(job_id, data):
 
     try:
         app_mode = data.get("app_mode", "simulation")
-        filenames = data.get("filenames", [])
+        filenames = _bounded_frames(data.get("filenames", []))
         gen_sheet = bool(data.get("sheet", True))
         out_ext = _normalize_ext(data.get("format", "jpg"))
         raw_roll_name = str(data.get("roll_name", "HALURO ROLL")).strip()[:40] or "HALURO ROLL"
         roll_name = secure_filename(raw_roll_name) or "HALURO_ROLL"
-        columns = int(data.get("columns", 4))
+        columns = _int(data, "columns", 4, 2, 8)
         analog_meta = _parse_analog_meta(data)
         per_frame_recipes = data.get("per_frame_recipes") or {}
 
@@ -1914,13 +2164,13 @@ def _run_batch_roll_worker(job_id, data):
             roll_folder = f"{roll_name}_neg_{profile_key}"
             sheet_film_name = f"Negativo · {profile_info['name']}"
         else:
-            film_key = data.get("film", "portra400")
-            ev = float(data.get("ev", 0.0))
-            halation = float(data.get("halation", 1.0))
-            grain = float(data.get("grain", 1.0))
-            vignette = float(data.get("vignette", 1.0))
+            film_key = _canonical_film_key(data.get("film", "portra400"))
+            ev = _num(data, "ev", 0.0, -10.0, 10.0)
+            halation = _num(data, "halation", 1.0, 0.0, 5.0)
+            grain = _num(data, "grain", 1.0, 0.0, 5.0)
+            vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
             add_date = bool(data.get("date", False))
-            rotate = int(data.get("rotate", 0))
+            rotate = _int(data, "rotate", 0, 0, 360)
             flip_h = bool(data.get("flip_h", False))
             film_info = get_film(film_key)
             roll_folder = f"{roll_name}_{film_key}"
@@ -1946,18 +2196,18 @@ def _run_batch_roll_worker(job_id, data):
             if is_neg:
                 fr_raw = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
                 frame_params = _parse_negative_params({**data, **fr_raw}) if isinstance(fr_raw, dict) else params
-                f_prof_key = frame_params["profile_key"]
+                f_prof_key = _canonical_profile_key(frame_params["profile_key"])
                 img, srgb_f = process_negative_to_image(fpath, max_dim=None, return_float=True, **frame_params)
                 out_name = f"{fpath.stem}_positive_{f_prof_key}{out_ext}"
             else:
                 fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
-                f_film = fr.get("film", film_key) if isinstance(fr, dict) else film_key
-                f_ev = float(fr.get("ev", ev)) if isinstance(fr, dict) else ev
-                f_hal = float(fr.get("halation", halation)) if isinstance(fr, dict) else halation
-                f_grn = float(fr.get("grain", grain)) if isinstance(fr, dict) else grain
-                f_vig = float(fr.get("vignette", vignette)) if isinstance(fr, dict) else vignette
+                f_film = _canonical_film_key(fr.get("film", film_key)) if isinstance(fr, dict) else film_key
+                f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
+                f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
+                f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
+                f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
                 f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
-                f_rot = int(fr.get("rotate", rotate)) if isinstance(fr, dict) else rotate
+                f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
                 f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
                 img, srgb_f = develop_frame(
                     fpath,
@@ -1988,7 +2238,7 @@ def _run_batch_roll_worker(job_id, data):
             )
             return (idx, fpath.name, out_name, img)
 
-        max_workers = min(4, max(1, os.cpu_count() or 1))
+        max_workers = min(MAX_FULL_RES_WORKERS, max(1, os.cpu_count() or 1))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(_worker_task, (i, fn)) for i, fn in enumerate(filenames)]
             for fut in as_completed(futures):
@@ -2094,7 +2344,7 @@ def _run_batch_roll_worker(job_id, data):
 @app.route("/api/batch/develop_roll_start", methods=["POST"])
 def api_batch_develop_roll_start():
     data = request.json or {}
-    filenames = data.get("filenames", [])
+    filenames = _bounded_frames(data.get("filenames", []))
     if not filenames:
         return jsonify({"error": "No hay fotogramas para procesar"}), 400
 
@@ -2196,5 +2446,11 @@ def api_serve_image(subpath):
 
 if __name__ == "__main__":
     import os
-    debug_mode = os.environ.get("HALURO_DEBUG", "").lower() in {"1", "true", "yes"}
-    app.run(host="127.0.0.1", port=5050, debug=debug_mode)
+    # The interactive Werkzeug debugger is never enabled: it exposes an
+    # interactive Python console on any unhandled exception.
+    try:
+        from waitress import serve
+
+        serve(app, host="127.0.0.1", port=5050, threads=8, ident="Haluro")
+    except ImportError:
+        app.run(host="127.0.0.1", port=5050, debug=False)

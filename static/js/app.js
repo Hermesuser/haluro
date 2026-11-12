@@ -1,5 +1,5 @@
 /**
- * Haluro — Laboratorio Analógico Digital (v2.4.6)
+ * Haluro — Laboratorio Analógico Digital (v2.5.0)
  * Precision frontend controller: 72-stock film simulation, C-41/B&W optical negative
  * inversion (RA-4, ECP 2383, Minilab, V-Log), B&W chemical toners & fine-art papers,
  * unified multi-frame Roll Analysis, 3-Way CMY split-toning, color-protected soft clip,
@@ -8,6 +8,30 @@
 
 const FAVORITES_KEY = "haluro_favorites_v2";
 const ANALOG_EXIF_STORAGE_KEY = "haluro_analog_exif_v23";
+
+/**
+ * Local-session guard.
+ *
+ * The backend only listens on 127.0.0.1, but a page open in the same browser
+ * could still forge requests against it, and a DNS-rebinding attack could make
+ * the browser believe the app lives on a foreign origin. The server issues a
+ * per-process token in a <meta> tag and requires it on every state-changing
+ * call, so we inject it into every outgoing request here, once.
+ */
+(function installLocalSessionGuard() {
+  const meta = document.querySelector('meta[name="haluro-api-token"]');
+  const token = meta ? (meta.content || "").trim() : "";
+  if (!token) return;
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    const options = init || {};
+    const headers = new Headers(options.headers || {});
+    if (!headers.has("X-Haluro-Token")) {
+      headers.set("X-Haluro-Token", token);
+    }
+    return nativeFetch(input, { ...options, headers });
+  };
+})();
 
 // Iconos SVG en línea (estrella llena/hueca y aspa) — comillas simples para no romper el JS
 const ICON_STAR_FILL = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.58 1.1 6.47L12 17.44 6.2 20.5l1.1-6.47L2.6 9.45l6.5-.95z"/></svg>';
@@ -204,7 +228,6 @@ const BW_TONER_DESCS = {
   cotton_matte: "Papel 100% algodón sin blanqueadores ópticos y negro mate suave.",
 };
 
-let debounceTimer = null;
 let previewAbortController = null;
 let offscreenHistCanvas = null;
 let offscreenOrigLoupeCanvas = null;
@@ -217,7 +240,16 @@ let lastFocusedBeforeModal = null;
 function setBackgroundInert(inert) {
   ["header.app-header", "main.studio-layout"].forEach((sel) => {
     const el = document.querySelector(sel);
-    if (el) el.inert = Boolean(inert);
+    if (!el) return;
+    // Use the attribute rather than the IDL property: `HTMLElement.inert` does
+    // not exist on Safari / WKWebView before 15.5, where assigning it silently
+    // created a meaningless JS property and left the background focusable.
+    el.toggleAttribute("inert", Boolean(inert));
+    if (Boolean(inert)) {
+      el.setAttribute("aria-hidden", "true");
+    } else {
+      el.removeAttribute("aria-hidden");
+    }
   });
 }
 
@@ -1229,6 +1261,10 @@ let draggingFrameIndex = null;
 function renderFilmStrip() {
   const strip = document.getElementById("stripFrames");
   if (!strip) return;
+  // Clearing innerHTML resets the scroll position of the horizontal film
+  // strip, which used to throw the photographer back to the first frame
+  // whenever a pick/reject mark was toggled. Preserve it explicitly.
+  const previousScrollLeft = strip.scrollLeft;
   strip.innerHTML = "";
 
   state.frames.forEach((frame, idx) => {
@@ -1399,6 +1435,11 @@ function renderFilmStrip() {
 
   updateCullSummaryUI();
   updateUndoRedoButtons();
+
+  // Restore the horizontal position the photographer was looking at.
+  if (previousScrollLeft > 0) {
+    strip.scrollLeft = previousScrollLeft;
+  }
 }
 
 // =============================================================
@@ -1602,9 +1643,25 @@ function selectCmyZone(zone) {
 // NON-BLOCKING REAL-TIME PREVIEW ENGINE
 // =============================================================
 
-function triggerDebouncedPreview() {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => requestPreview(false), 75);
+/**
+ * Non-blocking real-time preview engine.
+ *
+ * The debounce used to be a single global timer: moving one slider cancelled
+ * the pending preview of another, so a quick adjustment on two controls left
+ * one of them showing a stale frame. The timer is now keyed by control.
+ */
+const debounceTimers = new Map();
+
+function triggerDebouncedPreview(key = "default") {
+  const pending = debounceTimers.get(key);
+  if (pending) clearTimeout(pending);
+  debounceTimers.set(
+    key,
+    setTimeout(() => {
+      debounceTimers.delete(key);
+      requestPreview(false);
+    }, 75)
+  );
 }
 
 let lastPreviewErrorToastAt = 0;
@@ -2335,7 +2392,8 @@ function setBaseColor(linearRgb, serverHex = null, subtitle = null) {
 }
 
 async function autoDetectBaseColor(triggerPreviewAfter = true) {
-  const activeFrame = state.frames[state.activeFrameIndex];
+  const frameIndexAtRequest = state.activeFrameIndex;
+  const activeFrame = state.frames[frameIndexAtRequest];
   if (!activeFrame) return;
 
   try {
@@ -2349,6 +2407,10 @@ async function autoDetectBaseColor(triggerPreviewAfter = true) {
       }),
     });
     const data = await res.json();
+    // The user may have moved to another frame while the detection was in
+    // flight. Applying the result now would calibrate the wrong negative and
+    // then persist it into that frame's recipe.
+    if (state.activeFrameIndex !== frameIndexAtRequest) return;
     if (res.ok && data.base_color) {
       if (triggerPreviewAfter) {
         pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], "negative");
@@ -2827,7 +2889,19 @@ function initEyedropperViewport() {
 
   if (!wrapper) return;
 
-  wrapper.addEventListener("mousemove", (e) => {
+  // The densitometer used to run on *every* mousemove event: a layout read
+  // (getBoundingClientRect) plus a canvas readback (getImageData) at up to
+  // 120 Hz saturated the main thread when a 16-bit TIFF was on screen.
+  // Coordinates are now sampled and processed once per animation frame.
+  let pendingMoveEvent = null;
+  let moveFrameRequested = false;
+
+  const processPointerMove = () => {
+    moveFrameRequested = false;
+    const e = pendingMoveEvent;
+    pendingMoveEvent = null;
+    if (!e) return;
+
     const coords = getViewportNormalizedCoords(e);
     if (!coords) return;
     const { xPct, yPct } = coords;
@@ -2890,6 +2964,14 @@ function initEyedropperViewport() {
           loupeRgb.textContent = `R${sample.r} G${sample.g} B${sample.b}`;
         }
       }
+    }
+  };
+
+  wrapper.addEventListener("mousemove", (e) => {
+    pendingMoveEvent = e;
+    if (!moveFrameRequested) {
+      moveFrameRequested = true;
+      requestAnimationFrame(processPointerMove);
     }
   });
 
@@ -3226,6 +3308,14 @@ function initSplitSlider() {
   if (!wrapper || !divider) return;
 
   let dragging = false;
+  // The wrapper width is cached: applySplitPercent() writes styles and then
+  // reads clientWidth, which forced a synchronous layout on every pointer
+  // move (layout thrashing). The cache is refreshed on resize.
+  let cachedWrapWidth = wrapper.clientWidth;
+  const refreshWrapWidth = () => {
+    cachedWrapWidth = wrapper.clientWidth;
+  };
+  window.addEventListener("resize", refreshWrapWidth);
 
   const updateFromClientX = (clientX) => {
     if (state.viewMode !== "split") return;
@@ -3233,7 +3323,7 @@ function initSplitSlider() {
     if (!rect.width) return;
     let pct = ((clientX - rect.left) / rect.width) * 100;
     pct = Math.max(0, Math.min(100, pct));
-    applySplitPercent(pct);
+    applySplitPercent(pct, cachedWrapWidth);
   };
 
   divider.addEventListener("mousedown", (e) => {
@@ -3243,8 +3333,22 @@ function initSplitSlider() {
   window.addEventListener("mouseup", () => {
     dragging = false;
   });
+  // Throttle the drag to one repaint per animation frame.
+  let pendingDragX = null;
+  let dragFrameRequested = false;
+  const flushDrag = () => {
+    dragFrameRequested = false;
+    const clientX = pendingDragX;
+    pendingDragX = null;
+    if (clientX !== null) updateFromClientX(clientX);
+  };
   window.addEventListener("mousemove", (e) => {
-    if (dragging) updateFromClientX(e.clientX);
+    if (!dragging) return;
+    pendingDragX = e.clientX;
+    if (!dragFrameRequested) {
+      dragFrameRequested = true;
+      requestAnimationFrame(flushDrag);
+    }
   });
 
   divider.addEventListener(
@@ -3278,7 +3382,7 @@ function initSplitSlider() {
   });
 }
 
-function applySplitPercent(pct) {
+function applySplitPercent(pct, wrapWidth = null) {
   state.splitPercent = pct;
   const wrapper = document.getElementById("splitWrapper");
   const divider = document.getElementById("splitDivider");
@@ -3288,11 +3392,12 @@ function applySplitPercent(pct) {
   if (divider) {
     divider.style.left = `${pct}%`;
     divider.setAttribute("aria-valuenow", String(Math.round(pct)));
+    divider.setAttribute("aria-valuetext", `${Math.round(pct)}%`);
   }
 
   if (state.viewMode === "split") {
     let localPct = pct;
-    const wrapW = wrapper?.clientWidth || 0;
+    const wrapW = wrapWidth !== null ? wrapWidth : wrapper?.clientWidth || 0;
     if (wrapW > 0 && state.zoom > 1.01) {
       localPct = Math.max(
         0,
@@ -3982,8 +4087,13 @@ function initKeyboardShortcuts() {
 
     if (inTextInput || activeModal) return;
 
-    // Tab outside modals toggles Zen sidebars collapse
-    if (e.key === "Tab" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    // NOTE: Tab is deliberately NOT hijacked here. Capturing it made every
+    // slider, the 72-stock catalogue and the toolbar buttons unreachable by
+    // keyboard (WCAG 2.1.1 / 2.4.3). The Zen sidebar toggle now lives on its
+    // own button (zenToggleBtn) and on Cmd/Ctrl+Alt+Z.
+
+    // Zen / clean-table mode (Cmd/Ctrl + Alt + Z)
+    if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "z" || e.key === "Z")) {
       e.preventDefault();
       toggleZenSidebars();
       return;
@@ -4326,11 +4436,24 @@ async function developFullRoll() {
     }
 
     activeBatchJobId = startData.job_id;
+    let pollFailures = 0;
+    const MAX_POLL_FAILURES = 5;
+
+    const stopPolling = () => {
+      if (activeBatchPollTimer) {
+        clearTimeout(activeBatchPollTimer);
+        activeBatchPollTimer = null;
+      }
+      activeBatchJobId = null;
+    };
+
     const pollStatus = async () => {
       if (!activeBatchJobId) return;
+      const jobId = activeBatchJobId;
       try {
-        const stRes = await fetch(`/api/batch/develop_status/${encodeURIComponent(activeBatchJobId)}`);
+        const stRes = await fetch(`/api/batch/develop_status/${encodeURIComponent(jobId)}`);
         const st = await stRes.json();
+        pollFailures = 0;
         const pct = Math.max(0, Math.min(100, Number(st.percent || 0)));
 
         if (counterEl) {
@@ -4347,9 +4470,7 @@ async function developFullRoll() {
         if (timerEl && st.elapsed_seconds != null) timerEl.textContent = `${Number(st.elapsed_seconds).toFixed(1)}s`;
 
         if (st.status === "completed") {
-          clearInterval(activeBatchPollTimer);
-          activeBatchPollTimer = null;
-          activeBatchJobId = null;
+          stopPolling();
           setModalOpen(progressModal, false);
           state.lastRollResult = st.result;
           const summary = document.getElementById("modalSummary");
@@ -4357,29 +4478,49 @@ async function developFullRoll() {
             summary.textContent = `Se procesaron ${st.result.total_frames} fotograma(s) en ${st.result.elapsed_seconds}s sin tocar tus archivos originales. Incluye hoja de contactos de archivo.`;
           }
           setModalOpen("resultModal", true);
-        } else if (st.status === "cancelled") {
-          clearInterval(activeBatchPollTimer);
-          activeBatchPollTimer = null;
-          activeBatchJobId = null;
+          return;
+        }
+        if (st.status === "cancelled") {
+          stopPolling();
           setModalOpen(progressModal, false);
           showToast("Revelado cancelado", "Se detuvo el procesamiento por lotes.");
-        } else if (st.status === "error" || st.status === "not_found" || !stRes.ok) {
-          clearInterval(activeBatchPollTimer);
-          activeBatchPollTimer = null;
-          activeBatchJobId = null;
+          return;
+        }
+        if (st.status === "error" || st.status === "not_found" || !stRes.ok) {
+          stopPolling();
           setModalOpen(progressModal, false);
           showToast("Error en lote", st.error || "No se pudo completar el rollo.");
+          return;
         }
       } catch (pollErr) {
         console.error("Batch poll error:", pollErr);
+        pollFailures += 1;
+        if (pollFailures >= MAX_POLL_FAILURES) {
+          // The previous implementation only logged the failure and kept the
+          // interval alive forever, which left the "Revelar rollo" button
+          // permanently blocked until the page was reloaded.
+          stopPolling();
+          setModalOpen(progressModal, false);
+          showToast("Error en lote", "Se perdió la conexión con el revelado en curso.");
+          return;
+        }
+      }
+      // Recursive timeout instead of setInterval: overlapping polls could let
+      // a slow response overwrite a newer progress value, rewinding the bar.
+      if (activeBatchJobId && activeBatchJobId === jobId) {
+        activeBatchPollTimer = setTimeout(pollStatus, 300);
       }
     };
 
-    if (activeBatchPollTimer) clearInterval(activeBatchPollTimer);
-    activeBatchPollTimer = setInterval(pollStatus, 300);
+    if (activeBatchPollTimer) clearTimeout(activeBatchPollTimer);
     await pollStatus();
   } catch (err) {
     setModalOpen(progressModal, false);
+    if (activeBatchPollTimer) {
+      clearTimeout(activeBatchPollTimer);
+      activeBatchPollTimer = null;
+    }
+    activeBatchJobId = null;
     console.error("Error revelando rollo:", err);
     showToast("Error en lote", err.message || "No se pudo completar el rollo.");
   }
@@ -4880,9 +5021,16 @@ function initUIListeners() {
   });
 
   // Catalog search, clear & ISO/catalog sort toggle
+  // The search rebuilt all 72 cards (≈576 nodes + 216 listeners) on every
+  // keystroke; it is now debounced.
+  let searchDebounceTimer = null;
   document.getElementById("filmSearch")?.addEventListener("input", (e) => {
     state.search = e.target.value;
-    applyFilters();
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      searchDebounceTimer = null;
+      applyFilters();
+    }, 140);
   });
   document.getElementById("clearFilmSearchBtn")?.addEventListener("click", () => {
     const searchEl = document.getElementById("filmSearch");
@@ -4977,7 +5125,9 @@ function initUIListeners() {
       if (lbl) lbl.textContent = formatter(val);
       onValue(val);
       saveActiveFrameRecipe();
-      triggerDebouncedPreview();
+      // Keyed per control so two sliders moved in quick succession do not
+      // cancel each other's pending render.
+      triggerDebouncedPreview(el.id || "default");
     });
   };
 
@@ -5284,7 +5434,13 @@ function initUIListeners() {
       await window.pywebview.api.open_developed_folder();
       return;
     }
-    await fetch("/api/open_folder", { method: "POST" });
+    try {
+      const res = await fetch("/api/open_folder", { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error("open_folder failed:", err);
+      showToast("No se pudo abrir la carpeta", "Haluro no pudo abrir el directorio de salida.");
+    }
   });
 
   // Modal actions & backdrop dismissal
@@ -5300,17 +5456,34 @@ function initUIListeners() {
   document.getElementById("closeAboutBtn")?.addEventListener("click", () => {
     setModalOpen("aboutModal", false);
   });
-  document.getElementById("btnCopyAboutInfo")?.addEventListener("click", () => {
+  document.getElementById("btnCopyAboutInfo")?.addEventListener("click", async () => {
     const text =
-      "Haluro — Laboratorio Analógico Digital (v2.4.6)\n" +
+      "Haluro — Laboratorio Analógico Digital (v2.5.0)\n" +
       "Desarrollador: Fotógrafo César Fernández Ardiles (Oregano, Chile)\n" +
       "Licencia: MIT (Software libre y gratuito)\n" +
       "Emulación: 72 películas químicas + Inversión óptica C-41 / B&N\n" +
       "100% No destructivo · 100% Local y privado\n" +
       "Exportación: TIFF 16-bit real (48-bit RGB) + EXIF analógico";
-    navigator.clipboard?.writeText(text).then(() => {
+    // navigator.clipboard requires a secure context: it rejects on plain
+    // http://<LAN-IP>, so a failure here must fall back and still give feedback.
+    try {
+      if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
       showToast("Ficha copiada al portapapeles", "Información técnica y de autor de Haluro.");
-    });
+    } catch (err) {
+      console.error("copy about info failed:", err);
+      showToast("No se pudo copiar", "El portapapeles no está disponible en este contexto.");
+    }
   });
 
   document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
@@ -5322,15 +5495,22 @@ function initUIListeners() {
 
   document.getElementById("modalSaveZipBtn")?.addEventListener("click", async () => {
     if (!state.lastRollResult) return;
-    const res = await fetch("/api/save_zip_to_downloads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roll_folder: state.lastRollResult.roll_folder }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      setModalOpen("resultModal", false);
-      showToast("ZIP guardado en Descargas", data.saved_path);
+    try {
+      const res = await fetch("/api/save_zip_to_downloads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roll_folder: state.lastRollResult.roll_folder }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModalOpen("resultModal", false);
+        showToast("ZIP guardado en Descargas", data.saved_path);
+      } else {
+        showToast("No se pudo guardar el ZIP", data.error || "Error desconocido.");
+      }
+    } catch (err) {
+      console.error("save_zip_to_downloads failed:", err);
+      showToast("No se pudo guardar el ZIP", "Haluro no pudo comprimir el rollo.");
     }
   });
 
@@ -5394,23 +5574,38 @@ function setRenderBusy(isBusy) {
   document.getElementById("renderDot")?.classList.toggle("busy", Boolean(isBusy));
 }
 
+/**
+ * Show/hide the processing overlay.
+ *
+ * A single boolean could not represent two concurrent operations: the first
+ * `finally` cleared the overlay while the second was still running. The
+ * counter keeps the overlay up until the last operation finishes.
+ */
+let loadingCount = 0;
 function showLoading(visible, message = "Procesando en el laboratorio…") {
   const overlay = document.getElementById("loadingOverlay");
   const msgEl = document.getElementById("loadingMessage");
   if (msgEl && message) msgEl.textContent = message;
-  overlay?.classList.toggle("active", Boolean(visible));
+  loadingCount = Math.max(0, loadingCount + (visible ? 1 : -1));
+  overlay?.classList.toggle("active", loadingCount > 0);
 }
 
 async function revealFileInFinder(path) {
-  if (window.pywebview && window.pywebview.api && window.pywebview.api.reveal_file) {
-    await window.pywebview.api.reveal_file(path);
-    return;
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.reveal_file) {
+      await window.pywebview.api.reveal_file(path);
+      return;
+    }
+    const res = await fetch("/api/reveal_in_finder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (err) {
+    console.error("reveal_in_finder failed:", err);
+    showToast("No se pudo mostrar el archivo", "Haluro no pudo abrir el gestor de archivos.");
   }
-  await fetch("/api/reveal_in_finder", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path }),
-  });
 }
 
 function showToast(title, desc, actionLabel = null, actionCallback = null) {

@@ -2,9 +2,10 @@
 Includes roll header, film canister branding, frame markers, and negative sprockets.
 """
 
-from pathlib import Path
-from PIL import Image, ImageDraw
 import math
+from pathlib import Path
+
+from PIL import Image, ImageDraw
 
 from .platform_io import load_ui_font
 
@@ -41,9 +42,17 @@ def generate_contact_sheet(
     loaded_frames = []
     for item in frame_images:
         if isinstance(item, (str, Path)):
-            loaded_frames.append(Image.open(item).convert("RGB"))
+            with Image.open(item) as src:
+                frame = src.convert("RGB")
         else:
-            loaded_frames.append(item.convert("RGB"))
+            frame = item.convert("RGB")
+
+        # Reduce to the thumbnail size *immediately*. Keeping every frame at
+        # full resolution made a 36-frame 24 MP roll consume ~7 GB of RAM and
+        # frequently killed the process with an out-of-memory kill.
+        if frame.width > thumb_width * 2 or frame.height > thumb_width * 2:
+            frame.thumbnail((thumb_width * 2, thumb_width * 2), Image.Resampling.LANCZOS)
+        loaded_frames.append(frame)
             
     n_frames = len(loaded_frames)
     rows = math.ceil(n_frames / columns)
@@ -56,7 +65,8 @@ def generate_contact_sheet(
     spacing_x = int(round(24 * scale))
     spacing_y = int(round(48 * scale))
     
-    # Adaptive slot height: compact 3:2 when all frames are landscape, taller balanced 0.88:1 when vertical/square frames exist
+    # Adaptive slot height: compact 3:2 when all frames are landscape,
+    # taller balanced 0.88:1 when vertical/square frames exist
     has_portrait_or_square = any(im.height > im.width * 0.90 for im in loaded_frames)
     thumb_h = int(round(thumb_width * (0.88 if has_portrait_or_square else 2 / 3)))
     
@@ -88,7 +98,13 @@ def generate_contact_sheet(
     badge_w, badge_h = int(round(160 * scale)), int(round(40 * scale))
     bx = total_w - margin_x - badge_w
     by = int(round(50 * scale))
-    draw.rounded_rectangle([bx, by, bx + badge_w, by + badge_h], radius=max(3, int(round(6 * scale))), fill=(28, 30, 35), outline=(229, 149, 40), width=max(1, int(round(2 * scale))))
+    draw.rounded_rectangle(
+        [bx, by, bx + badge_w, by + badge_h],
+        radius=max(3, int(round(6 * scale))),
+        fill=(28, 30, 35),
+        outline=(229, 149, 40),
+        width=max(1, int(round(2 * scale))),
+    )
     badge_text = "HALURO LAB"
     bbox = draw.textbbox((0, 0), badge_text, font=frame_font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -107,7 +123,10 @@ def generate_contact_sheet(
         y = margin_top + r * (thumb_h + spacing_y)
         
         # Fit image maintaining aspect ratio inside slot
-        if frame.width > thumb_width or frame.height > thumb_h or (frame.width < thumb_width and frame.height < thumb_h):
+        too_wide = frame.width > thumb_width
+        too_tall = frame.height > thumb_h
+        too_small = frame.width < thumb_width and frame.height < thumb_h
+        if too_wide or too_tall or too_small:
             thumb = frame.copy()
             thumb.thumbnail((thumb_width, thumb_h), Image.Resampling.BICUBIC)
         else:

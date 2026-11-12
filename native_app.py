@@ -10,16 +10,16 @@ from __future__ import annotations
 import ctypes
 import json
 import logging
-from pathlib import Path
 import socket
 import sys
 import threading
 import time
 import urllib.request
+from pathlib import Path
 
 # Ensure package imports resolve in both source checkouts and frozen bundles
 _BOOT_DIR = (
-    Path(getattr(sys, "_MEIPASS")).resolve()
+    Path(sys._MEIPASS).resolve()
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
     else Path(__file__).resolve().parent
 )
@@ -129,7 +129,7 @@ def wait_for_server(port: int, timeout: float = 8.0) -> bool:
     health_url = f"http://127.0.0.1:{port}/api/health"
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(health_url, timeout=0.6) as resp:
+            with urllib.request.urlopen(health_url, timeout=0.6) as resp:  # noqa: S310 - loopback only
                 if resp.status == 200:
                     return True
         except Exception:
@@ -138,17 +138,38 @@ def wait_for_server(port: int, timeout: float = 8.0) -> bool:
 
 
 def run_backend(port: int) -> None:
-    """Run local loopback HTTP engine (`127.0.0.1` only)."""
+    """Run local loopback HTTP engine (`127.0.0.1` only).
+
+    Uses Waitress, a production WSGI server, instead of Flask's development
+    server: the latter has no socket timeouts, no connection limit and can
+    print a debugger traceback that leaks internal paths.
+    """
     try:
         from app import app
 
         logging.getLogger("werkzeug").setLevel(logging.ERROR)
-        app.run(
+
+        try:
+            from waitress import serve
+        except ImportError:  # pragma: no cover - Waitress is a hard dependency
+            logger.warning("Waitress not available; falling back to the built-in server.")
+            app.run(
+                host="127.0.0.1",
+                port=port,
+                debug=False,
+                use_reloader=False,
+                threaded=True,
+            )
+            return
+
+        serve(
+            app,
             host="127.0.0.1",
             port=port,
-            debug=False,
-            use_reloader=False,
-            threaded=True,
+            threads=8,
+            connection_limit=64,
+            channel_timeout=120,
+            ident="Haluro",
         )
     except Exception as exc:
         logger.exception("Backend server failed to start: %s", exc)
@@ -189,8 +210,8 @@ def configure_macos_application_identity(window: object | None = None) -> None:
             if hasattr(cocoa, "info") and isinstance(cocoa.info, dict):
                 cocoa.info["CFBundleName"] = APP_NAME
                 cocoa.info["CFBundleDisplayName"] = APP_NAME
-        except Exception:  # pragma: no cover
-            pass
+        except Exception as exc:  # pragma: no cover
+            logger.debug("No se pudo ajustar la identidad de cocoa: %s", exc)
 
         # 2. Locate and load Haluro AppIcon.icns
         icon_path = _BOOT_DIR / "assets" / "AppIcon.icns"
@@ -252,8 +273,8 @@ def _show_native_fatal_error(title: str, message: str) -> None:
             # MB_ICONERROR (0x10) | MB_OK (0x0)
             ctypes.windll.user32.MessageBoxW(0, message, title, 0x10)  # type: ignore[attr-defined]
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("MessageBoxW no disponible: %s", exc)
     sys.stderr.write(f"{title}: {message}\n")
 
 

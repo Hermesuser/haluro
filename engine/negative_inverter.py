@@ -21,9 +21,10 @@ Implements:
 from __future__ import annotations
 
 from pathlib import Path
+
 import numpy as np
-from PIL import Image
 import scipy.ndimage
+from PIL import Image
 
 from .pipeline import (
     apply_geometry,
@@ -525,7 +526,6 @@ def _raw_optical_density(
     arr = np.asarray(lin_img, dtype=np.float32)
     src_cfg = SCAN_SOURCES.get(scan_source, SCAN_SOURCES["camera_raw"])
     pre_gamma = float(src_cfg["pre_gamma"])
-    pre_sat_bias = float(src_cfg["pre_sat_bias"])
 
     if abs(pre_gamma - 1.0) > 1e-3:
         arr = np.power(np.maximum(arr, 1e-6), pre_gamma)
@@ -758,7 +758,19 @@ def _compute_normalized_log_exposure(
         if h - 2 * cy > 32 and w - 2 * cx > 32:
             u = u[cy : h - cy, cx : w - cx]
 
-    return u
+    # Measured density span converted into a log10 exposure span.
+    #
+    # The characteristic curve of an emulsion is D = gamma * log(E) + D0, so the
+    # log-exposure covered by the scanned density range is d_range / gamma.
+    # This is the quantity that tells the reconstruction how much contrast the
+    # negative actually carries; previously it was discarded after normalising
+    # u, and every roll was rebuilt with the same curve.
+    film_gamma = float(
+        np.clip(MINILAB_PROFILES.get(profile_key, {}).get("gamma", 1.0), 0.30, 3.0)
+    )
+    log_span = float(np.clip(float(np.mean(d_range)) / max(film_gamma, 0.05), 0.25, 3.0))
+
+    return u, log_span
 
 
 def compute_neutral_wb_from_point(
@@ -782,7 +794,7 @@ def compute_neutral_wb_from_point(
     if film_type == "bw" or profile_key == "bw":
         return [0.0, 0.0, 0.0]
 
-    u = _compute_normalized_log_exposure(
+    u, _log_span = _compute_normalized_log_exposure(
         lin_img,
         base_color=base_color,
         film_type=film_type,
@@ -835,7 +847,7 @@ def auto_balance_scene_wb(
     if film_type == "bw" or profile_key == "bw":
         return [0.0, 0.0, 0.0]
 
-    u = _compute_normalized_log_exposure(
+    u, _log_span = _compute_normalized_log_exposure(
         lin_img,
         base_color=base_color,
         film_type=film_type,
@@ -1052,7 +1064,7 @@ def invert_negative(
     is_bw = film_type == "bw" or profile_key == "bw"
 
     # 1 & 2. Base subtraction, source pre-conditioning, backlight decoupling, D-min/D-max & border crop
-    u = _compute_normalized_log_exposure(
+    u, log_span = _compute_normalized_log_exposure(
         lin_img,
         base_color=base_color,
         film_type=film_type,
@@ -1160,8 +1172,20 @@ def invert_negative(
     w_clip_val = profile["shoulder"] - whites * 0.12 - wc_off
     u = _color_protected_clip(u, b_clip_val, w_clip_val, protect_chroma=bool(clip_protect) and not is_bw)
 
-    # 7. Reconstruct scene-linear positive light from perceptual log-density u
-    pos = np.power(u, 2.15)
+    # 7. Reconstruct scene-linear positive light from the measured density.
+    #
+    # Hurter-Driffield: the transmission of a negative is T = 10^(-D), so the
+    # luminance the print receives is EXPONENTIAL in the measured optical
+    # density. The previous implementation used a fixed power law (u ** 2.15)
+    # and discarded the measured density span, which meant a pushed roll and a
+    # flat roll were rebuilt with exactly the same tonal curve.
+    #
+    # The exponential is normalised between the measured black and white
+    # points (u=0 stays black, u=1 stays white), which preserves the mid-tone
+    # anchor of the catalogue while letting the measured contrast — through
+    # log_span — drive the slope of the reconstruction.
+    hd_denominator = max(10.0 ** log_span - 1.0, 1e-6)
+    pos = np.clip((np.power(10.0, u * log_span) - 1.0) / hd_denominator, 0.0, 1.0)
 
     # Photochemical RA-4 / CinePrint ECP selective hue calibration
     hue_rules = profile.get("hue_rules")
@@ -1171,7 +1195,10 @@ def invert_negative(
         pos = srgb_to_linear(pos_srgb)
 
     # 8. LabGlow (Optical Enlarger Diffusion / Highlight Bloom in linear light)
-    base_glow = max(0.12, profile.get("glow", 0.12))
+    # The profile's declared glow is used verbatim. A previous floor of 0.12
+    # silently overrode the catalogue: the "linear" profile (glow 0.0) and
+    # "vlog_flat" (0.04) both rendered a 3x stronger halo than advertised.
+    base_glow = float(profile.get("glow", 0.12))
     glow_strength = base_glow * float(np.clip(glow_mult, 0.0, 3.0))
     if glow_strength > 0.01:
         luma_lin = np.sum(pos * LUMA, axis=-1)
@@ -1292,7 +1319,7 @@ def process_negative_to_image(
         srgb = apply_optical_sharpen(srgb, mode=str(sharpen_mode), amount=float(sharpen_amount))
 
     srgb_clamped = np.clip(srgb, 0.0, 1.0).astype(np.float32)
-    pil_img = Image.fromarray((srgb_clamped * 255.0).astype(np.uint8))
+    pil_img = Image.fromarray(np.rint(srgb_clamped * 255.0).astype(np.uint8))
     if return_float:
         return pil_img, srgb_clamped
     return pil_img
