@@ -22,7 +22,7 @@
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "checksums": {
-    "macos_arm64": "2fef6e2f9b530da7013343e58bd1857705836bc28d7790e0c166e7ab3f5df81a",
+    "macos_arm64": "1116b3e5bdd6407e0b6cd701ddf205db269ee5f789619fd1b66ab87730f392fb",
     "macos_x86_64": "",
     "windows_x86_64": "",
     "windows_portable": ""
