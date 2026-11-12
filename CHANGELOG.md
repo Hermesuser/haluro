@@ -9,6 +9,40 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [No publicado]
+
+### Interfaz — Solapes en la barra del visor al maximizar la ventana
+
+- **Los controles de la barra del visor se solapaban con la telemetría.** Al
+  maximizar la ventana (por ejemplo, un MacBook Pro de 14" a 1512 px) el grupo de
+  herramientas de geometría se encogía por debajo de su contenido y el botón
+  «Sincronizar rollo» se montaba encima del distintivo «Original intacto», que
+  además quedaba recortado en el borde. La causa era que los puntos de
+  ruptura se medían contra el **ancho de la ventana** cuando la barra vive en la
+  **columna central** (ventana − panel izquierdo − panel derecho).
+- **La barra ahora se adapta a su propio ancho** mediante consultas de
+  contenedor (`@container`), no a la pantalla: tres niveles de compactación
+  progresiva (tipografía y etiqueta corta →Copiar/Pegar y «Ajustar» a icono →
+ compactación máxima) que conservan siempre todas las funciones.
+- **Nunca hay solapes ni controles recortados.** El grupo de geometría ya no se
+  encoge por debajo de su contenido y la barra hace scroll horizontal como
+  última red de seguridad. Verificado de 700 a 2560 px de ancho.
+- **La telemetría se reubica en el densitómetro RGB** (junto a «Receta activa»):
+  el estado de la edición no destructiva, la resolución y el tiempo de revelado
+  quedan fuera de la fila de herramientas, donde ya no compiten por el espacio.
+- **Compatibilidad con WebKit antiguo.** Los niveles de compactación se replican
+  con consultas de medios bajo `@supports not (container-type: inline-size)`
+  para macOS 11-12 (Safari 14-15), que no soporta consultas de contenedor.
+- **Inspector del panel derecho aplastado en móvil.** Con la ventana muy
+  estrecha el densitómetro comprimía el inspector a 26 px y sus controles se
+  montaban sobre el botón de abajo; ahora los paneles se apilan y la página
+  hace scroll.
+- **Escalones de layout más coherentes:** panel izquierdo y derecho más estrechos
+  en ventanas de 1120 px, y paso a la mesa de luz a una sola columna por debajo
+  de 1024 px.
+
+---
+
 ## [2.5.0] — 2026-11-12
 
 ### Seguridad — Sesión local protegida

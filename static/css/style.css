@@ -1608,8 +1608,24 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 8px;
   flex-shrink: 0;
   min-width: 0;
-  overflow: clip;
+  /* La barra se adapta a SU PROPIO ancho (no al de la ventana): evita que los
+     controles se pisen cuando la columna central se estrecha. */
+  container-type: inline-size;
+  container-name: vptoolbar;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-rule) transparent;
+  overscroll-behavior-x: contain;
 }
+
+.viewport-toolbar::-webkit-scrollbar { height: 4px; }
+.viewport-toolbar::-webkit-scrollbar-track { background: transparent; }
+.viewport-toolbar::-webkit-scrollbar-thumb {
+  background: var(--hairline-rule);
+  border-radius: 2px;
+}
+.viewport-toolbar::-webkit-scrollbar-thumb:hover { background: var(--pewter-muted); }
 
 .view-modes {
   display: inline-flex;
@@ -1647,7 +1663,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  flex-shrink: 1;
+  /* No se encoge por debajo de su contenido: si no cabe, la barra se desplaza
+     en horizontal en lugar de solaparse con el resto de controles. */
+  flex-shrink: 0;
   min-width: 0;
 }
 
@@ -1688,6 +1706,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-variant-numeric: tabular-nums;
   font-size: 11px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .zoom-readout:hover { color: var(--silver-text); }
@@ -1704,7 +1728,18 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
   transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+
+/* Iconos de respaldo: sólo aparecen cuando la barra del visor se compacta */
+.pill-icon,
+.zoom-fit-icon {
+  display: none;
 }
 
 .recipe-pill-btn:hover:not(:disabled) {
@@ -1739,10 +1774,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   align-items: center;
   gap: 7px;
+  row-gap: 3px;
+  flex-wrap: wrap;
   white-space: nowrap;
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
+  border-top: 1px solid var(--hairline-subtle);
+  padding-top: 8px;
+  margin-top: 2px;
 }
 
 .status-dot {
@@ -1750,6 +1787,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   height: 7px;
   border-radius: 50%;
   background-color: var(--emerald-ok);
+  flex-shrink: 0;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1765,6 +1803,81 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .render-stats .separator { color: var(--graphite-dim); }
+
+/* Resolución + tiempo viajan juntos: nunca se separan al ajustar el panel */
+.stat-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* =============================================================
+   BARRA DEL VISOR — ADAPTACIÓN POR ANCHO REAL DEL CONTENEDOR
+   La barra vive en la columna central (ventana − panel izq. − panel der.),
+   así que sus breakpoints se miden contra SU contenedor, no contra la
+   ventana: así nunca se solapan controles al maximizar la pantalla.
+   ============================================================= */
+
+/* Nivel 1 — barra con espacio de sobra: tipografía compacta y etiqueta corta */
+@container vptoolbar (max-width: 830px) {
+  .mode-btn { padding: 4px 6px; font-size: 11px; }
+  .tool-icon-btn { width: 24px; height: 24px; }
+  .zoom-readout { padding: 0 6px; font-size: 11px; }
+  .recipe-pill-btn { padding: 0 7px; font-size: 11px; }
+  .sync-label-full { display: none; }
+  .sync-label-short { display: inline; }
+}
+
+/* Nivel 2 — la receta y el zoom pasan a icono: se conservan las funciones */
+@container vptoolbar (max-width: 740px) {
+  .recipe-pill-btn .pill-label { display: none; }
+  .recipe-pill-btn .pill-icon { display: inline-flex; }
+  .recipe-pill-btn { padding: 0 6px; }
+  .zoom-readout .zoom-fit-text { display: none; }
+  .zoom-readout .zoom-fit-icon { display: inline-flex; }
+  .zoom-readout { width: 26px; padding: 0; }
+}
+
+/* Nivel 3 — barra muy estrecha: se aprieta al máximo sin perder controles */
+@container vptoolbar (max-width: 660px) {
+  .toolbar-sep { margin: 0; }
+  .view-modes { gap: 0; }
+  .mode-btn { padding: 3px 3px; font-size: 10px; }
+  .tool-icon-btn { width: 22px; height: 22px; }
+  .geometry-tools { gap: 1px; }
+  .recipe-pill-btn { padding: 0 4px; }
+}
+
+/* Reserva para navegadores sin consultas de contenedor (WebKit de macOS 11-12):
+   los mismos niveles, pero medidos contra la ventana en vez del contenedor. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 1440px) {
+    .mode-btn { padding: 4px 6px; font-size: 11px; }
+    .tool-icon-btn { width: 24px; height: 24px; }
+    .zoom-readout { padding: 0 6px; font-size: 11px; }
+    .recipe-pill-btn { padding: 0 7px; font-size: 11px; }
+    .sync-label-full { display: none; }
+    .sync-label-short { display: inline; }
+  }
+  @media (max-width: 1290px) {
+    .recipe-pill-btn .pill-label { display: none; }
+    .recipe-pill-btn .pill-icon { display: inline-flex; }
+    .recipe-pill-btn { padding: 0 6px; }
+    .zoom-readout .zoom-fit-text { display: none; }
+    .zoom-readout .zoom-fit-icon { display: inline-flex; }
+    .zoom-readout { width: 26px; padding: 0; }
+  }
+  @media (max-width: 1172px) {
+    .toolbar-sep { margin: 0; }
+    .view-modes { gap: 0; }
+    .mode-btn { padding: 3px 3px; font-size: 10px; }
+    .tool-icon-btn { width: 22px; height: 22px; }
+    .geometry-tools { gap: 1px; }
+    .recipe-pill-btn { padding: 0 4px; }
+  }
+}
 
 /* Light Table Canvas */
 .canvas-container {
@@ -3242,12 +3355,8 @@ body.roll-empty .inspector-scroll {
    RESPONSIVE ADAPTATION & REDUCED MOTION
    ============================================================= */
 
-@media (max-width: 1480px) {
-  .badge-nondestructive,
-  .render-stats .badge-nondestructive + .separator {
-    display: none;
-  }
-}
+/* Los controles de la barra del visor se adaptan por consulta de contenedor
+   (ver @container vptoolbar): aquí sólo se ajustan el layout y los paneles. */
 
 @media (max-width: 1440px) {
   .studio-layout {
@@ -3256,12 +3365,6 @@ body.roll-empty .inspector-scroll {
   .brand-sub { display: none; }
   .brand { min-width: auto; }
   .viewport-toolbar { padding: 0 10px; gap: 6px; }
-  .mode-btn { padding: 4px 7px; font-size: 11px; }
-  .tool-icon-btn { width: 24px; height: 24px; }
-  .zoom-readout { padding: 0 6px; font-size: 11px; }
-  .recipe-pill-btn { padding: 0 7px; font-size: 11px; }
-  .sync-label-full { display: none; }
-  .sync-label-short { display: inline; }
   .seg-btn { padding: 5px 5px; font-size: 11px; }
   .segmented-3 .seg-btn { padding: 5px 3px; font-size: 11px; }
 }
@@ -3272,7 +3375,14 @@ body.roll-empty .inspector-scroll {
   }
 }
 
-@media (max-width: 960px) {
+/* Ventana estrecha: los paneles ceden espacio a la mesa de luz */
+@media (max-width: 1120px) {
+  .studio-layout {
+    grid-template-columns: 226px minmax(0, 1fr) 242px;
+  }
+}
+
+@media (max-width: 1024px) {
   html, body { overflow: auto; }
   .app-header { height: auto; flex-wrap: wrap; padding: 8px 12px; }
   .studio-layout {
@@ -3282,9 +3392,13 @@ body.roll-empty .inspector-scroll {
   }
   /* La mesa de luz manda: la fotografía abre la pantalla, los paneles la siguen */
   .viewport { order: -1; }
-  /* Telemetría de escritorio fuera del ancho móvil (evita recorte en el borde) */
-  .render-stats { display: none; }
+  /* La telemetría vive ahora en el densitómetro: se muestra también en móvil */
+  .render-stats { white-space: normal; }
+  /* Los paneles se apilan y la página hace scroll: el densitómetro ya no
+     aplasta al inspector (antes se solapaban sus controles). */
   .sidebar { border: none; border-bottom: 1px solid var(--hairline-rule); max-height: 340px; }
+  .sidebar-right { max-height: none; }
+  .inspector-scroll { max-height: 70vh; }
   .canvas-container { min-height: 50vh; }
 
   /* Áreas táctiles de 44px en controles primarios */
@@ -3294,6 +3408,13 @@ body.roll-empty .inspector-scroll {
     min-height: 40px;
   }
   .app-header .btn { min-height: 44px; }
+
+  /* La barra del visor se aprieta según SU ancho (consulta de contenedor),
+     no según el de la pantalla: evita el scroll horizontal en móvil. */
+  .viewport-toolbar .tool-icon-btn { width: 26px; height: 26px; }
+  .viewport-toolbar .mode-btn,
+  .viewport-toolbar .recipe-pill-btn,
+  .viewport-toolbar .zoom-readout { min-height: 26px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

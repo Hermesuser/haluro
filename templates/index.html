@@ -488,22 +488,29 @@
           </button>
           <span class="toolbar-sep" aria-hidden="true"></span>
           <button class="tool-icon-btn" id="zoomOutBtn" aria-label="Alejar zoom" title="Alejar (-)">−</button>
-          <button class="zoom-readout" id="zoomResetBtn" title="Restablecer vista al 100% encajado (Tecla 0)">Ajustar</button>
+          <button class="zoom-readout" id="zoomResetBtn" title="Restablecer vista al 100% encajado (Tecla 0)">
+            <svg class="icon-xs zoom-fit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/>
+            </svg>
+            <span class="zoom-fit-text">Ajustar</span>
+          </button>
           <button class="tool-icon-btn" id="zoomInBtn" aria-label="Acercar zoom" title="Acercar (+ o rueda del ratón)">+</button>
           <span class="toolbar-sep" aria-hidden="true"></span>
-          <button class="recipe-pill-btn" id="copyRecipeBtn" title="Copiar receta óptica del fotograma activo (⇧C)">Copiar</button>
-          <button class="recipe-pill-btn" id="pasteRecipeBtn" title="Pegar receta copiada en este fotograma (⇧V)" disabled>Pegar</button>
+          <button class="recipe-pill-btn" id="copyRecipeBtn" title="Copiar receta óptica del fotograma activo (⇧C)">
+            <svg class="icon-xs pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"/>
+              <path d="M5 15V6a2 2 0 0 1 2-2h9"/>
+            </svg>
+            <span class="pill-label">Copiar</span>
+          </button>
+          <button class="recipe-pill-btn" id="pasteRecipeBtn" title="Pegar receta copiada en este fotograma (⇧V)" disabled>
+            <svg class="icon-xs pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M9.5 4.5h5V6h-5z"/>
+              <path d="M8.5 5.5H6.8A1.8 1.8 0 0 0 5 7.3v11.4A1.8 1.8 0 0 0 6.8 20.5h10.4a1.8 1.8 0 0 0 1.8-1.8V7.3a1.8 1.8 0 0 0-1.8-1.8h-1.7"/>
+            </svg>
+            <span class="pill-label">Pegar</span>
+          </button>
           <button class="recipe-pill-btn recipe-sync-btn" id="syncRollBtn" title="Sincronizar la receta actual en todos los fotogramas del rollo"><span class="sync-label-full">Sincronizar rollo</span><span class="sync-label-short">Sincr. rollo</span></button>
-        </div>
-
-        <!-- Live Telemetry Status -->
-        <div class="render-stats" id="renderStats">
-          <span class="status-dot" id="renderDot" aria-hidden="true"></span>
-          <span class="badge-nondestructive" title="Edición 100% no destructiva: tu archivo original jamás se altera">Original intacto</span>
-          <span class="separator">·</span>
-          <span id="statResolution">—</span>
-          <span class="separator">·</span>
-          <span id="statTime">—</span>
         </div>
       </div>
 
@@ -628,6 +635,16 @@
         <div class="active-stock-bar">
           <span class="stock-label-muted" id="statFilmLabel">Receta activa</span>
           <span class="stock-label-value" id="statFilm">Kodak Portra 400</span>
+        </div>
+        <!-- Live Telemetry Status (vive en el densitómetro: la barra del visor queda libre de solapes) -->
+        <div class="render-stats" id="renderStats" aria-live="off">
+          <span class="status-dot" id="renderDot" aria-hidden="true"></span>
+          <span class="badge-nondestructive" title="Edición 100% no destructiva: tu archivo original jamás se altera">Original intacto</span>
+          <span class="stat-detail">
+            <span id="statResolution">—</span>
+            <span class="separator">·</span>
+            <span id="statTime">—</span>
+          </span>
         </div>
       </div>
 
