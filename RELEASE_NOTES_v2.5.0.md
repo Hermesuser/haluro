@@ -64,7 +64,7 @@ Para eliminar la advertencia de Gatekeeper completamente, se requiere:
 
 | Plataforma | Archivo | SHA-256 |
 |------------|---------|---------|
-| macOS ARM64 | `Haluro-2.5.0-macOS-arm64.dmg` | `1116b3e5bdd6407e0b6cd701ddf205db269ee5f789619fd1b66ab87730f392fb` |
+| macOS ARM64 | `Haluro-2.5.0-macOS-arm64.dmg` | `3b579b435be730fe41ee3c9e0fa24a51c1a61f00722579b769205cf6c57b3ca0` |
 | macOS Intel | `Haluro-2.5.0-macOS-x86_64.dmg` | *(construido por CI)* |
 | Windows x64 | `Haluro-Setup-2.5.0-Win11-x64.exe` | *(construido por CI)* |
 | Windows Portable | `Haluro-Portable-2.5.0-Win11-x64.zip` | *(construido por CI)* |

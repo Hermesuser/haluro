@@ -49,9 +49,27 @@ mkdir -p "${STAGE_DIR}"
 cp -R "${APP_BUNDLE}" "${STAGE_DIR}/Haluro.app"
 
 dot_clean "${STAGE_DIR}/Haluro.app" 2>/dev/null || true
-xattr -cr "${STAGE_DIR}/Haluro.app"
-codesign --force --deep -s - "${STAGE_DIR}/Haluro.app"
+xattr -cr "${STAGE_DIR}/Haluro.app" 2>/dev/null || true
+
+# La firma es obligatoria en Apple Silicon: un bundle sin firmar no puede
+# lanzarse (launchd falla con "Launch failed", errno 163). Si el entorno de CI
+# proporciona una identidad Developer ID, se usa para firmar y notarizar; en
+# caso contrario se aplica una firma ad-hoc, suficiente para ejecución local.
+SIGN_IDENTITY="${HALIRO_CODESIGN_IDENTITY:--}"
+if [[ "${SIGN_IDENTITY}" == "-" ]]; then
+  echo "==> Firmando Haluro.app en modo ad-hoc (sin certificado Apple Developer) ..."
+  codesign --force --deep -s - "${STAGE_DIR}/Haluro.app"
+else
+  echo "==> Firmando Haluro.app con identidad: ${SIGN_IDENTITY} ..."
+  codesign --force --deep --options runtime \
+    --entitlements "${REPO_ROOT}/packaging/macos/Entitlements.plist" \
+    -s "${SIGN_IDENTITY}" "${STAGE_DIR}/Haluro.app"
+fi
 codesign --verify --deep --strict "${STAGE_DIR}/Haluro.app"
+
+# Mantener una copia firmada en dist/ para verificación y notarización.
+rm -rf dist/Haluro.app
+ditto "${STAGE_DIR}/Haluro.app" dist/Haluro.app
 
 DMG_PATH="dist/Haluro-${VERSION}-macOS-${ARCH}.dmg"
 echo "==> [4/4] Empaquetando imagen de disco ${DMG_PATH} ..."

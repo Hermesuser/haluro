@@ -46,6 +46,13 @@ jobs:
   build-macos:
     name: Package macOS Native App (.app & .dmg)
     runs-on: ${{ matrix.os }}
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_IDENTITY: ${{ secrets.MACOS_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     strategy:
       fail-fast: false
       matrix:
@@ -75,58 +82,43 @@ jobs:
       - name: Run native host smoke test
         run: python native_app.py --smoke-test
 
-      - name: Build macOS .app and .dmg
-        run: ./packaging/macos/build_macos.sh
-
-      - name: Code sign macOS app & DMG (if signing identity configured)
-        if: env.MACOS_CERTIFICATE != '' && env.APPLE_TEAM_ID != ''
+      - name: Import macOS code-signing certificate (if configured)
+        if: env.MACOS_CERTIFICATE != '' && env.MACOS_CERT_PASSWORD != ''
         run: |
           set -euo pipefail
-          # Decodificar el certificado de distribución (base64 -> .p12)
-          echo "${{ env.MACOS_CERTIFICATE }}" | base64 --decode > signing_cert.p12
-          security create-keychain -p "${{ env.MACOS_CERT_PASSWORD }}" build.keychain
-          security unlock-keychain -p "${{ env.MACOS_CERT_PASSWORD }}" build.keychain
-          security import signing_cert.p12 -k build.keychain -P "${{ env.MACOS_CERT_PASSWORD }}" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ env.MACOS_CERT_PASSWORD }}" build.keychain
+          echo "${MACOS_CERTIFICATE}" | base64 --decode > signing_cert.p12
+          security create-keychain -p "${MACOS_CERT_PASSWORD}" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "${MACOS_CERT_PASSWORD}" build.keychain
+          security import signing_cert.p12 -k build.keychain -P "${MACOS_CERT_PASSWORD}" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${MACOS_CERT_PASSWORD}" build.keychain
 
-          # Codesign del bundle .app
-          APP_PATH=$(find dist -name "Haluro.app" -maxdepth 1 -print -quit)
-          if [ -n "$APP_PATH" ]; then
-            codesign --deep --force --sign "${{ env.MACOS_IDENTITY }}" \
-              --entitlements packaging/macos/Entitlements.plist \
-              --options runtime "$APP_PATH"
-          fi
+      - name: Build macOS .app and .dmg
+        env:
+          HALIRO_CODESIGN_IDENTITY: ${{ env.MACOS_IDENTITY }}
+        run: ./packaging/macos/build_macos.sh
 
-          # Codesign del .dmg si existe
-          DMG_PATH=$(find dist -name "*.dmg" -maxdepth 1 -print -quit)
-          if [ -n "$DMG_PATH" ]; then
-            codesign --force --sign "${{ env.MACOS_IDENTITY }}" "$DMG_PATH"
+      - name: Code sign macOS DMG (if signing identity configured)
+        if: env.MACOS_IDENTITY != ''
+        run: |
+          set -euo pipefail
+          DMG_PATH=$(find dist -maxdepth 1 -name "*.dmg" -print -quit)
+          if [ -n "${DMG_PATH}" ]; then
+            codesign --force --sign "${MACOS_IDENTITY}" "${DMG_PATH}"
           fi
 
       - name: Notarize macOS artifacts (Apple notarytool)
         if: env.APPLE_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != '' && env.APPLE_TEAM_ID != ''
         run: |
           set -euo pipefail
-          # Subir .app y .dmg para notarización
-          APP_PATH=$(find dist -name "Haluro.app" -maxdepth 1 -print -quit)
-          DMG_PATH=$(find dist -name "*.dmg" -maxdepth 1 -print -quit)
-
-          if [ -n "$APP_PATH" ]; then
-            xcrun notarytool submit "$APP_PATH" \
-              --apple-id "${{ env.APPLE_ID }}" \
-              --team-id "${{ env.APPLE_TEAM_ID }}" \
-              --password "${{ env.APPLE_APP_SPECIFIC_PASSWORD }}" \
+          DMG_PATH=$(find dist -maxdepth 1 -name "*.dmg" -print -quit)
+          if [ -n "${DMG_PATH}" ]; then
+            xcrun notarytool submit "${DMG_PATH}" \
+              --apple-id "${APPLE_ID}" \
+              --team-id "${APPLE_TEAM_ID}" \
+              --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
               --wait
-            xcrun stapler staple "$APP_PATH"
-          fi
-
-          if [ -n "$DMG_PATH" ]; then
-            xcrun notarytool submit "$DMG_PATH" \
-              --apple-id "${{ env.APPLE_ID }}" \
-              --team-id "${{ env.APPLE_TEAM_ID }}" \
-              --password "${{ env.APPLE_APP_SPECIFIC_PASSWORD }}" \
-              --wait
-            xcrun stapler staple "$DMG_PATH"
+            xcrun stapler staple "${DMG_PATH}"
           fi
 
       - name: Upload macOS DMG artifact

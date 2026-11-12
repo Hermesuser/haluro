@@ -84,6 +84,14 @@ xattr -cr "${APPLICATIONS_DIR}/${APP_BUNDLE}" 2>/dev/null || true
 # Hacer ejecutable el binario principal
 chmod +x "${APPLICATIONS_DIR}/${APP_BUNDLE}/Contents/MacOS/Haluro" 2>/dev/null || true
 
+# Un bundle sin firma no puede lanzarse en Apple Silicon ("Launch failed",
+# errno 163). Si el DMG venía sin firmar, aplicar firma ad-hoc aquí.
+if ! codesign --verify --deep --strict "${APPLICATIONS_DIR}/${APP_BUNDLE}" >/dev/null 2>&1; then
+    echo "✍️  Firmando la app ad-hoc para que macOS pueda lanzarla..."
+    xattr -cr "${APPLICATIONS_DIR}/${APP_BUNDLE}" 2>/dev/null || true
+    codesign --force --deep -s - "${APPLICATIONS_DIR}/${APP_BUNDLE}" >/dev/null 2>&1 || true
+fi
+
 echo "✅ Atributos limpiados."
 
 echo ""

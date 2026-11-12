@@ -34,3 +34,6 @@ Desktop.ini
 
 # Design-audit evidence (local only)
 .taste-skill/
+
+# Per-user session token (never commit)
+session.token
