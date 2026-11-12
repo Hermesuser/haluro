@@ -84,7 +84,7 @@ jobs:
           name: Haluro-macOS-${{ matrix.arch }}
           path: |
             dist/Haluro-*-macOS-*.dmg
-            dist/SHA256SUMS-macOS.txt
+            dist/SHA256SUMS-macOS-*.txt
 
   build-windows11:
     name: Package Windows 11 Native Installer (.exe & .zip)
@@ -144,6 +144,17 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
+
+      - name: Merge the per-architecture macOS checksum manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          if compgen -G "SHA256SUMS-macOS-*.txt" > /dev/null; then
+            cat SHA256SUMS-macOS-*.txt | sort > SHA256SUMS-macOS.txt
+            rm -f SHA256SUMS-macOS-arm64.txt SHA256SUMS-macOS-x86_64.txt
+            echo "SHA256SUMS-macOS.txt:" && cat SHA256SUMS-macOS.txt
+          fi
 
       - name: Create Official GitHub Release
         uses: softprops/action-gh-release@v2

@@ -66,7 +66,10 @@ hdiutil create \
 rm -rf "${STAGE_DIR}"
 
 # Only checksum the artefact produced by this run: globbing every *.dmg in
-# dist/ used to include the artefacts of previous releases.
-(cd dist && shasum -a 256 "$(basename "${DMG_PATH}")" > "SHA256SUMS-macOS.txt")
+# dist/ used to include the artefacts of previous releases. The file name
+# carries the architecture because the Apple Silicon and Intel jobs run in
+# parallel and would otherwise overwrite each other's manifest.
+SUMS_NAME="SHA256SUMS-macOS-${ARCH}.txt"
+(cd dist && shasum -a 256 "$(basename "${DMG_PATH}")" > "${SUMS_NAME}")
 echo "Construcción macOS completada: ${DMG_PATH}"
-cat "dist/SHA256SUMS-macOS.txt"
+cat "dist/${SUMS_NAME}"
