@@ -1250,11 +1250,28 @@ def test_batch_async_roll_progress_and_cancel(client) -> None:
     assert nf.status_code == 404
 
     client.post("/api/load_sample")
+
+    # Use a small frame for the batch: developing the 26 MB sample RAW at full
+    # resolution can take longer than the deadline on a slow CI runner, and
+    # the test is about the batch orchestration, not about RAW throughput.
+    import io as _io
+
+    frame_buf = _io.BytesIO()
+    Image.new("RGB", (640, 480), (118, 92, 74)).save(frame_buf, format="JPEG")
+    frame_buf.seek(0)
+    up = client.post(
+        "/api/upload",
+        data={"file": (frame_buf, "batch_frame.jpg")},
+        content_type="multipart/form-data",
+    )
+    assert up.status_code == 200
+    batch_frame = up.get_json()["filename"]
+
     start_resp = client.post(
         "/api/batch/develop_roll_start",
         json={
             "app_mode": "simulation",
-            "filenames": ["SAMPLE.CR2"],
+            "filenames": [batch_frame],
             "film": "portra400",
             "roll_name": "ASYNC ROLL TEST",
             "columns": 3,
@@ -1267,7 +1284,7 @@ def test_batch_async_roll_progress_and_cancel(client) -> None:
     assert job_id
 
     status_data = None
-    deadline = time.time() + 30.0
+    deadline = time.time() + 120.0
     while time.time() < deadline:
         st_resp = client.get(f"/api/batch/develop_status/{job_id}")
         assert st_resp.status_code == 200

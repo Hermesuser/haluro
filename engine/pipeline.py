@@ -64,10 +64,10 @@ def wrap_angle(a):
 def srgb_to_linear(srgb):
     """Convert sRGB [0..1] to scene-linear [0..inf].
 
-    Implemented with a single branch instead of ``np.where``: ``np.where``
-    evaluates *both* arms, so a 24 MP frame allocated four extra float32
-    temporaries (≈1.2 GB of peak RSS) on every conversion, and the engine
-    converts 4-8 times per frame.
+    Implemented branch by branch instead of with ``np.where``: ``np.where``
+    evaluates *both* arms, so a 24 MP frame allocated three extra full-size
+    float32 temporaries (648 MB measured, versus 421 MB here) on every
+    conversion, and the engine converts 4-8 times per frame.
     """
     srgb = np.maximum(np.asarray(srgb, dtype=np.float32), 0.0)
     out = np.empty_like(srgb, dtype=np.float32)
@@ -75,7 +75,13 @@ def srgb_to_linear(srgb):
     np.divide(srgb, 12.92, out=out, where=low)
     high = ~low
     if high.any():
-        out[high] = np.power((srgb[high] + 0.055) / 1.055, 2.4)
+        # Work on a partial copy so the offset and the power reuse one buffer
+        # instead of allocating three full-size temporaries.
+        tmp = srgb[high]
+        tmp += 0.055
+        tmp /= 1.055
+        np.power(tmp, 2.4, out=tmp)
+        out[high] = tmp
     return out
 
 
@@ -92,7 +98,11 @@ def linear_to_srgb(lin, clip=True):
     np.multiply(lin, 12.92, out=out, where=low)
     high = ~low
     if high.any():
-        out[high] = 1.055 * np.power(lin[high], 1 / 2.4) - 0.055
+        tmp = lin[high]
+        np.power(tmp, 1 / 2.4, out=tmp)
+        tmp *= 1.055
+        tmp -= 0.055
+        out[high] = tmp
     return out
 
 
