@@ -4,11 +4,13 @@ Implements exposure, vignette, halation, 3D LUTs, film response curves, and grai
 
 from pathlib import Path
 import functools
+import io
 import math
 import struct
+import unicodedata
 import zlib
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageCms, ImageDraw, ImageFont, ImageOps
 import scipy.ndimage
 
 from . import __version__
@@ -114,6 +116,103 @@ RAW_EXTENSIONS = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2", ".raf"
 HEIF_EXTENSIONS = {".heic", ".heif"}
 
 
+@functools.lru_cache(maxsize=1)
+def _get_srgb_icc_bytes() -> bytes:
+    """Return canonical sRGB IEC61966-2.1 ICC profile bytes for tagged color-managed exports."""
+    prof = ImageCms.createProfile("sRGB")
+    return ImageCms.ImageCmsProfile(prof).tobytes()
+
+
+def get_srgb_icc_bytes() -> bytes:
+    """Public accessor for the cached canonical sRGB IEC61966-2.1 ICC profile payload."""
+    return _get_srgb_icc_bytes()
+
+
+def _is_srgb_icc_profile(icc_bytes: bytes | None) -> bool:
+    """Return True when ICC bytes are missing or already represent an sRGB color space."""
+    if not icc_bytes:
+        return True
+    try:
+        desc = ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(icc_bytes))) or ""
+        return "srgb" in desc.lower()
+    except Exception:
+        return False
+
+
+def _convert_pil_to_srgb(pil_img: Image.Image, icc_bytes: bytes | None) -> Image.Image:
+    """Convert a PIL image with an arbitrary embedded ICC profile (Adobe RGB, Display P3, ProPhoto) to sRGB."""
+    if not icc_bytes or _is_srgb_icc_profile(icc_bytes):
+        return pil_img.convert("RGB")
+    try:
+        src_prof = ImageCms.ImageCmsProfile(io.BytesIO(icc_bytes))
+        dst_prof = ImageCms.createProfile("sRGB")
+        src_img = pil_img if pil_img.mode in ("RGB", "L", "CMYK") else pil_img.convert("RGB")
+        converted = ImageCms.profileToProfile(
+            src_img,
+            src_prof,
+            dst_prof,
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode="RGB",
+        )
+        return converted if converted is not None else pil_img.convert("RGB")
+    except Exception:
+        return pil_img.convert("RGB")
+
+
+@functools.lru_cache(maxsize=8)
+def _build_icc_to_srgb_lut(icc_bytes: bytes, grid_size: int = 33) -> np.ndarray | None:
+    """Build and cache a 33x33x33 trilinear ICC-to-sRGB LUT preserving continuous 16-bit float gradation."""
+    try:
+        src_prof = ImageCms.ImageCmsProfile(io.BytesIO(icc_bytes))
+        dst_prof = ImageCms.createProfile("sRGB")
+        grid_1d = np.rint(np.linspace(0, 255, grid_size)).astype(np.uint8)
+        rr, gg, bb = np.meshgrid(grid_1d, grid_1d, grid_1d, indexing="ij")
+        flat = np.stack([rr, gg, bb], axis=-1).reshape(-1, 1, 3)
+        lut_img = ImageCms.profileToProfile(
+            Image.fromarray(flat, mode="RGB"),
+            src_prof,
+            dst_prof,
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            outputMode="RGB",
+        )
+        if lut_img is None:
+            return None
+        return (np.asarray(lut_img, dtype=np.float32) / 255.0).reshape(grid_size, grid_size, grid_size, 3)
+    except Exception:
+        return None
+
+
+def _convert_float32_icc_to_srgb(arr_rgb: np.ndarray, icc_bytes: bytes | None) -> np.ndarray:
+    """Convert float32 [0..1] RGB pixels from an embedded wide-gamut ICC profile into sRGB [0..1]."""
+    if not icc_bytes or _is_srgb_icc_profile(icc_bytes):
+        return arr_rgb
+    lut = _build_icc_to_srgb_lut(bytes(icc_bytes))
+    if lut is None:
+        return arr_rgb
+    n = lut.shape[0]
+    coords = np.stack(
+        [
+            np.clip(arr_rgb[..., 0], 0.0, 1.0),
+            np.clip(arr_rgb[..., 1], 0.0, 1.0),
+            np.clip(arr_rgb[..., 2], 0.0, 1.0),
+        ],
+        axis=0,
+    ) * float(n - 1)
+    out = np.stack(
+        [scipy.ndimage.map_coordinates(lut[..., c], coords, order=1, mode="nearest") for c in range(3)],
+        axis=-1,
+    )
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+
+def _to_ascii_transliterated(text: str) -> str:
+    """Transliterate accented Latin characters (e.g. 'Película' -> 'Pelicula') for strict ASCII EXIF/TIFF tags."""
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(text))
+    return normalized.encode("ascii", errors="ignore").decode("ascii").strip()
+
+
 def _open_heif_fallback_macos(path: Path) -> Image.Image:
     """Decode HEIC/HEIF on macOS via native ImageIO (`sips`) when `pillow-heif` is absent."""
     import subprocess
@@ -129,7 +228,8 @@ def _open_heif_fallback_macos(path: Path) -> Image.Image:
             timeout=30,
         )
         with Image.open(tmp_png) as decoded:
-            return decoded.convert("RGB")
+            icc_bytes = decoded.info.get("icc_profile")
+            return _convert_pil_to_srgb(decoded, icc_bytes)
     finally:
         tmp_png.unlink(missing_ok=True)
 
@@ -195,9 +295,16 @@ def _decode_image_linear_uncached(path, max_dim=None):
         raise
 
     with src_ctx as src:
+        src_icc = src.info.get("icc_profile")
+        if not src_icc and hasattr(src, "tag_v2"):
+            raw_icc_tag = src.tag_v2.get(34675)
+            if isinstance(raw_icc_tag, (bytes, bytearray)):
+                src_icc = bytes(raw_icc_tag)
+
         if suffix in (".tif", ".tiff"):
             arr16_rgb = _try_read_tiff16_rgb(path, src)
             if arr16_rgb is not None:
+                arr16_rgb = _convert_float32_icc_to_srgb(arr16_rgb, src_icc)
                 arr_srgb = _resize_float32_rgb(arr16_rgb, max_dim)
                 return srgb_to_linear(arr_srgb)
 
@@ -210,7 +317,7 @@ def _decode_image_linear_uncached(path, max_dim=None):
             arr_srgb = _resize_float32_rgb(arr_srgb, max_dim)
             return srgb_to_linear(arr_srgb)
 
-        img = img.convert("RGB")
+        img = _convert_pil_to_srgb(img, src_icc)
         if max_dim is not None and max(img.size) > max_dim:
             scale = max_dim / float(max(img.size))
             new_size = (max(1, int(round(img.width * scale))), max(1, int(round(img.height * scale))))
@@ -340,48 +447,92 @@ def format_analog_caption(analog_meta: dict | None) -> str:
     return " | ".join(parts)
 
 
+_SAFE_IFD0_TAGS = {
+    0x010F,  # Make
+    0x0110,  # Model
+    0x0132,  # DateTime
+    0x013B,  # Artist
+    0x8298,  # Copyright
+}
+
+_SAFE_EXIF_SUBIFD_TAGS = {
+    0x829A,  # ExposureTime
+    0x829D,  # FNumber
+    0x8822,  # ExposureProgram
+    0x8827,  # ISOSpeedRatings
+    0x9000,  # ExifVersion
+    0x9003,  # DateTimeOriginal
+    0x9004,  # DateTimeDigitized
+    0x9201,  # ShutterSpeedValue
+    0x9202,  # ApertureValue
+    0x9204,  # ExposureBiasValue
+    0x9207,  # MeteringMode
+    0x9209,  # Flash
+    0x920A,  # FocalLength
+    0xA405,  # FocalLengthIn35mmFilm
+    0xA430,  # CameraOwnerName
+    0xA432,  # LensSpecification
+    0xA433,  # LensMake
+    0xA434,  # LensModel
+}
+
+
 def build_export_exif_bytes(source_path=None, analog_meta: dict | None = None) -> bytes | None:
-    """Build normalized EXIF payload preserving safe source tags and stamping analog film EXIF fields."""
+    """Build normalized EXIF payload preserving safe archival source tags (including RAW) and analog EXIF fields."""
     exif = Image.Exif()
-    has_data = False
+    has_data = True
 
     if source_path:
         try:
             src_p = Path(source_path)
-            if src_p.suffix.lower() not in RAW_EXTENSIONS and src_p.is_file():
+            if src_p.is_file():
                 with Image.open(src_p) as im:
                     src_exif = im.getexif()
                     if src_exif:
-                        for tag_id, val in src_exif.items():
-                            exif[tag_id] = val
-                        has_data = True
+                        for tag_id in _SAFE_IFD0_TAGS:
+                            if tag_id in src_exif and src_exif[tag_id] not in (None, ""):
+                                exif[tag_id] = src_exif[tag_id]
+                        src_sub = src_exif.get_ifd(0x8769)
+                        if src_sub:
+                            dst_sub = exif.get_ifd(0x8769)
+                            for tag_id in _SAFE_EXIF_SUBIFD_TAGS:
+                                if tag_id in src_sub and src_sub[tag_id] not in (None, ""):
+                                    dst_sub[tag_id] = src_sub[tag_id]
         except Exception:
             pass
 
     exif[0x0112] = 1  # Orientation normalized to top-left
     exif[0x0131] = f"Haluro {__version__}"
+    sub_ifd = exif.get_ifd(0x8769)
+    sub_ifd[0xA001] = 1  # ColorSpace = sRGB
 
     if isinstance(analog_meta, dict):
         clean = {k: str(v).strip() for k, v in analog_meta.items() if v is not None and str(v).strip()}
         if clean:
-            has_data = True
             if clean.get("camera_make"):
-                exif[0x010F] = clean["camera_make"]
+                mk = _to_ascii_transliterated(clean["camera_make"])
+                if mk:
+                    exif[0x010F] = mk
             if clean.get("camera_model"):
-                exif[0x0110] = clean["camera_model"]
+                md = _to_ascii_transliterated(clean["camera_model"])
+                if md:
+                    exif[0x0110] = md
             if clean.get("photographer"):
-                exif[0x013B] = clean["photographer"]
+                art = _to_ascii_transliterated(clean["photographer"])
+                if art:
+                    exif[0x013B] = art
 
             caption = format_analog_caption(clean)
             if caption:
-                # Standard TIFF/EXIF ASCII description (transliterated safely to ASCII for maximum viewer compatibility)
-                ascii_desc = caption.encode("ascii", errors="ignore").decode("ascii").strip()
+                # Standard TIFF/EXIF ASCII description (transliterated safely to preserve accented Spanish words)
+                ascii_desc = _to_ascii_transliterated(caption)
                 if ascii_desc:
                     exif[0x010E] = ascii_desc
 
-            sub_ifd = exif.get_ifd(0x8769)
             if clean.get("lens"):
-                sub_ifd[0xA434] = clean["lens"]
+                ln = _to_ascii_transliterated(clean["lens"])
+                if ln:
+                    sub_ifd[0xA434] = ln
             if clean.get("shot_iso"):
                 digits = "".join(ch for ch in clean["shot_iso"] if ch.isdigit())
                 if digits:
@@ -429,11 +580,13 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
     caption = format_analog_caption(clean_meta)
 
     def _ascii_bytes(text: str) -> bytes:
-        b = text.encode("utf-8", errors="ignore") + b"\x00"
-        return b
+        clean_ascii = _to_ascii_transliterated(text)
+        return clean_ascii.encode("ascii", errors="ignore") + b"\x00"
+
+    icc_bytes = _get_srgb_icc_bytes()
 
     # Build sorted TIFF 6.0 IFD entries: (tag, field_type, count, raw_data_bytes)
-    # Types: 2=ASCII, 3=SHORT (uint16), 4=LONG (uint32), 5=RATIONAL (2x uint32)
+    # Types: 2=ASCII, 3=SHORT (uint16), 4=LONG (uint32), 5=RATIONAL (2x uint32), 7=UNDEFINED
     raw_tags: list[tuple[int, int, int, bytes]] = [
         (256, 4, 1, struct.pack("<I", w)),  # ImageWidth
         (257, 4, 1, struct.pack("<I", h)),  # ImageLength
@@ -470,6 +623,8 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
     if clean_meta.get("photographer"):
         ab = _ascii_bytes(clean_meta["photographer"])
         raw_tags.append((315, 2, len(ab), ab))  # Artist
+    if icc_bytes:
+        raw_tags.append((34675, 7, len(icc_bytes), icc_bytes))  # InterColorProfile (sRGB IEC61966-2.1)
 
     raw_tags.sort(key=lambda item: item[0])
     num_entries = len(raw_tags)
@@ -544,15 +699,22 @@ def save_output_image(
         return
 
     exif_bytes = build_export_exif_bytes(source_path=source_path, analog_meta=analog_meta)
+    icc_bytes = _get_srgb_icc_bytes()
 
     if ext == ".png":
-        save_kwargs = {"format": "PNG", "compress_level": 4}
+        save_kwargs = {"format": "PNG", "compress_level": 4, "icc_profile": icc_bytes}
         if exif_bytes:
             save_kwargs["exif"] = exif_bytes
         pil_img.save(target_path, **save_kwargs)
     else:
-        # High-grade JPEG with 4:4:4 chroma subsampling=0 to preserve analog film grain & red halation
-        save_kwargs = {"format": "JPEG", "quality": quality, "subsampling": 0, "optimize": True}
+        # High-grade JPEG with 4:4:4 chroma subsampling=0 & embedded sRGB ICC to preserve grain and display gamut
+        save_kwargs = {
+            "format": "JPEG",
+            "quality": quality,
+            "subsampling": 0,
+            "optimize": True,
+            "icc_profile": icc_bytes,
+        }
         if exif_bytes:
             save_kwargs["exif"] = exif_bytes
         pil_img.save(target_path, **save_kwargs)

@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Cross-platform PyInstaller specification for Haluro v2.4.5.
+"""Cross-platform PyInstaller specification for Haluro v2.4.6.
 
 Targets:
   - Windows 11 x64 / ARM64 -> `dist/Haluro/Haluro.exe` (Edge WebView2, Win32 PE metadata, High-DPI)
@@ -121,8 +121,8 @@ if IS_MACOS:
         info_plist={
             "CFBundleName": "Haluro",
             "CFBundleDisplayName": "Haluro",
-            "CFBundleVersion": "2.4.5",
-            "CFBundleShortVersionString": "2.4.5",
+            "CFBundleVersion": "2.4.6",
+            "CFBundleShortVersionString": "2.4.6",
             "LSMinimumSystemVersion": "12.0" if platform.machine() == "x86_64" else "14.0",
             "NSHighResolutionCapable": True,
             "NSSupportsAutomaticGraphicsSwitching": True,

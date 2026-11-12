@@ -21,7 +21,7 @@ DESCRIPTIONS = {
     "cinestill800t": "Cine tungsteno, noches en azul profundo",
     "hp5": "B&N británico clásico, tonos medios fieles",
     "trix400": "Contraste marcado, clásico callejero",
-    "cinestill400t": "Cine tungsteno equilibrada a luz día",
+    "cinestill400d": "Cine luz día (5500K), halación cálida en luces",
     # Film-Luts
     "portra160": "Grano fino y tonos de piel naturales",
     "portra800": "Retratos en poca luz, grano cálido",
@@ -283,14 +283,19 @@ FILMS = {
         halation=0.4, hal_thr=0.75, hal_tint=(1.0, 1.0, 1.0), grain=0.036, grain_size=1.3, soft=0.6,
         desc=DESCRIPTIONS.get("trix400", "")
     ),
-    "cinestill400t": dict(
-        key="cinestill400t", brand="CineStill", name="CineStill 400T", iso=400, kind="cine", balance=5500, ev=0.0, sat=0.95,
+    "cinestill400d": dict(
+        key="cinestill400d", brand="CineStill", name="CineStill 400D", iso=400, kind="cine", balance=5500, ev=0.0, sat=0.95,
         contrast=(0.175, 0.175, 0.168), pivot=(-0.05, 0.0, -0.05),
         black=(0.02, 0.03, 0.04), white=(0.97, 0.96, 0.95),
         hues=[("cyan", "blue", 0.1, 1.0), ("red", "orange", 0.08, 1.05)],
         halation=3.0, hal_thr=0.65, hal_tint=(1.0, 0.22, 0.05), grain=0.022, grain_size=1.3, soft=0.75,
-        desc=DESCRIPTIONS.get("cinestill400t", "")
+        desc=DESCRIPTIONS.get("cinestill400d", "")
     ),
+}
+
+# Backward-compatible key aliases for historical saved recipes
+FILM_ALIASES = {
+    "cinestill400t": "cinestill400d",
 }
 
 # Append the remaining 63 stocks
@@ -300,7 +305,8 @@ for entry in STOCKS_DATA:
 
 
 def get_film(key):
-    return FILMS.get(key, FILMS["portra400"])
+    resolved = FILM_ALIASES.get(key, key)
+    return FILMS.get(resolved, FILMS["portra400"])
 
 
 def list_films():

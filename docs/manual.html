@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Haluro 2.4.5 — Manual de Usuario y Guía de Cuarto Oscuro</title>
+  <title>Haluro 2.4.6 — Manual de Usuario y Guía de Cuarto Oscuro</title>
   <style>
     :root {
       --bg: #121316;
@@ -408,7 +408,7 @@
 <body>
 
   <header class="hero">
-    <span class="badge-tag">Manual Oficial 2.4.5</span>
+    <span class="badge-tag">Manual Oficial 2.4.6</span>
     <h1 class="hero-title">Haluro — Laboratorio Analógico Digital</h1>
     <p class="hero-sub">Guía maestra de inversión fotoquímica, neutralización de soporte base (D-min), ampliadora dicroica CMY y catálogo de 72 emulsiones clásicas.</p>
     <div class="meta-bar">
@@ -444,8 +444,8 @@
           <div class="card-title">🍎 macOS (Apple Silicon e Intel)</div>
           <p>Dispones de dos archivos instaladores optimizados:</p>
           <ul style="padding-left: 1.25rem; margin-bottom: 1rem; color: #d1d5db; font-size: 0.95rem;">
-            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> <code>Haluro-2.4.5-macOS-arm64.dmg</code></li>
-            <li><strong>Intel (Core i5/i7/i9/Xeon):</strong> <code>Haluro-2.4.5-macOS-x86_64.dmg</code></li>
+            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> <code>Haluro-2.4.6-macOS-arm64.dmg</code></li>
+            <li><strong>Intel (Core i5/i7/i9/Xeon):</strong> <code>Haluro-2.4.6-macOS-x86_64.dmg</code></li>
           </ul>
           <p style="font-size: 0.9rem; color: var(--text-muted);">Monta el DMG y arrastra Haluro a tu carpeta <strong>Aplicaciones</strong>.</p>
         </div>
@@ -454,8 +454,8 @@
           <div class="card-title">🪟 Windows 11 (64-bit)</div>
           <p>Instalador oficial disponible:</p>
           <ul style="padding-left: 1.25rem; margin-bottom: 1rem; color: #d1d5db; font-size: 0.95rem;">
-            <li><strong>Instalador Setup:</strong> <code>Haluro-Setup-2.4.5-Win11-x64.exe</code></li>
-            <li><strong>Edición Portátil:</strong> <code>Haluro-Portable-2.4.5-Win11-x64.zip</code></li>
+            <li><strong>Instalador Setup:</strong> <code>Haluro-Setup-2.4.6-Win11-x64.exe</code></li>
+            <li><strong>Edición Portátil:</strong> <code>Haluro-Portable-2.4.6-Win11-x64.zip</code></li>
           </ul>
           <p style="font-size: 0.9rem; color: var(--text-muted);">Se integra automáticamente con Microsoft Edge WebView2 y el modo oscuro de Windows 11.</p>
         </div>
@@ -479,9 +479,16 @@
       <p>La pantalla principal recrea una mesa de luz de laboratorio profesional con calibración de color neutro y fondo antideslumbrante.</p>
 
       <div class="figure-card">
-        <img src="docs/images/01_mesa_de_luz.png" alt="Mesa de luz inicial de Haluro">
+        <img src="docs/images/01_mesa_de_luz.png" alt="Pantalla de bienvenida y mesa de luz guiada de Haluro">
         <div class="figure-caption">
-          <span>Figura 1:</span> Pantalla de bienvenida con zona de soltado (Drop Zone), selector de modos y acceso a muestras RAW de prueba.
+          <span>Figura 1:</span> Estado inicial guiado sobre la mesa de luz con acciones directas para importar fotografías o cargar muestras de laboratorio.
+        </div>
+      </div>
+
+      <div class="figure-card">
+        <img src="docs/images/02_espacio_trabajo_darkrooms.png" alt="Espacio de trabajo completo de Haluro en Modo Emulación">
+        <div class="figure-caption">
+          <span>Figura 2:</span> Espacio de trabajo en modo <strong>Emulación · 72</strong> con catálogo de películas en español, comparativa dividida, densitómetro RGB y tira de 35 mm.
         </div>
       </div>
 
@@ -490,7 +497,7 @@
           <div class="step-num">1</div>
           <div class="step-body">
             <h4>Importar Fotogramas</h4>
-            <p>Arrastra uno o varios archivos RAW (<code>.CR2</code>, <code>.NEF</code>, <code>.ARW</code>, <code>.RAF</code>, <code>.DNG</code>) o imágenes ráster (<code>.TIFF</code> 16-bit, <code>.JPG</code>) directamente al centro de la mesa de luz. También puedes usar el atajo <kbd>⌘ + O</kbd> (<kbd>Ctrl + O</kbd> en Windows).</p>
+            <p>Arrastra uno o varios archivos RAW (<code>.CR2</code>, <code>.CR3</code>, <code>.NEF</code>, <code>.ARW</code>, <code>.RAF</code>, <code>.DNG</code>) o imágenes ráster (<code>.TIFF</code> 16-bit, <code>.PNG</code>, <code>.JPG</code>, <code>.HEIF</code>) al centro de la mesa de luz, o usa <kbd>⌘ + O</kbd> (<kbd>Ctrl + O</kbd> en Windows).</p>
           </div>
         </div>
 
@@ -498,16 +505,16 @@
           <div class="step-num">2</div>
           <div class="step-body">
             <h4>Elegir el Modo de Revelado</h4>
-            <p><strong>Modo Negativo:</strong> Para rollos digitalizados en su estado virgen invertido (con máscara naranja o soporte de B&N).<br>
-            <strong>Modo Darkrooms:</strong> Para aplicar el catálogo de las 72 películas analógicas sobre positivos o fotografías digitales.</p>
+            <p><strong>Emulación · 72:</strong> Aplica el catálogo de 72 emulsiones químicas en español sobre positivos o archivos digitales.<br>
+            <strong>Revelar negativo:</strong> Inversión densitométrica para negativos digitalizados C-41 o Blanco y Negro con neutralización de máscara naranja (D-min).</p>
           </div>
         </div>
 
         <div class="step-item">
           <div class="step-num">3</div>
           <div class="step-body">
-            <h4>Inspección Densitométrica</h4>
-            <p>Pasa el puntero por cualquier región de la fotografía para leer los valores de luminancia y densidad RGB en el densitómetro flotante en tiempo real.</p>
+            <h4>Vistas e Inspección Densitométrica</h4>
+            <p>Alterna rápidamente entre <strong>Dividida</strong> (<kbd>1</kbd>), <strong>Revelada</strong> (<kbd>2</kbd>), <strong>Original</strong> (<kbd>\</kbd>) y <strong>Contactos</strong> (<kbd>3</kbd>), mientras supervisas la exposición con el <strong>Densitómetro RGB</strong> en tiempo real.</p>
           </div>
         </div>
       </div>
@@ -538,39 +545,44 @@
             <td>Navegar al fotograma anterior o siguiente del rollo</td>
           </tr>
           <tr>
-            <td><kbd>I</kbd></td>
-            <td><kbd>I</kbd></td>
-            <td>Activar cuentagotas para muestreo de soporte base D-min</td>
+            <td><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></td>
+            <td><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></td>
+            <td>Cambiar entre vista Dividida, Revelada y Contactos</td>
           </tr>
           <tr>
-            <td><kbd>\</kbd></td>
-            <td><kbd>\</kbd></td>
-            <td>Alternar vista comparativa en vivo (Antes / Después)</td>
+            <td><kbd>\</kbd> (mantener)</td>
+            <td><kbd>\</kbd> (mantener)</td>
+            <td>Inspeccionar temporalmente el original sin procesar</td>
           </tr>
           <tr>
-            <td><kbd>Espacio + Arrastrar</kbd></td>
-            <td><kbd>Espacio + Arrastrar</kbd></td>
-            <td>Moverse (Pan) sobre la mesa de luz con aumento</td>
+            <td><kbd>I</kbd> / <kbd>W</kbd></td>
+            <td><kbd>I</kbd> / <kbd>W</kbd></td>
+            <td>Cuentagotas de soporte D-min (<kbd>I</kbd>) y gris neutro en positivo (<kbd>W</kbd>)</td>
           </tr>
           <tr>
-            <td><kbd>⌘ + 0</kbd></td>
-            <td><kbd>Ctrl + 0</kbd></td>
-            <td>Ajustar fotografía completa a la pantalla</td>
+            <td><kbd>R</kbd> / <kbd>⇧ + R</kbd> / <kbd>F</kbd></td>
+            <td><kbd>R</kbd> / <kbd>Shift + R</kbd> / <kbd>F</kbd></td>
+            <td>Girar 90° derecha/izquierda y espejo horizontal de emulsión</td>
           </tr>
           <tr>
-            <td><kbd>⌘ + 1</kbd></td>
-            <td><kbd>Ctrl + 1</kbd></td>
-            <td>Zoom al 100% (inspección de cristales de plata y grano)</td>
+            <td><kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></td>
+            <td><kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></td>
+            <td>Acercar, alejar o ajustar el zoom completo (arrastra para mover con zoom)</td>
           </tr>
           <tr>
-            <td><kbd>⌘ + S</kbd></td>
-            <td><kbd>Ctrl + S</kbd></td>
-            <td>Exportar copia positiva de alta resolución</td>
+            <td><kbd>⇧ + ⌘ + C</kbd> / <kbd>V</kbd></td>
+            <td><kbd>Ctrl + Shift + C</kbd> / <kbd>V</kbd></td>
+            <td>Copiar y pegar la receta óptica al fotograma activo</td>
           </tr>
           <tr>
-            <td><kbd>R</kbd></td>
-            <td><kbd>R</kbd></td>
-            <td>Girar fotograma 90° en sentido horario</td>
+            <td><kbd>⌘ + S</kbd> / <kbd>⇧ + ⌘ + S</kbd></td>
+            <td><kbd>Ctrl + S</kbd> / <kbd>Ctrl + Shift + S</kbd></td>
+            <td>Guardar copia maestra en Descargas o abrir diálogo Guardar como…</td>
+          </tr>
+          <tr>
+            <td><kbd>L</kbd> / <kbd>?</kbd></td>
+            <td><kbd>L</kbd> / <kbd>?</kbd></td>
+            <td>Alternar luz roja de laboratorio o abrir panel de atajos</td>
           </tr>
         </tbody>
       </table>
@@ -582,9 +594,9 @@
       <p>A diferencia de los editores genéricos que simplemente aplican una curva invertida en X, Haluro modela la física de transmisión lumínica del acetato y la reducción fotoquímica.</p>
 
       <div class="figure-card">
-        <img src="docs/images/03_modo_negativo_inversion.png" alt="Inversión y calibración en Modo Negativo">
+        <img src="docs/images/03_modo_negativo_inversion.png" alt="Inversión y calibración en Modo Revelar negativo">
         <div class="figure-caption">
-          <span>Figura 2:</span> Modo Negativo: calibración de captura, muestreo de soporte D-min y perfiles de escáner.
+          <span>Figura 3:</span> Modo <strong>Revelar negativo</strong>: calibración de captura, soporte base D-min, perfiles de escáner y control de <strong>Densidad neutra (Medios)</strong> en Curva tonal.
         </div>
       </div>
 
@@ -596,14 +608,14 @@
           <div class="step-num">1</div>
           <div class="step-body">
             <h4>Activar Cuentagotas D-min (<kbd>Tecla I</kbd>)</h4>
-            <p>Pulsa la tecla <kbd>I</kbd> o haz clic en el icono del cuentagotas en el panel izquierdo (<strong>Soporte base y rollo</strong>).</p>
+            <p>Pulsa la tecla <kbd>I</kbd> o haz clic en <strong>Muestrear</strong> dentro del panel izquierdo (<strong>Soporte base (D-min) y rollo</strong>), o utiliza <strong>Auto</strong>.</p>
           </div>
         </div>
         <div class="step-item">
           <div class="step-num">2</div>
           <div class="step-body">
             <h4>Muestrear el Borde de la Película</h4>
-            <p>Haz clic en el reborde virgen perforado o en la franja negra sin exponer entre fotogramas. Haluro deducirá la absorción exacta del sustrato y normalizará el histograma en 16 bits.</p>
+            <p>Haz clic en el reborde virgen perforado o en la franja sin exponer entre fotogramas. Haluro deducirá la absorción exacta del sustrato y normalizará el histograma en 16 bits.</p>
           </div>
         </div>
       </div>
@@ -626,35 +638,35 @@
       <p>El panel derecho recrea los mandos de filtración de una ampliadora clásica de color para equilibrar el positivado.</p>
 
       <div class="figure-card">
-        <img src="docs/images/04_ampliadora_cmy_controles.png" alt="Controles de Ampliadora CMY y Curva Tonal">
+        <img src="docs/images/04_ampliadora_cmy_controles.png" alt="Controles de ampliadora CMY, curvas tonales y filtros ópticos en Haluro">
         <div class="figure-caption">
-          <span>Figura 3:</span> Ampliadora dicroica CMY, balance de 3 vías (sombras, medios tonos, luces) y corrección de gamma.
+          <span>Figura 4:</span> Cabezal <em>Ampliadora CMY y 3 vías</em>, <em>Densidad neutra (Medios)</em> y bloque <em>Filtros y nitidez óptica</em> en modo Revelada.
         </div>
       </div>
 
-      <h3>Filtrado por Sustracción de Color</h3>
-      <p>Modifica las densidades cromáticas con precisión de laboratorista:</p>
+      <h3>Filtrado por Sustracción de Color y Densidad</h3>
+      <p>Desde <strong>Curva tonal y proceso</strong> y <strong>Ampliadora CMY y 3 vías</strong> calibras densidad y color con lógica de cuarto oscuro:</p>
       <ul style="padding-left: 1.5rem; margin-bottom: 1.25rem; color: #d1d5db;">
-        <li><strong>Filtro Cian (C):</strong> Calibra la dominancia de rojos en las sombras y tonos medios.</li>
-        <li><strong>Filtro Magenta (M):</strong> Modula el equilibrio entre verde y magenta (clave para afinar tonos de piel).</li>
-        <li><strong>Filtro Amarillo (Y):</strong> Controla la temperatura analógica (calidez vs. frialdad del papel).</li>
+        <li><strong>Densidad neutra (Medios) y Latitud Pull ↔ Push:</strong> Ajusta la densidad media y el carácter del revelado antes o después de equilibrar el color.</li>
+        <li><strong>Filtros Cian / Magenta / Amarillo (CMY):</strong> Regulan la dominancia cromática por sustracción para corregir sombras frías, equilibrar tonos de piel y ajustar la calidez del positivado.</li>
+        <li><strong>Gris neutro (<kbd>W</kbd>) y Auto equilibrio:</strong> Permite muestrear una zona neutra directamente en el visor o calcular un equilibrio cromático automático.</li>
       </ul>
 
       <div class="callout info">
-        <div class="callout-title">💡 Balance de 3 Vías</div>
-        <p>Aísla la corrección cromática por zonas de luminancia: limpia el color de las sombras oscuras sin descalibrar el cielo o los tonos de piel en los medios tonos.</p>
+        <div class="callout-title">💡 Balance de 3 Vías y Filtros Ópticos</div>
+        <p>Alterna entre <strong>Global</strong>, <strong>Sombras</strong>, <strong>Medios</strong> y <strong>Luces</strong> para aislar correcciones por zona de luminancia, y despliega <strong>Filtros y nitidez óptica</strong> para activar <em>Apagada / Lab / Escáner</em>, <em>Intensidad de acutancia</em>, <em>Filtro 85B Cálido</em>, <em>Filtro Skylight (Anti-rojo)</em>, <em>Filtro Sombra (Anti-verde)</em>, <em>Halación y difusión suave</em> y <em>Acabado mate / velo suave</em>.</p>
       </div>
     </section>
 
     <!-- 5. CATÁLOGO DE PELÍCULAS -->
     <section id="catalogo">
       <h2 class="section-heading"><span class="num">05</span> Catálogo de 72 Emulsiones Clásicas</h2>
-      <p>En el <strong>Modo Darkrooms</strong>, Haluro pone a tu disposición un catálogo de 72 emulsiones icónicas con sus curvas características sensitométricas (pie, zona recta y hombro).</p>
+      <p>En el modo <strong>Emulación · 72</strong>, Haluro pone a tu disposición un catálogo de 72 emulsiones icónicas en español, organizado por familias químicas y curvas características sensitométricas.</p>
 
       <div class="figure-card">
-        <img src="docs/images/06_catalogo_peliculas_cinestill.png" alt="Catálogo de emulsiones con CineStill 800T">
+        <img src="docs/images/06_catalogo_peliculas_cinestill.png" alt="Catálogo de 72 emulsiones con filtro Cine y CineStill 800T activo">
         <div class="figure-caption">
-          <span>Figura 4:</span> Catálogo interactivo de emulsiones con selector de familias y vista previa de CineStill 800T.
+          <span>Figura 5:</span> Selector de familias en español dentro de <em>Emulación · 72</em> mostrando el filtro <em>Cine</em> con CineStill 800T.
         </div>
       </div>
 
@@ -698,62 +710,68 @@
       <p>Cada efecto fotoquímico en Haluro se genera a partir de modelos físicos del comportamiento de la luz y la plata coloidal.</p>
 
       <div class="figure-card">
-        <img src="docs/images/05_optica_grano_exif.png" alt="Filtros Ópticos y Textura Fotoquímica">
+        <img src="docs/images/05_optica_grano_exif.png" alt="Revelado Plata B&N, grano de haluro de plata, viñeteo, EXIF analógico y TIFF 16b">
         <div class="figure-caption">
-          <span>Figura 5:</span> Ajustes de grano orgánico, halación analógica, virados químicos de papel y metadatos EXIF.
+          <span>Figura 6:</span> Modo <em>Plata B&N</em> (Kodak Tri-X 400) con ajustes de <em>Química y óptica</em>, <em>Ficha técnica EXIF analógica</em> activa y salida en <em>TIFF 16b</em>.
         </div>
       </div>
 
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">🔴 Halación Analógica</div>
-          <p>Modela el rebote interno de fotones contra la base de película cuando falta la capa antihalo (como en CineStill). Genera un halo rojizo difuso en bombillas, faroles y reflejos solares.</p>
+          <div class="card-title">🔴 Halación y Viñeteo Óptico</div>
+          <p>En <strong>Química y óptica</strong> regulas <em>Compensación de exposición</em>, <em>Halación en altas luces</em> (rebote difuso sobre la base de película), <em>Viñeteo óptico</em> y el <em>Sello de fecha en cuarzo ámbar</em> sobre la emulsión.</p>
         </div>
 
         <div class="card">
           <div class="card-title">🧂 Grano de Haluro de Plata</div>
-          <p>Elige entre cristales <strong>Cúbicos</strong> (textura orgánica y tridimensional) o cristales planos <strong>Tabulares T-Grain</strong> (textura moderna y microscópica). Modula intensidad, tamaño y acutancia.</p>
+          <p>Ajusta el <em>Grano de haluro de plata</em> para emular textura orgánica de película de 35mm o formato medio, complementado en negativo por los controles de <em>Intensidad de acutancia</em> en el bloque óptico.</p>
         </div>
       </div>
 
-      <h3>Virados Químicos para Blanco y Negro</h3>
+      <h3>Virados y Procesos Químicos de Papel (Plata B&amp;N)</h3>
+      <p>Dentro de <strong>Medio fotoquímico y acabado</strong> en modo <em>Plata B&amp;N</em> puedes elegir entre 10 acabados de laboratorio:</p>
       <ul style="padding-left: 1.5rem; color: #d1d5db;">
-        <li><strong>Virado al Selenio:</strong> Profundiza los negros (D-max) y enfría sutilmente los medios tonos. Tradicional para copias de museo.</li>
-        <li><strong>Virado al Sepia:</strong> Transforma la plata metálica en sulfuro de plata, otorgando una calidez clásica.</li>
-        <li><strong>Cianotipia (Azul Prusia):</strong> Tiñe sombras y medios tonos con el azul clásico de la solución ferrosa.</li>
-        <li><strong>Virado al Oro:</strong> Tono cálido rojizo con máxima protección contra el deterioro temporal.</li>
+        <li><strong>Gelatina de Plata Neutra y Papel Algodón Mate Museo:</strong> Respuesta clásica en blanco y negro neutro o acabado mate de archivo.</li>
+        <li><strong>Selenio #1, Selenio #2 y Selenio #3:</strong> Intensidades progresivas de virado al selenio para profundizar negros y enfriar tonos medios.</li>
+        <li><strong>Platino / Paladio Artesanal y Sepia Sulfuro / Kodak Brown:</strong> Tonos cálidos nobles y calidez clásica al sulfuro sobre copia baritada.</li>
+        <li><strong>Virado Cobre y Hierro (Split), Clorobromuro Cálido (Fomatone) y Bromuro Frío Azul-Negro:</strong> Virados divididos, papeles cálidos centroeuropeos y negros azulados profundos.</li>
       </ul>
     </section>
 
     <!-- 7. METADATOS EXIF Y EXPORTACIÓN -->
     <section id="exif-export">
-      <h2 class="section-heading"><span class="num">07</span> Metadatos Analógicos (Analog EXIF) y Exportación</h2>
-      <p>Conserva la memoria histórica de tus rollos incrustando los datos de la toma analógica directamente en el archivo digital.</p>
+      <h2 class="section-heading"><span class="num">07</span> Ficha Técnica EXIF Analógica y Exportación</h2>
+      <p>Conserva la trazabilidad completa de cada carrete incrustando los metadatos de toma y revelado directamente en el archivo maestro exportado.</p>
 
       <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="card-title">📝 Campos de Analog EXIF</div>
+        <div class="card-title">📝 Campos de la Ficha técnica EXIF analógica</div>
         <div class="grid-2" style="margin: 0.5rem 0 0;">
           <div>
-            <p style="margin-bottom: 0.25rem;"><strong>Cámara Clásica:</strong> Leica M6, Pentax 67, Canon AE-1...</p>
-            <p style="margin-bottom: 0.25rem;"><strong>Lente Analógico:</strong> Carl Zeiss Planar 80mm f/2.8...</p>
-            <p style="margin-bottom: 0.25rem;"><strong>Emulsión:</strong> Kodak Portra 400...</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Cámara y Óptica:</strong> Marca cámara, Modelo cámara, Objetivo / Óptica</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Película y Exposición:</strong> Película disparada, ISO expuesto, Formato</p>
           </div>
           <div>
-            <p style="margin-bottom: 0.25rem;"><strong>Rollo / Fotograma:</strong> Rollo #04 - Frame 12</p>
-            <p style="margin-bottom: 0.25rem;"><strong>Revelado / Químico:</strong> D-76 1+1 @ 20°C (10m 30s)</p>
-            <p style="margin-bottom: 0.25rem;"><strong>Fecha de Toma:</strong> Fecha original de exposición</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Laboratorio y Escaneo:</strong> Revelador / Proceso, Escáner / Captura</p>
+            <p style="margin-bottom: 0.25rem;"><strong>Autoría y Notas:</strong> Fotógrafo / Autor, Notas de cuarto oscuro, <em>Copiar pie técnico</em> y <em>Limpiar ficha</em></p>
           </div>
         </div>
       </div>
 
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">🗂️ Exportar en TIFF de 16 Bits</div>
-          <p>Sin compresión con pérdidas y con la máxima profundidad de color de 16 bits por canal. Es el formato recomendado para impresión de bellas artes, archivo patrimonial o retoque posterior en Photoshop.</p>
+          <div class="card-title">🗂️ Formato maestro: TIFF 16b y PNG</div>
+          <p>Elige <strong>TIFF 16b</strong> en la barra inferior para conservar 16 bits por canal ideales para impresión de bellas artes y archivo, o <strong>PNG</strong> para salida sin pérdidas lista para edición digital.</p>
         </div>
         <div class="card">
-          <div class="card-title">📱 Exportar en JPEG (Calidad 100%)</div>
-          <p>Genera un archivo con perfil sRGB calibrado para que los colores se vean exactamente iguales en pantallas Retina, teléfonos inteligentes y plataformas como Instagram o 500px.</p>
+          <div class="card-title">📱 Formato maestro: JPG 4:4:4</div>
+          <p>Exporta en <strong>JPG 4:4:4</strong> sin submuestreo de croma para preservar el máximo detalle en rojos y naranjas analógicos en pantallas Retina, teléfonos y publicación web.</p>
+        </div>
+      </div>
+
+      <div class="figure-card" style="margin-top: 1.5rem;">
+        <img src="docs/images/07_hoja_de_contactos.png" alt="Pestaña Contactos interactiva con hoja de contactos de 35mm y tira inferior">
+        <div class="figure-caption">
+          <span>Figura 7:</span> Pestaña <em>Contactos</em> interactiva con cuadrícula configurable (3 a 6 columnas), botón contextual <em>Guardar contactos</em> e indicadores ámbar en la tira de fotogramas.
         </div>
       </div>
 
@@ -761,9 +779,9 @@
         <div class="card-title">🎞️ Hoja de Contactos y Revelado en Lote Multinúcleo</div>
         <p>Haluro ofrece herramientas integradas para trabajar con rollos fotográficos completos:</p>
         <ul style="padding-left: 1.5rem; color: #d1d5db; margin-top: 0.5rem;">
-          <li><strong>Mesa de Luz Viva (Pestaña Contactos):</strong> Compone la cuadrícula analógica mediante hilos concurrentes en memoria. Puedes hacer clic sobre cualquier foto de la hoja para editarla al instante, usar la rueda del ratón para hacer zoom panorámico, personalizar el nombre del rollo y elegir entre 3, 4, 5 o 6 columnas. La tira inferior marca con un punto ámbar los fotogramas con ajustes propios.</li>
-          <li><strong>Guardar Solo la Hoja de Contactos:</strong> En la pestaña <em>«Contactos»</em>, el botón principal superior cambia contextualmente a <em>«Guardar contactos»</em> para exportar directamente la hoja en alta resolución de archivo (o usa <em>«Guardar como…»</em> para elegir carpeta y nombre).</li>
-          <li><strong>Revelar Rollo Completo con Progreso en Vivo:</strong> Procesa todo el carrete en paralelo aprovechando todos los núcleos de tu procesador con barra de avance fotograma a fotograma y botón para cancelar, añadiendo automáticamente la hoja de contactos a la carpeta del rollo.</li>
+          <li><strong>Mesa de Luz Viva (Pestaña Contactos, tecla <kbd>3</kbd>):</strong> Compone la cuadrícula analógica mediante hilos concurrentes en memoria. Puedes hacer clic sobre cualquier foto de la hoja para editarla al instante, usar la rueda del ratón para hacer zoom panorámico, personalizar el nombre del rollo y elegir entre 3, 4, 5 o 6 columnas. La tira inferior marca con un punto ámbar los fotogramas con ajustes propios.</li>
+          <li><strong>Guardar Solo la Hoja de Contactos:</strong> En la pestaña <em>«Contactos»</em>, el botón principal superior cambia contextualmente a <em>«Guardar contactos»</em> para exportar directamente la hoja en alta resolución de archivo (también disponible desde el desplegable como <em>«Guardar solo contactos»</em> o con <em>«Guardar como…»</em> para elegir carpeta y nombre).</li>
+          <li><strong>Revelar Rollo Completo con Progreso en Vivo:</strong> Pulsa <strong>Revelar rollo</strong> en la cabecera para procesar todo el carrete en paralelo aprovechando todos los núcleos de tu procesador, con barra de avance fotograma a fotograma, opción para cancelar e inclusión automática de la hoja de contactos.</li>
         </ul>
       </div>
     </section>
@@ -773,30 +791,30 @@
       <h2 class="section-heading"><span class="num">08</span> Preguntas Frecuentes y Diagnóstico</h2>
       
       <div class="card" style="margin-bottom: 1rem;">
-        <div class="card-title">❓ ¿Cómo proceso un rollo completo de 36 fotos con los mismos ajustes?</div>
-        <p>Ajusta el primer fotograma (muestreo D-min y cabezal dicroico), haz clic en <strong>«Guardar Ajustes de Rollo»</strong> en el panel izquierdo y luego arrastra el resto de fotos a la mesa de luz. Pulsa <strong>«Aplicar por Lote y Exportar»</strong> para procesar todo el carrete en segundo plano.</p>
+        <div class="card-title">❓ ¿Cómo proceso un rollo completo con los mismos ajustes?</div>
+        <p>Calibra el primer fotograma y pulsa <strong>Sincronizar rollo</strong> (<em>Sincr. rollo</em>) en la barra del visor para propagar la receta al resto del carrete, o usa <strong>Copiar</strong> (<kbd>⇧</kbd> + <kbd>⌘</kbd> + <kbd>C</kbd>) y <strong>Pegar</strong> (<kbd>⇧</kbd> + <kbd>⌘</kbd> + <kbd>V</kbd>) en fotogramas concretos. Finalmente pulsa <strong>Revelar rollo</strong> para exportar todo a resolución nativa.</p>
       </div>
 
       <div class="card" style="margin-bottom: 1rem;">
-        <div class="card-title">❓ Mi foto no tiene borde con película virgen visible para el D-min. ¿Qué hago?</div>
-        <p>En el panel derecho, pulsa el botón <strong>«Equilibrio de escena (Sin bordes)»</strong>. El algoritmo analizará la distribución de densidades de las sombras profundas para estimar matemáticamente el sustrato base sin necesidad del borde perforado.</p>
+        <div class="card-title">❓ Mi negativo no tiene borde con película virgen visible para el D-min. ¿Qué hago?</div>
+        <p>En <strong>Soporte base (D-min) y rollo</strong> pulsa <strong>Auto</strong> y abre <strong>Análisis de rollo y márgenes</strong> para estimar la máscara base del rollo. Después ajusta el color con <strong>Auto equilibrio</strong> o muestrea una superficie neutra de la imagen con <strong>Gris neutro (<kbd>W</kbd>)</strong>.</p>
       </div>
 
       <div class="card">
-        <div class="card-title">❓ ¿Puedo guardar mis combinaciones de película y grano favoritas?</div>
-        <p>Sí. En la parte superior del inspector derecho encontrarás el botón <strong>«Guardar Preset»</strong>. Puedes almacenar perfiles personalizados (por ejemplo, <em>«Mi Portra 400 + Frontier + Grano Fino»</em>) para reutilizarlos en un clic.</p>
+        <div class="card-title">❓ ¿Cómo deshago cambios o recupero versiones ya reveladas?</div>
+        <p>Usa <kbd>⌘</kbd> + <kbd>Z</kbd> para deshacer y <kbd>⇧</kbd> + <kbd>⌘</kbd> + <kbd>Z</kbd> para rehacer cualquier ajuste no destructivo sobre la receta actual. Si además quieres consultar exportaciones anteriores, abre el botón <strong>Historial de versiones reveladas</strong> en la barra superior.</p>
       </div>
 
       <div class="card" style="margin-top: 1rem;">
         <div class="card-title">🔄 ¿Cómo mantengo Haluro actualizado con las últimas versiones?</div>
-        <p>Haluro incluye un sistema inteligente y 100% privado de actualización. Al iniciar la aplicación o al pulsar <strong>«Comprobar ahora»</strong> en el menú <em>Acerca de</em>, Haluro consulta si existe una nueva versión oficial en GitHub. Si hay una actualización disponible, un distintivo sutil te mostrará las novedades y descargará el instalador específico para tu equipo (macOS Apple Silicon, macOS Intel o Windows) en 1 solo clic.</p>
+        <p>Haluro incluye un sistema de verificación de actualizaciones. Al iniciar o desde <strong>Comprobar ahora</strong> en el menú <em>Acerca de</em>, consulta si existe una versión oficial en GitHub y te muestra los detalles para descargar el instalador correspondiente a tu equipo (macOS Apple Silicon, macOS Intel o Windows).</p>
       </div>
     </section>
 
   </div>
 
   <footer>
-    <p><strong>Haluro 2.4.5 — Laboratorio Analógico Digital</strong></p>
+    <p><strong>Haluro 2.4.6 — Laboratorio Analógico Digital</strong></p>
     <p style="margin-top: 0.25rem;">Desarrollado para fotógrafos que aprecian la ciencia y el alma de la fotografía química.</p>
   </footer>
 

@@ -27,6 +27,7 @@ from engine.films import list_films, get_film, LUT_DIR
 from engine.pipeline import (
     develop_frame,
     format_analog_caption,
+    get_srgb_icc_bytes,
     load_image_linear,
     linear_to_srgb,
     save_output_image,
@@ -75,6 +76,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 DEVELOPED_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_OUTPUT_EXTS = {"jpg": ".jpg", "jpeg": ".jpg", "png": ".png", "tiff": ".tiff", "tif": ".tiff"}
+ALLOWED_INPUT_EXTS = RAW_EXTENSIONS | HEIF_EXTENSIONS | {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"}
 
 app = Flask(
     __name__,
@@ -134,6 +136,21 @@ def _sanitize_filename(raw_name):
     if not clean or clean.startswith("."):
         clean = f"captura_{uuid.uuid4().hex[:8]}{ext or '.jpg'}"
     return clean
+
+
+def _unique_upload_path(filename: str) -> Path:
+    """Return a non-colliding path inside UPLOAD_DIR so duplicate basenames never overwrite prior scans."""
+    candidate = UPLOAD_DIR / filename
+    if not candidate.exists():
+        return candidate
+    stem = Path(filename).stem
+    ext = Path(filename).suffix
+    idx = 2
+    while True:
+        cand = UPLOAD_DIR / f"{stem}_{idx}{ext}"
+        if not cand.exists():
+            return cand
+        idx += 1
 
 
 def _is_within(child: Path, parent: Path) -> bool:
@@ -358,6 +375,57 @@ def _record_history_entry(pil_img, final_saved_path: Path, meta: dict):
     return meta_out
 
 
+def _resolve_sheet_meta(valid_filenames, per_frame_recipes, app_mode, fallback_key, fallback_name):
+    """Compute contact-sheet header stock label (detecting mixed rolls) and short frame stems."""
+    frame_labels = [Path(fn).stem for fn in valid_filenames]
+    if not valid_filenames:
+        return fallback_name, frame_labels
+
+    recipes = per_frame_recipes if isinstance(per_frame_recipes, dict) else {}
+    used_keys = []
+    seen = set()
+
+    for fname in valid_filenames:
+        fr = recipes.get(fname)
+        if app_mode == "negative":
+            raw_k = (fr.get("profile") if isinstance(fr, dict) else None) or fallback_key
+            resolved_k = raw_k if raw_k in MINILAB_PROFILES else fallback_key
+        else:
+            raw_k = (fr.get("film") if isinstance(fr, dict) else None) or fallback_key
+            resolved_k = get_film(raw_k)["key"]
+        if resolved_k not in seen:
+            seen.add(resolved_k)
+            used_keys.append(resolved_k)
+
+    if app_mode == "negative":
+        if len(used_keys) > 1:
+            return f"Negativo · Mixto ({len(used_keys)} perfiles)", frame_labels
+        p_info = MINILAB_PROFILES.get(used_keys[0], MINILAB_PROFILES["frontier"])
+        return f"Negativo · {p_info['name']}", frame_labels
+
+    if len(used_keys) > 1:
+        return f"Rollo mixto ({len(used_keys)} emulsiones)", frame_labels
+    return get_film(used_keys[0])["name"], frame_labels
+
+
+def _collect_sheet_frames(filenames, render_thumb_fn):
+    """Render sheet thumbnails in parallel while preserving 1:1 (valid_filenames, images) order."""
+    def _task(fname):
+        img = render_thumb_fn(fname)
+        return (fname, img) if img is not None else None
+
+    max_workers = min(6, max(1, os.cpu_count() or 1))
+    if len(filenames) > 1 and max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            pairs = list(executor.map(_task, filenames))
+    else:
+        pairs = [_task(fn) for fn in filenames]
+
+    valid_filenames = [fn for item in pairs if item is not None for fn, _ in [item]]
+    rendered_images = [img for item in pairs if item is not None for _, img in [item]]
+    return valid_filenames, rendered_images
+
+
 # -------------------------------------------------------------
 # CORE STUDIO & FILM EMULATION ROUTES
 # -------------------------------------------------------------
@@ -450,21 +518,25 @@ def api_upload():
     if not f.filename:
         return jsonify({"error": "Nombre de archivo vacío"}), 400
 
+    raw_ext = Path(f.filename).suffix.lower()
+    if raw_ext and raw_ext not in ALLOWED_INPUT_EXTS:
+        return jsonify({"error": f"Formato no compatible ({raw_ext}). Usa RAW, TIFF, JPG, PNG o HEIF."}), 400
+
     filename = _sanitize_filename(f.filename)
-    save_path = UPLOAD_DIR / filename
-    # Avoid overwriting different uploads with identical names if needed
+    save_path = _unique_upload_path(filename)
+    stored_filename = save_path.name
     f.save(save_path)
 
     suffix_lower = save_path.suffix.lower()
     is_raw = suffix_lower in RAW_EXTENSIONS
     is_heif = suffix_lower in HEIF_EXTENSIONS
     return jsonify({
-        "filename": filename,
-        "name": f.filename,
+        "filename": stored_filename,
+        "name": Path(f.filename).name,
         "is_raw": is_raw,
         "is_heif": is_heif,
         "size_bytes": save_path.stat().st_size,
-        "thumb_url": f"/api/thumbnail/{filename}",
+        "thumb_url": f"/api/thumbnail/{stored_filename}",
     })
 
 
@@ -592,7 +664,7 @@ def api_develop_full():
             float_srgb=srgb_f,
             analog_meta=analog_meta,
         )
-        return (out_name, dev_img)
+        return (fname, out_name, dev_img)
 
     max_workers = min(4, max(1, os.cpu_count() or 1))
     if len(filenames) > 1 and max_workers > 1:
@@ -601,24 +673,30 @@ def api_develop_full():
     else:
         results = [_develop_one(fn) for fn in filenames]
 
+    valid_filenames = []
     developed_images = []
     output_files = []
     for res in results:
         if res:
-            out_name, dev_img = res
+            fn, out_name, dev_img = res
+            valid_filenames.append(fn)
             output_files.append(out_name)
             developed_images.append(dev_img)
 
     sheet_created = False
     if gen_sheet and developed_images:
+        sheet_film_name, frame_labels = _resolve_sheet_meta(
+            valid_filenames, per_frame_recipes, "simulation", film_key, film_info["name"]
+        )
         sheet = generate_contact_sheet(
             developed_images,
             roll_name=raw_roll_name,
-            film_name=film_info["name"],
+            film_name=sheet_film_name,
             columns=columns,
+            frame_labels=frame_labels,
         )
         sheet_path = out_roll_dir / "SHEET.jpg"
-        sheet.save(sheet_path, quality=93, subsampling=0)
+        sheet.save(sheet_path, quality=93, subsampling=0, icc_profile=get_srgb_icc_bytes())
         output_files.append("SHEET.jpg")
         sheet_created = True
 
@@ -681,23 +759,22 @@ def api_contact_sheet_preview():
             flip_h=f_flip,
         )
 
-    max_workers = min(6, max(1, os.cpu_count() or 1))
-    if len(filenames) > 1 and max_workers > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
-    else:
-        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+    valid_filenames, rendered_images = _collect_sheet_frames(filenames, _render_thumb)
 
     if not rendered_images:
         return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
 
+    sheet_film_name, frame_labels = _resolve_sheet_meta(
+        valid_filenames, per_frame_recipes, "simulation", film_key, film_info["name"]
+    )
     sheet, layout_boxes = generate_contact_sheet(
         rendered_images,
         roll_name=raw_roll_name,
-        film_name=film_info["name"],
+        film_name=sheet_film_name,
         columns=columns,
         thumb_width=480,
         return_layout=True,
+        frame_labels=frame_labels,
     )
 
     cache_dir = DEVELOPED_DIR / "cache"
@@ -781,25 +858,24 @@ def api_save_contact_sheet():
             flip_h=f_flip,
         )
 
-    max_workers = min(6, max(1, os.cpu_count() or 1))
-    if len(filenames) > 1 and max_workers > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
-    else:
-        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+    valid_filenames, rendered_images = _collect_sheet_frames(filenames, _render_thumb)
 
     if not rendered_images:
         return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
 
+    sheet_film_name, frame_labels = _resolve_sheet_meta(
+        valid_filenames, per_frame_recipes, "simulation", film_key, film_info["name"]
+    )
     sheet = generate_contact_sheet(
         rendered_images,
         roll_name=raw_roll_name,
-        film_name=film_info["name"],
+        film_name=sheet_film_name,
         columns=columns,
         thumb_width=960,
+        frame_labels=frame_labels,
     )
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    sheet.save(target_path, format="JPEG", quality=94, subsampling=0)
+    sheet.save(target_path, format="JPEG", quality=94, subsampling=0, icc_profile=get_srgb_icc_bytes())
 
     if reveal:
         reveal_in_file_manager(target_path)
@@ -1424,7 +1500,7 @@ def api_negative_preview():
         "profile": profile_info,
     }
     if include_original:
-        crop_milli = int(round(params["crop_pct"] * 1000))
+        crop_milli = 0 if bool(data.get("original_uncropped", False)) else int(round(params["crop_pct"] * 1000))
         resp["original"] = _cached_original_b64(
             str(fpath), fpath.stat().st_mtime_ns, 1280, params["rotate"], params["flip_h"], crop_milli
         )
@@ -1606,7 +1682,7 @@ def api_negative_develop_full():
             float_srgb=srgb_f,
             analog_meta=analog_meta,
         )
-        return (out_name, pos_img)
+        return (fname, out_name, pos_img)
 
     max_workers = min(4, max(1, os.cpu_count() or 1))
     if len(filenames) > 1 and max_workers > 1:
@@ -1615,24 +1691,30 @@ def api_negative_develop_full():
     else:
         results = [_develop_one(fn) for fn in filenames]
 
+    valid_filenames = []
     developed_images = []
     output_files = []
     for res in results:
         if res:
-            out_name, pos_img = res
+            fn, out_name, pos_img = res
+            valid_filenames.append(fn)
             output_files.append(out_name)
             developed_images.append(pos_img)
 
     sheet_created = False
     if gen_sheet and developed_images:
+        sheet_film_name, frame_labels = _resolve_sheet_meta(
+            valid_filenames, per_frame_recipes, "negative", profile_key, f"Negativo · {profile_info['name']}"
+        )
         sheet = generate_contact_sheet(
             developed_images,
             roll_name=raw_roll_name,
-            film_name=f"Negativo · {profile_info['name']}",
+            film_name=sheet_film_name,
             columns=columns,
+            frame_labels=frame_labels,
         )
         sheet_path = out_roll_dir / "SHEET.jpg"
-        sheet.save(sheet_path, quality=93, subsampling=0)
+        sheet.save(sheet_path, quality=93, subsampling=0, icc_profile=get_srgb_icc_bytes())
         output_files.append("SHEET.jpg")
         sheet_created = True
 
@@ -1675,23 +1757,22 @@ def api_negative_contact_sheet_preview():
 
         return process_negative_to_image(fpath, max_dim=720, return_float=False, **frame_params)
 
-    max_workers = min(6, max(1, os.cpu_count() or 1))
-    if len(filenames) > 1 and max_workers > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
-    else:
-        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+    valid_filenames, rendered_images = _collect_sheet_frames(filenames, _render_thumb)
 
     if not rendered_images:
         return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
 
+    sheet_film_name, frame_labels = _resolve_sheet_meta(
+        valid_filenames, per_frame_recipes, "negative", profile_key, f"Negativo · {profile_info['name']}"
+    )
     sheet, layout_boxes = generate_contact_sheet(
         rendered_images,
         roll_name=raw_roll_name,
-        film_name=f"Negativo · {profile_info['name']}",
+        film_name=sheet_film_name,
         columns=columns,
         thumb_width=480,
         return_layout=True,
+        frame_labels=frame_labels,
     )
 
     cache_dir = DEVELOPED_DIR / "cache"
@@ -1755,25 +1836,24 @@ def api_negative_save_contact_sheet():
 
         return process_negative_to_image(fpath, max_dim=1400, return_float=False, **frame_params)
 
-    max_workers = min(6, max(1, os.cpu_count() or 1))
-    if len(filenames) > 1 and max_workers > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            rendered_images = [img for img in executor.map(_render_thumb, filenames) if img is not None]
-    else:
-        rendered_images = [img for fn in filenames if (img := _render_thumb(fn)) is not None]
+    valid_filenames, rendered_images = _collect_sheet_frames(filenames, _render_thumb)
 
     if not rendered_images:
         return jsonify({"error": "No se pudieron procesar fotogramas para la hoja"}), 400
 
+    sheet_film_name, frame_labels = _resolve_sheet_meta(
+        valid_filenames, per_frame_recipes, "negative", profile_key, f"Negativo · {profile_info['name']}"
+    )
     sheet = generate_contact_sheet(
         rendered_images,
         roll_name=raw_roll_name,
-        film_name=f"Negativo · {profile_info['name']}",
+        film_name=sheet_film_name,
         columns=columns,
         thumb_width=960,
+        frame_labels=frame_labels,
     )
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    sheet.save(target_path, format="JPEG", quality=94, subsampling=0)
+    sheet.save(target_path, format="JPEG", quality=94, subsampling=0, icc_profile=get_srgb_icc_bytes())
 
     if reveal:
         reveal_in_file_manager(target_path)
@@ -1947,10 +2027,12 @@ def _run_batch_roll_worker(job_id, data):
             )
             return
 
+        valid_filenames = []
         developed_images = []
         output_files = []
         for idx in sorted(indexed_results.keys()):
             out_name, img = indexed_results[idx]
+            valid_filenames.append(filenames[idx])
             output_files.append(out_name)
             developed_images.append(img)
 
@@ -1962,14 +2044,22 @@ def _run_batch_roll_worker(job_id, data):
                 current_file="Componiendo hoja de contactos de archivo…",
                 elapsed_seconds=round(time.time() - t_start, 1),
             )
+            batch_sheet_film, frame_labels = _resolve_sheet_meta(
+                valid_filenames,
+                per_frame_recipes,
+                app_mode,
+                profile_key if is_neg else film_key,
+                sheet_film_name,
+            )
             sheet = generate_contact_sheet(
                 developed_images,
                 roll_name=raw_roll_name,
-                film_name=sheet_film_name,
+                film_name=batch_sheet_film,
                 columns=columns,
+                frame_labels=frame_labels,
             )
             sheet_path = out_roll_dir / "SHEET.jpg"
-            sheet.save(sheet_path, quality=93, subsampling=0)
+            sheet.save(sheet_path, quality=93, subsampling=0, icc_profile=get_srgb_icc_bytes())
             output_files.append("SHEET.jpg")
             sheet_created = True
 

@@ -39,10 +39,14 @@
 1. **Emulación Analógica Auténtica:** Simulación espectral de **72 películas químicas clásicas** (Kodak Portra, Tri-X, Ektachrome, Fuji Velvia, Provia, Neopan, Ilford HP5+, Delta, CineStill 800T, etc.) mediante matrices de interpolación tetraédrica 3D LUT, grano volumétrico no repetitivo, halo rojo de capa antihalo y viñeteo óptico.
 2. **Revelado Digital de Negativos:** Inversión sensitométrica basada en el modelo **Hurter–Driffield (H&D)** para negativos color (C-41) y blanco y negro digitalizados mediante escáner plano, escáner dedicado de película o cámara digital con fuente de luz LED. Elimina matemáticamente la máscara naranja (D-min), desacopla el balance de blancos de la escena y emula la respuesta tonal de papeles fotográficos tradicionales (**Fuji Crystal Archive RA-4**, **Kodak Vision 2383 ECP** de cine, Minilabs **Noritsu / Frontier** y perfil logarítmico **V-Log**).
 
-<img width="1507" height="892" alt="image" src="https://github.com/user-attachments/assets/799a98b0-341f-42d2-a1ae-2a63a6a0799f" />
+![Espacio de trabajo Haluro v2.4.5 en modo Emulación · 72 con Kodak Portra 400 y vista dividida](docs/images/02_espacio_trabajo_darkrooms.png)
+*Mesa de luz en modo **Emulación · 72** con vista dividida, catálogo en español e histograma Densitómetro RGB.*
 
+![Inversión de negativo C-41 en modo Revelar negativo con soporte D-min, Densidad neutra y Auto equilibrio](docs/images/03_modo_negativo_inversion.png)
+*Laboratorio de **Revelado Negativo** (C-41 · Fuji Frontier SP-3000) con muestreo de soporte base (D-min), `Densidad neutra (Medios)` y ampliación dicroica.*
 
-<img width="1512" height="889" alt="image" src="https://github.com/user-attachments/assets/574916ec-7748-4fe2-b841-cbb806056818" />
+![Pestaña interactiva Contactos con tira inferior de fotogramas y exportación directa de hoja de contactos](docs/images/07_hoja_de_contactos.png)
+*Pestaña interactiva **Contactos** (`HALURO · SERIE 35MM`) con cuadrícula configurable (3 a 6 columnas), zoom panorámico y exportación contextual con `Guardar contactos`.*
 
 ---
 
@@ -97,11 +101,13 @@
 - Filtro de acutancia selectiva aplicada en el canal de luminancia (Y) en modos `lab` o `scanner`.
 - Protección anti-grano adaptativa: modula la ganancia en función de la luminancia para no amplificar el ruido de fondo en sombras ni estropear la textura orgánica del grano de película.
 
-### Módulo 6 — Ficha Técnica Analógica EXIF y Exportación Maestra
-- Inyección EXIF nativa en metadatos estándar (`Make`, `Model`, `LensModel`, `ISOSpeedRatings`, `Artist`, `ImageDescription` y `UserComment` Unicode UTF-16).
+### Módulo 6 — Ficha Técnica Analógica EXIF, Hoja de Contactos y Exportación Maestra
+- Inyección EXIF nativa en metadatos estándar (`Make`, `Model`, `LensModel`, `ISOSpeedRatings`, `Artist`, `ImageDescription` y `UserComment` Unicode UTF-16) desde **Ficha técnica EXIF analógica**.
 - Autocompletado con sugerencias rápidas para cámaras clásicas (Leica, Hasselblad, Pentax, Canon, Nikon, Mamiya, Rolleiflex) y películas reconocidas.
-- Botón **"Copiar pie técnico"** para pegar la ficha completa en redes sociales, bitácoras o catálogos de exposición.
-- Exportación directa a `~/Downloads` con atajo `⌘S` / `Ctrl+S`, diálogo nativo de guardado `Guardar como…` con `⇧⌘S` / `Ctrl+Shift+S`, o revelado por lotes de todo el rollo con generación automática de **Hoja de Contactos** tipográfica.
+- Botones **"Copiar pie técnico"** para pegar la ficha completa en redes sociales o catálogos y **"Limpiar ficha"** para reiniciar los metadatos de sesión.
+- **Hoja de Contactos interactiva (pestaña `Contactos`, tecla `3`):** vista en vivo configurable de 3 a 6 columnas con zoom panorámico por rueda, edición directa al hacer clic en cualquier cuadro e indicadores ámbar en la tira inferior para fotogramas editados.
+- **Exportación flexible y lotes en vivo:** guardado rápido (`⌘S` / `Ctrl+S`), `Guardar como…` (`⇧⌘S` / `Ctrl+Shift+S`), botón contextual **Guardar contactos** / **Guardar solo contactos** y **Revelar rollo** multinúcleo con barra de progreso fotograma a fotograma y cancelación inmediata.
+- **Historial no destructivo y navegación:** deshacer/rehacer (`⌘Z` / `⇧⌘Z`), cambio de fotograma con `←` / `→`, copiar/pegar recetas (`⇧⌘C` / `⇧⌘V`) y `Sincronizar rollo`.
 
 ---
 
@@ -214,13 +220,13 @@ python cli.py invert negativo_01.tif \
                                         │
                  ┌──────────────────────┴──────────────────────┐
                  ▼                                             ▼
-     [Modo 1: Emulación 72 Films]                  [Modo 2: Revelado Negativo]
-     - Selección de emulsión química               - Selección de fuente (Cámara / Escáner)
-     - Compensación EV (-2.0 a +2.0)               - Cuentagotas de soporte base (D-min)
-     - Control de Halo (Antihalo)                  - Balance de blancos neutro de escena
-     - Grano analógico y viñeteo                   - Calibración de rollo (Roll Analysis)
-     - Fecha analógica en emulsión                 - Virados B&N / Acabados de copia
-                 │                                 - Etalonaje CMY de 3 vías
+     [Modo 1: Emulación · 72]                      [Modo 2: Revelar negativo]
+     - Catálogo de 72 emulsiones en español        - Proceso Color C-41 o Plata B&N y luz
+     - Compensación de exposición                  - Muestrear D-min (I) y Análisis de rollo
+     - Halación en altas luces                     - Curva tonal: Densidad neutra y Pull/Push
+     - Grano de haluro de plata y viñeteo          - 10 acabados y virados químicos de papel
+     - Sello de fecha en cuarzo ámbar              - Ampliadora CMY, 3 vías y Gris neutro (W)
+                 │                                 - Filtros ópticos y nitidez (Lab/Escáner)
                  │                                             │
                  └──────────────────────┬──────────────────────┘
                                         │
@@ -248,7 +254,7 @@ python cli.py invert negativo_01.tif \
    ```
 3. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de ejecución utiliza `Pillow >= 13.0.0` y `pytest >= 9.0.0`, resolviendo todas las advertencias y CVEs conocidas del ecosistema Python (resultado: **0 vulnerabilidades detectadas**).
 4. **Validación de Rutas Seguras:** Todas las rutas de importación y exportación son verificadas contra ataques de salto de directorio (*path traversal*) mediante resolución canónica y extensiones permitidas.
-5. **Calidad de Código y Pruebas Automatizadas:** Suite de **25 pruebas unitarias e integrales** que verifican matemáticamente la inversión H&D, la neutralidad del balance de blancos, la integridad de 16 bits de los archivos TIFF y la persistencia EXIF.
+5. **Calidad de Código y Pruebas Automatizadas:** Suite de **37 pruebas automatizadas (`pytest`)** que verifican matemáticamente la inversión H&D, el motor `Densidad neutra`, la hoja de contactos interactiva, el progreso de revelado por lotes, la integridad de 16 bits en TIFF y la persistencia EXIF.
 
 ---
 

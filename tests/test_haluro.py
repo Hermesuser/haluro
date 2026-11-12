@@ -437,13 +437,13 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_api_health_and_security_headers(client) -> None:
-    assert __version__ == "2.4.5"
+    assert __version__ == "2.4.6"
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
-    assert body["version"] == "2.4.5"
+    assert body["version"] == "2.4.6"
     assert body["films_count"] == 72
     assert body["platform"] in {"macos", "windows", "linux"}
 
@@ -460,7 +460,7 @@ def test_api_about_manifest(client) -> None:
     assert resp.status_code == 200
     info = resp.get_json()
     assert info["app"] == "Haluro"
-    assert info["version"] == "2.4.5"
+    assert info["version"] == "2.4.6"
     assert info["license"] == "MIT"
     assert "César Fernández Ardiles" in info["developer"]["name"]
     assert "Chile" in info["developer"]["country"]
@@ -924,7 +924,7 @@ def test_macos_application_identity_and_about_panel():
 
         assert _MACOS_ABOUT_OPTIONS is not None
         assert _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationName] == "Haluro"
-        assert "2.4.5" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
+        assert "2.4.6" in str(_MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionApplicationVersion])
         credits_str = _MACOS_ABOUT_OPTIONS[AppKit.NSAboutPanelOptionCredits].string()
         assert "César Fernández Ardiles" in credits_str
         assert "Chile" in credits_str
@@ -1277,6 +1277,287 @@ def test_batch_async_roll_progress_and_cancel(client) -> None:
     cancel_ok = client.post(f"/api/batch/develop_cancel/{job_id}")
     assert cancel_ok.status_code == 200
     assert cancel_ok.get_json()["success"] is True
+
+
+# =============================================================================
+# 6. UI/UX & ARCHIVAL LAB AUDIT REGRESSION SUITE (v2.4.6)
+# =============================================================================
+
+
+def test_save_output_embeds_srgb_icc_and_transliterates_ascii(tmp_path: Path) -> None:
+    from engine.pipeline import get_srgb_icc_bytes
+
+    icc_expected = get_srgb_icc_bytes()
+    assert len(icc_expected) > 100
+
+    img = Image.new("RGB", (32, 32), (180, 120, 80))
+    float_srgb = np.full((32, 32, 3), [180 / 255.0, 120 / 255.0, 80 / 255.0], dtype=np.float32)
+    analog_meta = {
+        "camera_make": "Canon",
+        "camera_model": "AE-1 Program",
+        "lens": "50mm f/1.4",
+        "photographer": "César Fernández Ñandú",
+        "notes": "Atardecer en Valparaíso — ¡película!",
+    }
+
+    jpg_path = tmp_path / "archival.jpg"
+    png_path = tmp_path / "archival.png"
+    tif_path = tmp_path / "archival.tif"
+
+    save_output_image(img, jpg_path, analog_meta=analog_meta)
+    save_output_image(img, png_path, analog_meta=analog_meta)
+    save_output_image(img, tif_path, float_srgb=float_srgb, analog_meta=analog_meta)
+
+    with Image.open(jpg_path) as out_jpg:
+        assert out_jpg.info.get("icc_profile") == icc_expected
+        exif = out_jpg.getexif()
+        assert exif.get(0x013B) == "Cesar Fernandez Nandu"
+        assert "Valparaiso" in (exif.get(0x010E) or "")
+        assert "?" not in (exif.get(0x013B) or "")
+
+    with Image.open(png_path) as out_png:
+        assert out_png.info.get("icc_profile") == icc_expected
+
+    with Image.open(tif_path) as out_tif:
+        assert out_tif.tag_v2.get(34675) == icc_expected
+        assert out_tif.tag_v2.get(315) == "Cesar Fernandez Nandu"
+        assert "Valparaiso" in (out_tif.tag_v2.get(270) or "")
+
+
+def test_non_srgb_icc_input_converts_to_srgb_linear(tmp_path: Path) -> None:
+    from PIL import ImageCms
+    from engine.pipeline import _convert_pil_to_srgb, _is_srgb_icc_profile, get_srgb_icc_bytes
+
+    assert _is_srgb_icc_profile(get_srgb_icc_bytes()) is True
+
+    # Construct a non-sRGB LAB profile unconditionally to assert detection & color transform
+    lab_icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("LAB")).tobytes()
+    assert _is_srgb_icc_profile(lab_icc) is False
+
+    # If host has Display P3 profile (macOS), verify end-to-end linear load shifts wide-gamut values into sRGB
+    p3_path = Path("/System/Library/ColorSync/Profiles/Display P3.icc")
+    if p3_path.exists():
+        p3_bytes = p3_path.read_bytes()
+        assert _is_srgb_icc_profile(p3_bytes) is False
+        wide_img = Image.new("RGB", (16, 16), (220, 40, 20))
+        converted = _convert_pil_to_srgb(wide_img, p3_bytes)
+        arr_conv = np.asarray(converted)
+        assert int(arr_conv[0, 0, 0]) > 220  # Pure Display-P3 red clips higher in sRGB primaries
+
+        png_p3 = tmp_path / "p3_sample.png"
+        wide_img.save(png_p3, format="PNG", icc_profile=p3_bytes)
+        lin = load_image_linear(png_p3)
+        srgb_out = linear_to_srgb(lin)
+        assert float(srgb_out[0, 0, 0]) > 0.88
+    else:
+        with mock.patch("engine.pipeline.ImageCms.profileToProfile") as mock_xform:
+            fake_conv = Image.new("RGB", (8, 8), (240, 10, 5))
+            mock_xform.return_value = fake_conv
+            res = _convert_pil_to_srgb(Image.new("RGB", (8, 8), (220, 40, 20)), lab_icc)
+            assert mock_xform.called
+            assert np.asarray(res)[0, 0, 0] == 240
+
+
+def test_raw_sample_exif_preserved_and_colorspace_srgb(tmp_path: Path) -> None:
+    sample_cr2 = Path(__file__).resolve().parent.parent / "samples" / "SAMPLE.CR2"
+    assert sample_cr2.is_file()
+
+    out_jpg = tmp_path / "from_raw.jpg"
+    img = Image.new("RGB", (16, 16), (120, 120, 120))
+    save_output_image(
+        img,
+        out_jpg,
+        source_path=sample_cr2,
+        analog_meta={"photographer": "Ana Gómez"},
+    )
+
+    with Image.open(out_jpg) as saved:
+        exif = saved.getexif()
+        assert exif.get(0x010F) == "Canon"
+        assert exif.get(0x013B) == "Ana Gomez"
+        assert exif.get(0x0112) == 1
+        sub_ifd = exif.get_ifd(0x8769)
+        assert sub_ifd.get(0xA001) == 1
+
+
+def test_upload_deduplication_and_extension_rejection(client) -> None:
+    import io
+    import app as haluro_app
+
+    buf1 = io.BytesIO()
+    Image.new("RGB", (16, 16), (200, 100, 50)).save(buf1, format="JPEG")
+    buf1.seek(0)
+    res1 = client.post(
+        "/api/upload",
+        data={"file": (buf1, "DSC_0001.jpg")},
+        content_type="multipart/form-data",
+    )
+    assert res1.status_code == 200
+    d1 = res1.get_json()
+    assert d1["filename"] == "DSC_0001.jpg"
+
+    buf2 = io.BytesIO()
+    Image.new("RGB", (16, 16), (50, 100, 200)).save(buf2, format="JPEG")
+    buf2.seek(0)
+    res2 = client.post(
+        "/api/upload",
+        data={"file": (buf2, "DSC_0001.jpg")},
+        content_type="multipart/form-data",
+    )
+    assert res2.status_code == 200
+    d2 = res2.get_json()
+    assert d2["filename"] == "DSC_0001_2.jpg"
+    assert (haluro_app.UPLOAD_DIR / "DSC_0001.jpg").is_file()
+    assert (haluro_app.UPLOAD_DIR / "DSC_0001_2.jpg").is_file()
+
+    bad = client.post(
+        "/api/upload",
+        data={"file": (io.BytesIO(b"MZ_not_an_image"), "payload.exe")},
+        content_type="multipart/form-data",
+    )
+    assert bad.status_code == 400
+    assert "error" in (bad.get_json() or {})
+
+
+def test_cinestill400d_alias_print_category_and_ui_contract(client) -> None:
+    c400d = get_film("cinestill400d")
+    assert c400d["key"] == "cinestill400d"
+    assert c400d["kind"] == "cine"
+    assert get_film("cinestill400t")["key"] == "cinestill400d"
+
+    films = list_films()
+    assert any(f["kind"] == "print" for f in films)
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    for marker in (
+        "v2.4.6",
+        'id="undoBtn"',
+        'id="redoBtn"',
+        'id="zenToggleBtn"',
+        'id="syncRollModal"',
+        'id="zebraCanvas"',
+        'id="loupeZoomCanvas"',
+        'id="stripCullBar"',
+        'id="btnAutoFillExifFromRecipe"',
+        "Altas suaves",
+        'id="clipShadows"',
+        'data-category="print"',
+    ):
+        assert marker in html
+
+
+def test_negative_preview_original_uncropped_flag(client) -> None:
+    import base64
+    import io
+
+    # Upload an 800x600 frame (below max_dim=1280 so crop_pct strictly reduces output dimensions)
+    neg_buf = io.BytesIO()
+    Image.new("RGB", (800, 600), (210, 120, 75)).save(neg_buf, format="JPEG")
+    neg_buf.seek(0)
+    up = client.post(
+        "/api/upload",
+        data={"file": (neg_buf, "test_neg_border.jpg")},
+        content_type="multipart/form-data",
+    )
+    assert up.status_code == 200
+    fname = up.get_json()["filename"]
+
+    resp_cropped = client.post(
+        "/api/negative/preview",
+        json={
+            "filename": fname,
+            "profile": "frontier",
+            "crop_pct": 0.12,
+            "original_uncropped": False,
+        },
+    )
+    assert resp_cropped.status_code == 200
+    dc = resp_cropped.get_json()
+    assert "original" in dc and "developed" in dc
+
+    resp_uncropped = client.post(
+        "/api/negative/preview",
+        json={
+            "filename": fname,
+            "profile": "frontier",
+            "crop_pct": 0.12,
+            "original_uncropped": True,
+        },
+    )
+    assert resp_uncropped.status_code == 200
+    du = resp_uncropped.get_json()
+    assert "original" in du and "developed" in du
+
+    def _decode_b64_size(data_url: str) -> tuple[int, int]:
+        raw_b64 = data_url.split(",", 1)[1]
+        with Image.open(io.BytesIO(base64.b64decode(raw_b64))) as im:
+            return im.size
+
+    orig_c_w, orig_c_h = _decode_b64_size(dc["original"])
+    dev_c_w, dev_c_h = _decode_b64_size(dc["developed"])
+    orig_u_w, orig_u_h = _decode_b64_size(du["original"])
+    dev_u_w, dev_u_h = _decode_b64_size(du["developed"])
+    assert (orig_c_w, orig_c_h) == (dev_c_w, dev_c_h)
+    assert (orig_u_w, orig_u_h) == (800, 600)
+    assert orig_u_w > dev_u_w and orig_u_h > dev_u_h
+
+
+def test_contact_sheet_stems_aspect_and_mixed_roll_meta(tmp_path: Path) -> None:
+    import app as haluro_app
+
+    portrait_imgs = [Image.new("RGB", (240, 360), (140, 120, 100)) for _ in range(2)]
+    sheet_p, layout_p = generate_contact_sheet(
+        portrait_imgs,
+        roll_name="ROLLO MIXTO",
+        film_name="Rollo mixto (2 emulsiones)",
+        columns=2,
+        thumb_width=320,
+        return_layout=True,
+        frame_labels=["DSC_0001", "RETOQUE_FINAL"],
+    )
+    assert len(layout_p) == 2
+
+    landscape_imgs = [Image.new("RGB", (360, 240), (140, 120, 100)) for _ in range(2)]
+    sheet_l = generate_contact_sheet(
+        landscape_imgs,
+        roll_name="ROLLO PAISAJE",
+        film_name="Kodak Portra 400",
+        columns=2,
+        thumb_width=320,
+        return_layout=False,
+    )
+    # Tall/square batches reserve 0.88:1 slot height vs compact 2:3 for landscape batches
+    assert sheet_p.height > sheet_l.height
+
+    # Verify mixed emulsion/profile headers resolved by _resolve_sheet_meta
+    sim_label, sim_stems = haluro_app._resolve_sheet_meta(
+        ["DSC_0001.CR2", "RETOQUE_FINAL.JPG"],
+        {"DSC_0001.CR2": {"film": "portra400"}, "RETOQUE_FINAL.JPG": {"film": "hp5"}},
+        "simulation",
+        "portra400",
+        "Kodak Portra 400",
+    )
+    assert "2 emulsiones" in sim_label
+    assert sim_stems == ["DSC_0001", "RETOQUE_FINAL"]
+
+    neg_label, neg_stems = haluro_app._resolve_sheet_meta(
+        ["A.JPG", "B.JPG"],
+        {"A.JPG": {"profile": "frontier"}, "B.JPG": {"profile": "noritsu"}},
+        "negative",
+        "frontier",
+        "Negativo · Fuji Frontier SP-3000",
+    )
+    assert "2 perfiles" in neg_label
+    assert neg_stems == ["A", "B"]
+
+    # Export contact sheet via save_output_image guarantees sRGB ICC tagging even on contact sheets
+    cs_out = tmp_path / "SHEET.jpg"
+    save_output_image(sheet_p, cs_out)
+    with Image.open(cs_out) as saved_cs:
+        assert saved_cs.info.get("icc_profile") is not None
+
 
 
 

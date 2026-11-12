@@ -65,7 +65,7 @@
         <span id="loadSampleLabel">Muestra</span>
       </button>
 
-      <label class="btn btn-secondary btn-sm upload-label" id="uploadBtnLabel" title="Importar archivos desde tu Mac (⌘O)">
+      <label class="btn btn-secondary btn-sm upload-label" id="uploadBtnLabel" title="Importar archivos desde tu equipo (O)">
         <input type="file" id="fileInput" multiple accept=".cr2,.cr3,.dng,.nef,.arw,.orf,.rw2,.raf,.pef,.jpg,.jpeg,.png,.tif,.tiff,.heic,.heif">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -77,7 +77,15 @@
 
       <div class="header-divider" aria-hidden="true"></div>
 
-      <button class="btn btn-icon-only" id="safelightToggle" aria-label="Alternar luz roja de cuarto oscuro (L)" title="Luz roja de laboratorio (Tecla L)">
+      <button class="btn btn-icon-only" id="zenToggleBtn" aria-pressed="false" aria-label="Alternar paneles laterales (Tab)" title="Modo mesa limpia: ocultar o mostrar paneles (Tecla Tab)">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <line x1="8.5" y1="4" x2="8.5" y2="20"/>
+          <line x1="15.5" y1="4" x2="15.5" y2="20"/>
+        </svg>
+      </button>
+
+      <button class="btn btn-icon-only" id="safelightToggle" aria-pressed="false" aria-label="Alternar luz roja de cuarto oscuro (L)" title="Luz roja de laboratorio (Tecla L)">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
           <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/>
         </svg>
@@ -152,25 +160,30 @@
       <div id="shelfContainer" class="sidebar-pane">
         <div class="pane-header">
           <h2>Catálogo de películas</h2>
-          <span class="mono-badge" id="filmCountBadge">72</span>
+          <div class="pane-header-tools">
+            <button type="button" class="sort-toggle-btn" id="filmSortBtn" aria-pressed="false" title="Alternar orden por catálogo o sensibilidad ISO">Catálogo</button>
+            <span class="mono-badge" id="filmCountBadge">72</span>
+          </div>
         </div>
 
         <div class="search-box">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
             <circle cx="11" cy="11" r="7"/>
             <line x1="20" y1="20" x2="16" y2="16"/>
           </svg>
-          <input type="search" id="filmSearch" placeholder="Buscar película o marca (Portra, Velvia, Ilford)…" aria-label="Buscar película">
+          <input type="search" id="filmSearch" placeholder="Buscar película, marca o ISO…" aria-label="Buscar película">
+          <button type="button" class="search-clear-btn" id="clearFilmSearchBtn" aria-label="Limpiar búsqueda" title="Limpiar búsqueda" hidden>&times;</button>
         </div>
 
         <div class="category-filters" id="categoryFilters" role="toolbar" aria-label="Filtrar por proceso químico">
-          <button class="filter-pill active" data-category="all">Todas</button>
-          <button class="filter-pill" data-category="fav">★ Favoritas</button>
-          <button class="filter-pill" data-category="neg">Negativo C-41</button>
-          <button class="filter-pill" data-category="slide">Diapositiva E-6</button>
-          <button class="filter-pill" data-category="cine">Cine</button>
-          <button class="filter-pill" data-category="bw">Plata B&amp;N</button>
-          <button class="filter-pill" data-category="xpro">Cross-Pro</button>
+          <button class="filter-pill active" data-category="all" aria-pressed="true">Todas</button>
+          <button class="filter-pill" data-category="fav" aria-pressed="false"><svg class="icon-xs" viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true" style="vertical-align:-1px;"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.58 1.1 6.47L12 17.44 6.2 20.5l1.1-6.47L2.6 9.45l6.5-.95z"/></svg> Favoritas</button>
+          <button class="filter-pill" data-category="neg" aria-pressed="false">Negativo C-41</button>
+          <button class="filter-pill" data-category="slide" aria-pressed="false">Diapositiva E-6</button>
+          <button class="filter-pill" data-category="cine" aria-pressed="false">Cine</button>
+          <button class="filter-pill" data-category="print" aria-pressed="false">Copia Cine</button>
+          <button class="filter-pill" data-category="bw" aria-pressed="false">Plata B&amp;N</button>
+          <button class="filter-pill" data-category="xpro" aria-pressed="false">Cross-Pro</button>
         </div>
 
         <div class="film-shelf-list" id="filmList" role="listbox" aria-label="Lista de películas analógicas">
@@ -182,7 +195,7 @@
       <div id="negativeLabContainer" class="sidebar-pane" style="display: none;">
         <div class="pane-header">
           <h2>Calibración negativa</h2>
-          <span class="mono-badge badge-emerald">Densitometría v2.3</span>
+          <span class="mono-badge badge-emerald">v2.4.6 · Lineal</span>
         </div>
 
         <div class="pane-scroll">
@@ -219,10 +232,10 @@
 
                 <div class="control-group compact-top" id="negPreSatGroup">
                   <div class="control-label">
-                    <span title="Amplifica o modera la separación de capas de tinte C-41 antes de invertir la densidad">Pre-saturación óptica</span>
+                    <span id="lblNegPreSat" title="Amplifica o modera la separación de capas de tinte C-41 antes de invertir la densidad">Pre-saturación óptica</span>
                     <span class="control-val" id="negPreSatVal">1.00x</span>
                   </div>
-                  <input type="range" id="negPreSatSlider" min="0.50" max="1.60" step="0.05" value="1.00" data-default="1.00">
+                  <input type="range" id="negPreSatSlider" min="0.50" max="1.60" step="0.05" value="1.00" data-default="1.00" aria-labelledby="lblNegPreSat">
                 </div>
               </div>
             </details>
@@ -245,7 +258,7 @@
                 </div>
               </div>
               <div class="base-actions">
-                <button class="btn btn-outline btn-xs" id="btnEyedropper" title="Haz clic en el borde sin exponer del negativo (Tecla I)">
+                <button class="btn btn-outline btn-xs" id="btnEyedropper" aria-pressed="false" title="Haz clic en el borde sin exponer del negativo (Tecla I)">
                   <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                     <path d="m2 22 1-1h3l9-9M3 21v-3l9-9"/>
                     <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>
@@ -281,18 +294,18 @@
 
                 <div class="control-group compact-top">
                   <div class="control-label">
-                    <span title="Ignora soportes negros o bordes de mesa de luz al calcular el punto blanco y negro">Margen de análisis de borde</span>
+                    <span id="lblNegBuffer" title="Ignora soportes negros o bordes de mesa de luz al calcular el punto blanco y negro">Margen de análisis de borde</span>
                     <span class="control-val" id="negBufferVal">6%</span>
                   </div>
-                  <input type="range" id="negBufferSlider" min="0" max="20" step="1" value="6" data-default="6">
+                  <input type="range" id="negBufferSlider" min="0" max="20" step="1" value="6" data-default="6" aria-labelledby="lblNegBuffer">
                 </div>
 
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Recorta simétricamente las perforaciones o bordes exteriores">Recorte limpio de bordes</span>
+                    <span id="lblNegCrop" title="Recorta simétricamente las perforaciones o bordes exteriores">Recorte limpio de bordes</span>
                     <span class="control-val" id="negCropVal">0%</span>
                   </div>
-                  <input type="range" id="negCropSlider" min="0" max="15" step="0.5" value="0" data-default="0">
+                  <input type="range" id="negCropSlider" min="0" max="15" step="0.5" value="0" data-default="0" aria-labelledby="lblNegCrop">
                 </div>
               </div>
             </details>
@@ -311,8 +324,8 @@
               <button class="seg-btn" data-tone="soft" title="Contraste abierto y transiciones suaves">Suave</button>
               <button class="seg-btn active" data-tone="standard" title="Equilibrio sensitométrico nominal">Estándar</button>
               <button class="seg-btn" data-tone="vivid" title="Contraste profundo y riqueza cromática">Vívido</button>
-              <button class="seg-btn" data-tone="highlight_soft" title="Comprime suavemente el hombro de altas luces protegiendo cielos y pieles">Hombro</button>
-              <button class="seg-btn" data-tone="shadow_soft" title="Levanta delicadamente el talón de sombras densas">Abierto</button>
+              <button class="seg-btn" data-tone="highlight_soft" title="Protege las altas luces, cielos y tonos de piel comprimiendo el hombro">Altas suaves</button>
+              <button class="seg-btn" data-tone="shadow_soft" title="Levanta delicadamente las sombras densas sin empastar el negro">Abierto</button>
             </div>
 
             <!-- Contextual Color Print Finishing (0% - 200%) -->
@@ -332,10 +345,10 @@
               </select>
               <div class="control-group compact-top" id="negFinishAmountGroup">
                 <div class="control-label">
-                  <span>Intensidad de acabado</span>
+                  <span id="lblNegFinishAmount">Intensidad de acabado</span>
                   <span class="control-val" id="negFinishAmountVal">100%</span>
                 </div>
-                <input type="range" id="negFinishAmountSlider" min="0" max="200" step="5" value="100" data-default="100">
+                <input type="range" id="negFinishAmountSlider" min="0" max="200" step="5" value="100" data-default="100" aria-labelledby="lblNegFinishAmount">
               </div>
             </div>
 
@@ -360,10 +373,10 @@
               <p class="helper-copy" id="negBwTonerDesc">Copia baritada clásica de plata pura (R=G=B) sin virado químico.</p>
               <div class="control-group compact-top">
                 <div class="control-label">
-                  <span>Intensidad del virado</span>
+                  <span id="lblNegBwTonerStrength">Intensidad del virado</span>
                   <span class="control-val" id="negBwTonerStrengthVal">100%</span>
                 </div>
-                <input type="range" id="negBwTonerStrengthSlider" min="0" max="150" step="5" value="100" data-default="100">
+                <input type="range" id="negBwTonerStrengthSlider" min="0" max="150" step="5" value="100" data-default="100" aria-labelledby="lblNegBwTonerStrength">
               </div>
             </div>
 
@@ -435,14 +448,27 @@
       <div class="viewport-toolbar">
         <!-- View Modes -->
         <div class="view-modes" role="group" aria-label="Modo de visualización">
-          <button class="mode-btn active" id="viewSplitBtn" title="Comparativa dividida Antes/Después (Tecla 1)">Dividida</button>
-          <button class="mode-btn" id="viewFullBtn" title="Ver solo fotografía revelada (Tecla 2)">Revelada</button>
-          <button class="mode-btn" id="viewOrigBtn" title="Mantén pulsado '\' o haz clic para ver el original sin procesar">Original</button>
-          <button class="mode-btn" id="viewSheetBtn" title="Generar hoja de contactos del rollo (Tecla 3)">Contactos</button>
+          <button class="mode-btn active" id="viewSplitBtn" aria-pressed="true" title="Comparativa dividida Antes/Después (Tecla 1)">Dividida</button>
+          <button class="mode-btn" id="viewFullBtn" aria-pressed="false" title="Ver solo fotografía revelada (Tecla 2)">Revelada</button>
+          <button class="mode-btn" id="viewOrigBtn" aria-pressed="false" title="Mantén pulsado '\' o haz clic para ver el original sin procesar">Original</button>
+          <button class="mode-btn" id="viewSheetBtn" aria-pressed="false" title="Generar hoja de contactos del rollo (Tecla 3)">Contactos</button>
         </div>
 
-        <!-- Geometry & Zoom Instruments -->
-        <div class="geometry-tools" role="group" aria-label="Orientación y lupa">
+        <!-- Geometry, Undo/Redo, Zoom & Recipe Sync Instruments -->
+        <div class="geometry-tools" role="group" aria-label="Deshacer, orientación y lupa">
+          <button class="tool-icon-btn" id="undoBtn" aria-label="Deshacer último ajuste" title="Deshacer ajuste (Z)" disabled>
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M9 14 4 9l5-5"/>
+              <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
+            </svg>
+          </button>
+          <button class="tool-icon-btn" id="redoBtn" aria-label="Rehacer ajuste" title="Rehacer ajuste (Shift+Z)" disabled>
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="m15 14 5-5-5-5"/>
+              <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
+            </svg>
+          </button>
+          <span class="toolbar-sep" aria-hidden="true"></span>
           <button class="tool-icon-btn" id="rotateLeftBtn" aria-label="Rotar 90 grados a la izquierda" title="Rotar 90° izquierda (⇧R)">
             <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -455,7 +481,7 @@
               <path d="M21 3v5h-5"/>
             </svg>
           </button>
-          <button class="tool-icon-btn" id="flipHBtn" aria-label="Espejo horizontal de emulsión" title="Voltear horizontalmente / Lado de emulsión (Tecla F)">
+          <button class="tool-icon-btn" id="flipHBtn" aria-label="Espejo horizontal de emulsión" aria-pressed="false" title="Voltear horizontalmente / Lado de emulsión (Tecla F)">
             <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M12 3v18M8 7l-5 5 5 5M16 7l5 5-5 5"/>
             </svg>
@@ -465,8 +491,8 @@
           <button class="zoom-readout" id="zoomResetBtn" title="Restablecer vista al 100% encajado (Tecla 0)">Ajustar</button>
           <button class="tool-icon-btn" id="zoomInBtn" aria-label="Acercar zoom" title="Acercar (+ o rueda del ratón)">+</button>
           <span class="toolbar-sep" aria-hidden="true"></span>
-          <button class="recipe-pill-btn" id="copyRecipeBtn" title="Copiar receta óptica del fotograma activo (⇧⌘C)">Copiar</button>
-          <button class="recipe-pill-btn" id="pasteRecipeBtn" title="Pegar receta copiada en este fotograma (⇧⌘V)" disabled>Pegar</button>
+          <button class="recipe-pill-btn" id="copyRecipeBtn" title="Copiar receta óptica del fotograma activo (⇧C)">Copiar</button>
+          <button class="recipe-pill-btn" id="pasteRecipeBtn" title="Pegar receta copiada en este fotograma (⇧V)" disabled>Pegar</button>
           <button class="recipe-pill-btn recipe-sync-btn" id="syncRollBtn" title="Sincronizar la receta actual en todos los fotogramas del rollo"><span class="sync-label-full">Sincronizar rollo</span><span class="sync-label-short">Sincr. rollo</span></button>
         </div>
 
@@ -484,8 +510,11 @@
       <!-- Main Light Table Canvas -->
       <div class="canvas-container" id="canvasContainer">
         <div class="split-slider-wrapper" id="splitWrapper">
-          <img id="imgOriginal" class="split-image original" src="" alt="Fotografía original sin procesar" draggable="false">
-          <img id="imgDeveloped" class="split-image developed" src="" alt="Fotografía revelada en Haluro" crossorigin="anonymous" draggable="false">
+          <div class="split-media-layer" id="splitMediaLayer">
+            <img id="imgOriginal" class="split-image original" alt="Fotografía original sin procesar" draggable="false">
+            <img id="imgDeveloped" class="split-image developed" alt="Fotografía revelada en Haluro" crossorigin="anonymous" draggable="false">
+            <canvas id="zebraCanvas" class="zebra-overlay" aria-hidden="true"></canvas>
+          </div>
 
           <div class="split-divider" id="splitDivider" role="slider" tabindex="0" aria-label="Divisor de comparativa antes y después" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
             <div class="divider-handle" aria-hidden="true">
@@ -499,10 +528,16 @@
           <div class="split-label label-left" id="originalLabel">Original</div>
           <div class="split-label label-right" id="developedLabel">Kodak Portra 400</div>
 
-          <!-- Floating Eyedropper Magnifier Pill -->
+          <!-- Floating Eyedropper Magnifier Card -->
           <div class="eyedropper-loupe" id="eyedropperLoupe" style="display: none;">
-            <span class="loupe-dot" id="loupeDot"></span>
-            <span class="loupe-label" id="loupeLabel">Muestrear base</span>
+            <canvas id="loupeZoomCanvas" class="loupe-zoom-canvas" width="72" height="72" aria-hidden="true"></canvas>
+            <div class="loupe-meta">
+              <div class="loupe-title-row">
+                <span class="loupe-dot" id="loupeDot"></span>
+                <span class="loupe-label" id="loupeLabel">Muestrear base</span>
+              </div>
+              <span class="loupe-rgb" id="loupeRgb">RGB — · — · —</span>
+            </div>
           </div>
         </div>
 
@@ -517,12 +552,15 @@
               <div class="sheet-control-item">
                 <span class="sheet-control-label">Columnas:</span>
                 <div class="sheet-cols-group" id="sheetColumnsBar" role="radiogroup" aria-label="Columnas de la hoja de contactos">
-                  <button class="sheet-col-btn" data-cols="3" title="3 columnas (miniaturas grandes)">3</button>
-                  <button class="sheet-col-btn active" data-cols="4" title="4 columnas (estándar 35mm)">4</button>
-                  <button class="sheet-col-btn" data-cols="5" title="5 columnas (rollos de 24-36 fotos)">5</button>
-                  <button class="sheet-col-btn" data-cols="6" title="6 columnas (alta densidad)">6</button>
+                  <button class="sheet-col-btn" data-cols="3" aria-checked="false" role="radio" title="3 columnas (miniaturas grandes)">3</button>
+                  <button class="sheet-col-btn active" data-cols="4" aria-checked="true" role="radio" title="4 columnas (estándar 35mm)">4</button>
+                  <button class="sheet-col-btn" data-cols="5" aria-checked="false" role="radio" title="5 columnas (rollos de 24-36 fotos)">5</button>
+                  <button class="sheet-col-btn" data-cols="6" aria-checked="false" role="radio" title="6 columnas (alta densidad)">6</button>
                 </div>
               </div>
+              <button type="button" class="sheet-filter-btn" id="sheetHideRejectedBtn" aria-pressed="false" title="Excluir fotogramas descartados (X) de esta hoja de contactos" style="display: none;">
+                Ocultar descartes <span id="rejectedCountBadge">0</span>
+              </button>
             </div>
             <span class="sheet-interactive-hint" title="Haz clic en cualquier fotograma de la hoja para editarlo o usa la rueda del ratón para hacer zoom">
               Clic en foto para editar · Rueda para lupa
@@ -531,7 +569,7 @@
 
           <div class="sheet-stage" id="sheetStage">
             <div class="sheet-wrapper" id="sheetWrapper">
-              <img id="sheetPreview" src="" alt="Hoja de contactos analógica" draggable="false">
+              <img id="sheetPreview" alt="Hoja de contactos analógica" draggable="false">
               <div class="sheet-overlay-grid" id="sheetOverlayGrid" aria-label="Fotogramas interactivos de la hoja"></div>
             </div>
           </div>
@@ -560,8 +598,12 @@
         </div>
       </div>
 
-      <!-- Bottom 35mm Perforated Film Strip -->
+      <!-- Main Light Table Footer: Culling Bar & 35mm Film Strip -->
       <footer class="film-strip" aria-label="Tira de fotogramas importados">
+        <div class="strip-cull-bar" id="stripCullBar" style="display: none;">
+          <span class="cull-summary-text" id="cullSummaryText">0 elegidas · 0 descartadas</span>
+          <button type="button" class="btn btn-ghost btn-2xs" id="btnCullClearRejected" title="Quitar fotogramas descartados (X) del rollo">Quitar descartes</button>
+        </div>
         <div class="sprocket-track top" aria-hidden="true"></div>
         <div class="strip-frames-scroll" id="stripFrames">
           <!-- Populated dynamically with real image thumbnails -->
@@ -575,15 +617,16 @@
       <!-- Live RGB & Luminance Histogram -->
       <div class="histogram-box">
         <div class="histogram-header">
-          <span class="panel-eyebrow">Densitómetro RGB</span>
+          <span class="panel-label">Densitómetro RGB</span>
           <div class="clip-indicators">
-            <span class="clip-pill" id="clipShadows" title="Porcentaje de sombras puras en negro">Sombras 0.0%</span>
-            <span class="clip-pill" id="clipHighlights" title="Porcentaje de altas luces al límite">Luces 0.0%</span>
+            <button type="button" class="clip-pill clip-toggle-btn" id="clipShadows" aria-pressed="false" title="Alternar aviso de sombras empastadas en azul (Tecla J)">Sombras 0.0%</button>
+            <button type="button" class="clip-pill clip-toggle-btn" id="clipHighlights" aria-pressed="false" title="Alternar aviso de luces quemadas en rojo (Tecla J)">Luces 0.0%</button>
           </div>
         </div>
         <canvas id="histogramCanvas" width="272" height="84" aria-label="Histograma RGB en tiempo real"></canvas>
+        <div class="cursor-readout" id="cursorReadout" aria-live="off">Mueve el cursor para leer RGB y Zona</div>
         <div class="active-stock-bar">
-          <span class="stock-label-muted">Receta activa</span>
+          <span class="stock-label-muted" id="statFilmLabel">Receta activa</span>
           <span class="stock-label-value" id="statFilm">Kodak Portra 400</span>
         </div>
       </div>
@@ -597,38 +640,38 @@
               <h3>Química y óptica</h3>
               <button class="reset-link" id="resetSimBtn" title="Restablecer todos los controles a sus valores nominales">Restablecer</button>
             </div>
-            <p class="helper-copy">Doble clic en cualquier deslizador para volver a su punto neutro.</p>
+            <p class="helper-copy">Doble clic en el deslizador para neutro · Clic en el número para editar.</p>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Compensación de exposición</span>
+                <span id="lblEv">Compensación de exposición</span>
                 <span class="control-val" id="evVal">0.0 EV</span>
               </div>
-              <input type="range" class="bipolar-range" id="evSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0">
+              <input type="range" class="bipolar-range" id="evSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0" aria-labelledby="lblEv">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Halación en altas luces</span>
+                <span id="lblHalation">Halación en altas luces</span>
                 <span class="control-val" id="halationVal">1.0x</span>
               </div>
-              <input type="range" id="halationSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+              <input type="range" id="halationSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0" aria-labelledby="lblHalation">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Grano de haluro de plata</span>
+                <span id="lblGrain">Grano de haluro de plata</span>
                 <span class="control-val" id="grainVal">1.0x</span>
               </div>
-              <input type="range" id="grainSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+              <input type="range" id="grainSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0" aria-labelledby="lblGrain">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Viñeteo óptico</span>
+                <span id="lblVignette">Viñeteo óptico</span>
                 <span class="control-val" id="vignetteVal">1.0x</span>
               </div>
-              <input type="range" id="vignetteSlider" min="0.0" max="2.0" step="0.1" value="1.0" data-default="1.0">
+              <input type="range" id="vignetteSlider" min="0.0" max="2.0" step="0.1" value="1.0" data-default="1.0" aria-labelledby="lblVignette">
             </div>
 
             <div class="control-toggle">
@@ -651,50 +694,50 @@
 
             <div class="control-group">
               <div class="control-label">
-                <span>Brillo (Gamma de emulsión)</span>
+                <span id="lblNegBrightness">Brillo (Gamma de emulsión)</span>
                 <span class="control-val" id="negBrightnessVal">0.00</span>
               </div>
-              <input type="range" class="bipolar-range" id="negBrightnessSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              <input type="range" class="bipolar-range" id="negBrightnessSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegBrightness">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span title="Ajusta la exposición de medios tonos manteniendo bloqueada la cromaticidad neutra">Densidad neutra (Medios)</span>
+                <span id="lblNegMidtoneNd" title="Ajusta la exposición de medios tonos manteniendo bloqueada la cromaticidad neutra">Densidad neutra (Medios)</span>
                 <span class="control-val" id="negMidtoneNdVal">0.00</span>
               </div>
-              <input type="range" class="bipolar-range" id="negMidtoneNdSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              <input type="range" class="bipolar-range" id="negMidtoneNdSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegMidtoneNd">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Contraste tonal</span>
+                <span id="lblNegContrast">Contraste tonal</span>
                 <span class="control-val" id="negContrastVal">0.00</span>
               </div>
-              <input type="range" class="bipolar-range" id="negContrastSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              <input type="range" class="bipolar-range" id="negContrastSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegContrast">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Altas luces</span>
+                <span id="lblNegLights">Altas luces</span>
                 <span class="control-val" id="negLightsVal">0.00</span>
               </div>
-              <input type="range" class="bipolar-range" id="negLightsSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              <input type="range" class="bipolar-range" id="negLightsSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegLights">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Sombras</span>
+                <span id="lblNegDarks">Sombras</span>
                 <span class="control-val" id="negDarksVal">0.00</span>
               </div>
-              <input type="range" class="bipolar-range" id="negDarksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+              <input type="range" class="bipolar-range" id="negDarksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegDarks">
             </div>
 
             <div class="control-group">
               <div class="control-label">
-                <span>Saturación cromática</span>
+                <span id="lblNegSat">Saturación cromática</span>
                 <span class="control-val" id="negSatVal">1.00x</span>
               </div>
-              <input type="range" id="negSatSlider" min="0.0" max="2.0" step="0.05" value="1.0" data-default="1.0">
+              <input type="range" id="negSatSlider" min="0.0" max="2.0" step="0.05" value="1.0" data-default="1.0" aria-labelledby="lblNegSat">
             </div>
 
             <details class="sub-drawer" id="negFineToneDrawer">
@@ -702,57 +745,57 @@
               <div class="sub-drawer-body">
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Compensa películas forzadas (Push +) o suaviza contrastes duros (Pull −)">Latitud Pull ↔ Push</span>
+                    <span id="lblNegPushPull" title="Compensa películas forzadas (Push +) o suaviza contrastes duros (Pull −)">Latitud Pull ↔ Push</span>
                     <span class="control-val" id="negPushPullVal">0.00</span>
                   </div>
-                  <input type="range" class="bipolar-range" id="negPushPullSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                  <input type="range" class="bipolar-range" id="negPushPullSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegPushPull">
                 </div>
 
                 <div class="control-group">
                   <div class="control-label">
-                    <span>Punto blanco (Hombro)</span>
+                    <span id="lblNegWhites">Punto blanco (Hombro)</span>
                     <span class="control-val" id="negWhitesVal">0.00</span>
                   </div>
-                  <input type="range" class="bipolar-range" id="negWhitesSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                  <input type="range" class="bipolar-range" id="negWhitesSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegWhites">
                 </div>
 
                 <div class="control-group">
                   <div class="control-label">
-                    <span>Punto negro (Talón)</span>
+                    <span id="lblNegBlacks">Punto negro (Talón)</span>
                     <span class="control-val" id="negBlacksVal">0.00</span>
                   </div>
-                  <input type="range" class="bipolar-range" id="negBlacksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                  <input type="range" class="bipolar-range" id="negBlacksSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegBlacks">
                 </div>
 
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Ancla selectivamente el velo de base en sombras profundas sin oscurecer pieles">Negros profundos anti-velo</span>
+                    <span id="lblNegInkyBlacks" title="Ancla selectivamente el velo de base en sombras profundas sin oscurecer pieles">Negros profundos anti-velo</span>
                     <span class="control-val" id="negInkyBlacksVal">0%</span>
                   </div>
-                  <input type="range" id="negInkyBlacksSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                  <input type="range" id="negInkyBlacksSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegInkyBlacks">
                 </div>
 
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Realce analógico que protege los grises neutros mientras aviva colores apagados">Viveza de color natural</span>
+                    <span id="lblNegRpTone" title="Realce analógico que protege los grises neutros mientras aviva colores apagados">Viveza de color natural</span>
                     <span class="control-val" id="negRpToneVal">0%</span>
                   </div>
-                  <input type="range" id="negRpToneSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                  <input type="range" id="negRpToneSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegRpTone">
                 </div>
 
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Ajusta el umbral inferior de densidad en sombras">Corte de negros</span>
+                    <span id="lblNegBlackClip" title="Ajusta el umbral inferior de densidad en sombras">Corte de negros</span>
                     <span class="control-val" id="negBlackClipVal">0.00</span>
                   </div>
-                  <input type="range" class="bipolar-range" id="negBlackClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00">
+                  <input type="range" class="bipolar-range" id="negBlackClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00" aria-labelledby="lblNegBlackClip">
                 </div>
                 <div class="control-group">
                   <div class="control-label">
-                    <span title="Ajusta el umbral superior de densidad en luces altas">Corte de luces</span>
+                    <span id="lblNegWhiteClip" title="Ajusta el umbral superior de densidad en luces altas">Corte de luces</span>
                     <span class="control-val" id="negWhiteClipVal">0.00</span>
                   </div>
-                  <input type="range" class="bipolar-range" id="negWhiteClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00">
+                  <input type="range" class="bipolar-range" id="negWhiteClipSlider" min="-0.50" max="0.50" step="0.02" value="0.00" data-default="0.00" aria-labelledby="lblNegWhiteClip">
                 </div>
                 <div class="control-toggle">
                   <label class="switch" for="negClipProtectToggle">
@@ -768,12 +811,12 @@
           <section class="panel-card">
             <div class="section-head">
               <h3>Ampliadora CMY y 3 vías</h3>
-              <button class="reset-link" id="resetNegColorBtn">Neutro</button>
+              <button class="reset-link" id="resetNegColorBtn" title="Restablecer cabezal CMY, zonas y temperatura">Restablecer</button>
             </div>
 
             <!-- Positive Scene Neutral WB Row for Borderless Scans -->
             <div class="scene-wb-bar">
-              <button class="btn btn-outline btn-xs scene-wb-btn" id="btnSceneWbEyedropper" title="Haz clic sobre un gris, asfalto o sombra neutra en el positivo (Tecla W)">
+              <button class="btn btn-outline btn-xs scene-wb-btn" id="btnSceneWbEyedropper" aria-pressed="false" title="Haz clic sobre un gris, asfalto o sombra neutra en el positivo (Tecla W)">
                 <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path d="m2 22 1-1h3l9-9M3 21v-3l9-9"/>
                   <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>
@@ -791,94 +834,95 @@
 
             <!-- 4-Zone CMY Selector: Global Enlarger Lights vs 3-Way Split Toning -->
             <div class="segmented-bar segmented-4" id="cmyZoneBar" role="tablist" aria-label="Zona tonal CMY">
-              <button class="seg-btn active" data-zone="global" title="Luces globales del cabezal dicroico CMY">Global</button>
-              <button class="seg-btn" data-zone="shadows" title="Tinte CMY selectivo en sombras conservando luminancia">Sombras</button>
-              <button class="seg-btn" data-zone="mids" title="Tinte CMY selectivo en medios tonos y pieles">Medios</button>
-              <button class="seg-btn" data-zone="highs" title="Tinte CMY selectivo en altas luces y cielos">Luces</button>
+              <button class="seg-btn active" data-zone="global" role="tab" aria-selected="true" title="Luces globales del cabezal dicroico CMY">Global</button>
+              <button class="seg-btn" data-zone="shadows" role="tab" aria-selected="false" title="Tinte CMY selectivo en sombras conservando luminancia">Sombras</button>
+              <button class="seg-btn" data-zone="mids" role="tab" aria-selected="false" title="Tinte CMY selectivo en medios tonos y pieles">Medios</button>
+              <button class="seg-btn" data-zone="highs" role="tab" aria-selected="false" title="Tinte CMY selectivo en altas luces y cielos">Luces</button>
             </div>
 
             <div id="cmyGlobalPane" class="zone-stack">
-              <div class="control-group">
+              <p class="helper-copy">Cabezal CMY corrige el negativo; Temperatura y Tinte afinan la escena en positivo.</p>
+              <div class="control-group cmy-nudge-group">
                 <div class="control-label">
-                  <span>Cian ↔ Rojo</span>
+                  <span id="lblCmyRed">Cian ↔ Rojo</span>
                   <span class="control-val" id="cmyRedVal">0.00</span>
                 </div>
-                <input type="range" class="track-cyan-red" id="cmyRedSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-cyan-red" id="cmyRedSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblCmyRed">
               </div>
 
-              <div class="control-group">
+              <div class="control-group cmy-nudge-group">
                 <div class="control-label">
-                  <span>Magenta ↔ Verde</span>
+                  <span id="lblCmyGreen">Magenta ↔ Verde</span>
                   <span class="control-val" id="cmyGreenVal">0.00</span>
                 </div>
-                <input type="range" class="track-magenta-green" id="cmyGreenSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-magenta-green" id="cmyGreenSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblCmyGreen">
               </div>
 
-              <div class="control-group">
+              <div class="control-group cmy-nudge-group">
                 <div class="control-label">
-                  <span>Amarillo ↔ Azul</span>
+                  <span id="lblCmyBlue">Amarillo ↔ Azul</span>
                   <span class="control-val" id="cmyBlueVal">0.00</span>
                 </div>
-                <input type="range" class="track-yellow-blue" id="cmyBlueSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-yellow-blue" id="cmyBlueSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblCmyBlue">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span>Temperatura</span>
+                  <span id="lblNegTemp">Temperatura</span>
                   <span class="control-val" id="negTempVal">0.00</span>
                 </div>
-                <input type="range" class="track-temp" id="negTempSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-temp" id="negTempSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegTemp">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span>Tinte fino</span>
+                  <span id="lblNegTint">Tinte fino</span>
                   <span class="control-val" id="negTintVal">0.00</span>
                 </div>
-                <input type="range" class="track-tint" id="negTintSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-tint" id="negTintSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegTint">
               </div>
             </div>
 
             <div id="cmyZonePane" class="zone-stack" style="display: none;">
               <p class="helper-copy" id="cmyZoneHelper">Etalonaje selectivo de zona con preservación de luminancia.</p>
-              <div class="control-group">
+              <div class="control-group cmy-nudge-group">
                 <div class="control-label">
                   <span id="zoneRedLabel">Cian ↔ Rojo (Sombras)</span>
                   <span class="control-val" id="zoneCmyRedVal">0.00</span>
                 </div>
-                <input type="range" class="track-cyan-red" id="zoneCmyRedSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-cyan-red" id="zoneCmyRedSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="zoneRedLabel">
               </div>
 
-              <div class="control-group">
+              <div class="control-group cmy-nudge-group">
                 <div class="control-label">
                   <span id="zoneGreenLabel">Magenta ↔ Verde (Sombras)</span>
                   <span class="control-val" id="zoneCmyGreenVal">0.00</span>
                 </div>
-                <input type="range" class="track-magenta-green" id="zoneCmyGreenSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-magenta-green" id="zoneCmyGreenSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="zoneGreenLabel">
               </div>
 
-              <div class="control-group">
+              <div class="control-group cmy-nudge-group">
                 <div class="control-label">
                   <span id="zoneBlueLabel">Amarillo ↔ Azul (Sombras)</span>
                   <span class="control-val" id="zoneCmyBlueVal">0.00</span>
                 </div>
-                <input type="range" class="track-yellow-blue" id="zoneCmyBlueSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" class="track-yellow-blue" id="zoneCmyBlueSlider" min="-1.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="zoneBlueLabel">
               </div>
 
               <div class="control-group compact-top">
                 <div class="control-label">
-                  <span>Cruce de sombras</span>
+                  <span id="lblNegShadowsRange">Cruce de sombras</span>
                   <span class="control-val" id="negShadowsRangeVal">50%</span>
                 </div>
-                <input type="range" id="negShadowsRangeSlider" min="0" max="100" step="5" value="50" data-default="50">
+                <input type="range" id="negShadowsRangeSlider" min="0" max="100" step="5" value="50" data-default="50" aria-labelledby="lblNegShadowsRange">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span>Cruce de altas luces</span>
+                  <span id="lblNegHighsRange">Cruce de altas luces</span>
                   <span class="control-val" id="negHighsRangeVal">50%</span>
                 </div>
-                <input type="range" id="negHighsRangeSlider" min="0" max="100" step="5" value="50" data-default="50">
+                <input type="range" id="negHighsRangeSlider" min="0" max="100" step="5" value="50" data-default="50" aria-labelledby="lblNegHighsRange">
               </div>
             </div>
           </section>
@@ -900,50 +944,50 @@
 
               <div class="control-group" id="negSharpenAmountGroup" style="display: none;">
                 <div class="control-label">
-                  <span>Intensidad de acutancia</span>
+                  <span id="lblNegSharpenAmount">Intensidad de acutancia</span>
                   <span class="control-val" id="negSharpenAmountVal">100%</span>
                 </div>
-                <input type="range" id="negSharpenAmountSlider" min="0" max="200" step="10" value="100" data-default="100">
+                <input type="range" id="negSharpenAmountSlider" min="0" max="200" step="10" value="100" data-default="100" aria-labelledby="lblNegSharpenAmount">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span title="Filtro ámbar tipo Wratten 85B para película de tungsteno (800T / 500T) en luz día">Filtro 85B Cálido</span>
+                  <span id="lblNegWarming85" title="Filtro ámbar tipo Wratten 85B para película de tungsteno (800T / 500T) en luz día">Filtro 85B Cálido</span>
                   <span class="control-val" id="negWarming85Val">0%</span>
                 </div>
-                <input type="range" id="negWarming85Slider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" id="negWarming85Slider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegWarming85">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span title="Corrige selectivamente el tinte rojizo en altas luces provocado por backlights cálidos">Filtro Skylight (Anti-rojo)</span>
+                  <span id="lblNegSkylight" title="Corrige selectivamente el tinte rojizo en altas luces provocado por backlights cálidos">Filtro Skylight (Anti-rojo)</span>
                   <span class="control-val" id="negSkylightVal">0%</span>
                 </div>
-                <input type="range" id="negSkylightSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" id="negSkylightSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegSkylight">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span title="Neutraliza el velo verdoso en sombras de negativos subexpuestos o caducados">Filtro Sombra (Anti-verde)</span>
+                  <span id="lblNegShade" title="Neutraliza el velo verdoso en sombras de negativos subexpuestos o caducados">Filtro Sombra (Anti-verde)</span>
                   <span class="control-val" id="negShadeVal">0%</span>
                 </div>
-                <input type="range" id="negShadeSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0">
+                <input type="range" id="negShadeSlider" min="0.0" max="1.0" step="0.05" value="0.0" data-default="0.0" aria-labelledby="lblNegShade">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span>Halación y difusión suave</span>
+                  <span id="lblNegGlow">Halación y difusión suave</span>
                   <span class="control-val" id="negGlowVal">1.0x</span>
                 </div>
-                <input type="range" id="negGlowSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+                <input type="range" id="negGlowSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0" aria-labelledby="lblNegGlow">
               </div>
 
               <div class="control-group">
                 <div class="control-label">
-                  <span>Acabado mate / velo suave</span>
+                  <span id="lblNegFade">Acabado mate / velo suave</span>
                   <span class="control-val" id="negFadeVal">1.0x</span>
                 </div>
-                <input type="range" id="negFadeSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0">
+                <input type="range" id="negFadeSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0" aria-labelledby="lblNegFade">
               </div>
             </div>
           </details>
@@ -971,13 +1015,13 @@
               <span>Objetivo / Óptica</span>
               <input type="text" id="exifLens" list="dlLenses" placeholder="50mm f/1.4, 35mm Summicron…">
             </label>
-            <div class="exif-grid-2">
+            <div class="exif-grid-70-30">
               <label class="exif-field">
                 <span>Película disparada</span>
                 <input type="text" id="exifFilmStock" list="dlFilmStocks" placeholder="Kodak Portra 400…">
               </label>
               <label class="exif-field">
-                <span>ISO expuesto</span>
+                <span>ISO</span>
                 <input type="text" id="exifShotIso" placeholder="400">
               </label>
             </div>
@@ -1001,7 +1045,7 @@
             <div class="exif-grid-2">
               <label class="exif-field">
                 <span>Escáner / Captura</span>
-                <input type="text" id="exifScanner" list="dlScanners" placeholder="Frontier / Cámara Macro">
+                <input type="text" id="exifScanner" list="dlScanners" placeholder="Frontier / Macro">
               </label>
               <label class="exif-field">
                 <span>Fotógrafo / Autor</span>
@@ -1013,11 +1057,14 @@
               <input type="text" id="exifNotes" placeholder="Push +1, filtro amarillo…">
             </label>
             <div class="exif-actions-row">
+              <button type="button" class="btn btn-secondary btn-xs" id="btnAutoFillExifFromRecipe" title="Completar Película, ISO, Proceso y Escáner con la receta activa">
+                Desde receta
+              </button>
               <button type="button" class="btn btn-outline btn-xs" id="btnCopyAnalogCaption" title="Copiar pie de foto técnico al portapapeles">
-                Copiar pie técnico
+                Copiar pie
               </button>
               <button type="button" class="btn btn-ghost btn-xs" id="btnClearAnalogExif">
-                Limpiar ficha
+                Limpiar
               </button>
             </div>
           </div>
@@ -1092,13 +1139,13 @@
         <div class="format-row">
           <span class="format-label">Formato maestro</span>
           <div class="format-pills" id="outputFormatPills" role="radiogroup" aria-label="Formato de archivo de exportación">
-            <button class="fmt-pill active" data-format="jpg" title="JPEG 96% sin submuestreo cromático (4:4:4) con EXIF analógico">JPG 4:4:4</button>
-            <button class="fmt-pill" data-format="png" title="PNG sin pérdida con metadatos EXIF">PNG</button>
-            <button class="fmt-pill" data-format="tiff" title="TIFF Maestro de 16 bits por canal (48-bit RGB) sin pérdida con EXIF analógico">TIFF 16b</button>
+            <button class="fmt-pill active" data-format="jpg" role="radio" aria-checked="true" title="JPEG 96% sin submuestreo cromático (4:4:4) con EXIF analógico">JPG 4:4:4</button>
+            <button class="fmt-pill" data-format="png" role="radio" aria-checked="false" title="PNG sin pérdida con metadatos EXIF">PNG</button>
+            <button class="fmt-pill" data-format="tiff" role="radio" aria-checked="false" title="TIFF Maestro de 16 bits por canal (48-bit RGB) sin pérdida con EXIF analógico">TIFF 16b</button>
           </div>
         </div>
         <button class="btn btn-ghost btn-block btn-xs" id="openFolderBtn">
-          Abrir carpeta interna de revelados en Finder
+          Abrir carpeta interna de revelados
         </button>
       </div>
     </aside>
@@ -1145,7 +1192,7 @@
         <p id="modalSummary">Se procesaron todos los fotogramas preservando el archivo original intacto.</p>
         <div class="modal-actions">
           <button class="btn btn-primary btn-lg" id="modalSaveZipBtn">
-            Guardar archivo ZIP en Descargas y mostrar en Finder
+            Guardar archivo ZIP en Descargas y mostrar carpeta
           </button>
           <button class="btn btn-secondary btn-lg" id="modalOpenRollBtn">
             Abrir carpeta con copias y hoja de contactos
@@ -1164,7 +1211,7 @@
       </div>
       <div class="modal-body modal-body-left">
         <p class="helper-copy" id="historyHelperCopy">
-          Tus archivos RAW y negativos originales jamás se modifican. Puedes localizar cualquier copia en Finder o restaurar su receta exacta en el laboratorio:
+          Tus archivos RAW y negativos originales jamás se modifican. Puedes localizar cualquier copia en tu equipo o restaurar su receta exacta en el laboratorio:
         </p>
         <div class="history-list" id="historyList">
           <!-- Populated dynamically -->
@@ -1187,16 +1234,20 @@
           <div class="shortcut-row"><span>Importar fotografía o escaneo</span><kbd id="kbdOpen">⌘ O</kbd></div>
           <div class="shortcut-row"><span>Deshacer / Rehacer ajuste</span><kbd id="kbdUndoRedo">⌘ Z / ⇧ ⌘ Z</kbd></div>
           <div class="shortcut-row"><span>Fotograma anterior / siguiente</span><kbd>←</kbd> <kbd>→</kbd></div>
+          <div class="shortcut-row"><span>Elegir / Descartar / Neutro</span><kbd>P</kbd> <kbd>X</kbd> <kbd>U</kbd></div>
           <div class="shortcut-row"><span>Comparar original (mantener)</span><kbd>\</kbd></div>
           <div class="shortcut-row"><span>Vista Dividida / Revelada / Contactos</span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></div>
+          <div class="shortcut-row"><span>Aviso de luces/sombras (Cebra)</span><kbd>J</kbd></div>
           <div class="shortcut-row"><span>Rotar fotograma 90°</span><kbd>R</kbd></div>
           <div class="shortcut-row"><span>Espejo horizontal de emulsión</span><kbd>F</kbd></div>
           <div class="shortcut-row"><span>Cuentagotas de soporte base (D-min)</span><kbd>I</kbd></div>
           <div class="shortcut-row"><span>Cuentagotas de gris neutro en positivo</span><kbd>W</kbd></div>
+          <div class="shortcut-row"><span>Mover lienzo temporalmente</span><kbd>Espacio</kbd> + arrastrar</div>
           <div class="shortcut-row"><span>Copiar / Pegar receta óptica</span><kbd id="kbdCopyPaste">⇧ ⌘ C / V</kbd></div>
           <div class="shortcut-row"><span>Encajar zoom en mesa de luz</span><kbd>0</kbd></div>
+          <div class="shortcut-row"><span>Ocultar/mostrar paneles (Mesa limpia)</span><kbd>Tab</kbd></div>
           <div class="shortcut-row"><span>Luz roja de cuarto oscuro</span><kbd>L</kbd></div>
-          <div class="shortcut-row"><span>Restablecer deslizador individual</span><kbd>Doble clic</kbd></div>
+          <div class="shortcut-row"><span>Restablecer o editar valor exacto</span><kbd>Doble clic / Clic</kbd></div>
         </div>
       </div>
     </div>
@@ -1216,7 +1267,7 @@
           </div>
           <div>
             <h3 id="aboutModalTitle">Haluro — Laboratorio Analógico Digital</h3>
-            <span class="about-version-badge">Versión 2.4.5 · Distribución Libre y Gratuita</span>
+            <span class="about-version-badge">Versión 2.4.6 · Distribución Libre y Gratuita</span>
           </div>
         </div>
         <button class="modal-close" id="closeAboutBtn" aria-label="Cerrar acerca de">&times;</button>
@@ -1243,7 +1294,7 @@
         <div class="about-update-card">
           <div class="about-update-info">
             <span class="about-update-title">Actualizaciones de software</span>
-            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.5 instalada</span>
+            <span class="about-update-status" id="aboutUpdateStatus">Versión 2.4.6 instalada</span>
           </div>
           <button class="btn btn-secondary btn-sm" id="btnCheckUpdateManual">
             <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -1367,6 +1418,55 @@
           </svg>
           <span id="btnDownloadUpdateLabel">Descargar actualización</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Selective Sync Recipe to Roll -->
+  <div class="modal-backdrop" id="syncRollModal" role="dialog" aria-modal="true" aria-labelledby="syncRollModalTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="syncRollModalTitle">Sincronizar receta con el rollo</h3>
+        <button class="modal-close" id="closeSyncRollModalBtn" aria-label="Cerrar sincronización">&times;</button>
+      </div>
+      <div class="modal-body modal-body-left">
+        <p class="helper-copy" id="syncRollModalIntro">
+          Elige qué parámetros de este fotograma se aplicarán al resto del rollo (la rotación y espejo individuales siempre se conservan):
+        </p>
+        <div class="sync-options-list" id="syncOptionsList">
+          <label class="sync-option-item">
+            <input type="checkbox" id="syncOptProfileTone" checked>
+            <div>
+              <strong id="syncOptProfileTitle">Perfil, película y curva tonal</strong>
+              <span id="syncOptProfileDesc">Emulsión o perfil de escáner, contraste, luces y negros.</span>
+            </div>
+          </label>
+          <label class="sync-option-item" id="syncOptColorRow">
+            <input type="checkbox" id="syncOptColor" checked>
+            <div>
+              <strong>Etalonaje CMY, zonas y temperatura</strong>
+              <span>Luces de ampliadora, balance de escena y tono por zonas.</span>
+            </div>
+          </label>
+          <label class="sync-option-item">
+            <input type="checkbox" id="syncOptOptics" checked>
+            <div>
+              <strong id="syncOptOpticsTitle">Óptica, filtros, grano y acabado</strong>
+              <span id="syncOptOpticsDesc">Halación, grano, viñeteado, nitidez y papel/virado.</span>
+            </div>
+          </label>
+          <label class="sync-option-item sync-option-caution" id="syncOptBaseCropRow">
+            <input type="checkbox" id="syncOptBaseCrop">
+            <div>
+              <strong>Soporte D-min y recorte de borde</strong>
+              <span>Incluir únicamente si todo el rollo se escaneó con idéntico encuadre y máscara.</span>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer update-modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCancelSyncRoll">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnConfirmSyncRoll">Aplicar al rollo</button>
       </div>
     </div>
   </div>

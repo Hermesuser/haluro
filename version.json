@@ -1,20 +1,21 @@
 {
-  "version": "2.4.5",
+  "version": "2.4.6",
   "release_date": "2026-11-11",
-  "name": "Haluro v2.4.5",
-  "title": "Flujo de Cuarto Oscuro Refinado, Historial Deshacer y Catálogo en Español",
-  "description": "Pulido integral de interfaz y experiencia de usuario: historial rápido Deshacer/Rehacer (⌘Z / ⇧⌘Z), navegación por fotogramas con flechas, estado vacío guiado, densidad neutra en Laboratorio de Negativos y traducciones completas al español en las 72 películas.",
+  "name": "Haluro v2.4.6",
+  "title": "Pulido Integral de Interfaz: Tipografía, Iconografía SVG y Móvil Foto-Primero",
+  "description": "Auditoría completa de UI/UX aplicada de punta a punta: escala tipográfica unificada sin texto bajo 11px, iconografía vectorial nativa en todo el flujo de fotogramas, jerarquía de superficies sin sombras flotantes, y layout móvil que abre la pantalla con la fotografía.",
   "highlights": [
-    "Deshacer y rehacer ajustes en tiempo real (⌘Z / ⇧⌘Z) junto con navegación directa entre fotogramas con las teclas ← y →.",
-    "Estado vacío guiado sobre la mesa de luz con acciones directas para importar fotografías o iniciar con muestras de laboratorio.",
-    "Control directo de Densidad neutra en el Laboratorio de Negativos y adaptación limpia de la barra de herramientas en portátiles.",
-    "Catálogo completo de 72 películas clásicas en español y terminología de captura unificada (Cámara RAW, Soporte base D-min)."
+    "Escala tipográfica unificada en seis tamaños (11/12/13/14/16/20px): ninguna etiqueta, badge ni dato por debajo de 11px en escritorio, hoja de contactos y catálogo.",
+    "Iconografía SVG en línea para favoritas, selección y descarte de fotogramas: estrella y aspa nítidas en cualquier densidad de píxeles, sin glifos tipográficos.",
+    "Jerarquía de superficies calibrada: el visor y la hoja de contactos descansan sobre su borde de 1px sin sombras flotantes, y los controles activos usan anillo por contorno.",
+    "En pantallas angostas la fotografía abre la vista con áreas táctiles de 40–44px, la telemetría de escritorio cede su lugar y el estado vacío deja de filtrar texto alterno.",
+    "Respiros y márgenes revisados en cabeceras de panel, histograma, barra de herramientas y pie del inspector, con transiciones nombradas y valores numéricos tabulares."
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-2.4.5-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-2.4.5-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-Setup-2.4.5-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.5/Haluro-Portable-2.4.5-Win11-x64.zip",
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-2.4.6-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-2.4.6-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-Setup-2.4.6-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.4.6/Haluro-Portable-2.4.6-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "min_supported_version": "2.0.0"

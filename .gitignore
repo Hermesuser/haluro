@@ -24,3 +24,6 @@ logs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Design-audit evidence (local only)
+.taste-skill/

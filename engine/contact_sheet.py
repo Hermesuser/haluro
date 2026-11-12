@@ -11,16 +11,18 @@ from .platform_io import load_ui_font
 
 def generate_contact_sheet(
     frame_images,
-    roll_name="ROLL 001",
+    roll_name="ROLLO 001",
     film_name="Kodak Portra 400",
     date_str=None,
     columns=4,
     thumb_width=480,
     return_layout=False,
+    frame_labels=None,
 ):
     """frame_images: list of PIL Images or file paths.
     columns: integer number of columns (typically 3, 4, 5, or 6).
     return_layout: bool, if True returns tuple (sheet_image, layout_boxes).
+    frame_labels: optional list of per-frame identifiers (stems) shown next to DX numbers.
     Returns: PIL Image of the contact sheet (or tuple if return_layout=True).
     """
     if not date_str:
@@ -54,8 +56,9 @@ def generate_contact_sheet(
     spacing_x = int(round(24 * scale))
     spacing_y = int(round(48 * scale))
     
-    # Target frame aspect ratio approx 3:2
-    thumb_h = int(round(thumb_width * 2 / 3))
+    # Adaptive slot height: compact 3:2 when all frames are landscape, taller balanced 0.88:1 when vertical/square frames exist
+    has_portrait_or_square = any(im.height > im.width * 0.90 for im in loaded_frames)
+    thumb_h = int(round(thumb_width * (0.88 if has_portrait_or_square else 2 / 3)))
     
     total_w = margin_x * 2 + columns * thumb_width + (columns - 1) * spacing_x
     total_h = margin_top + margin_bottom + rows * thumb_h + (rows - 1) * spacing_y
@@ -74,14 +77,24 @@ def generate_contact_sheet(
     rule_y = int(round(30 * scale))
     draw.rectangle([margin_x, rule_y, total_w - margin_x, rule_y + rule_h], fill=(220, 140, 30))
     draw.text((margin_x, int(round(48 * scale))), film_name.upper(), font=title_font, fill=(240, 240, 240))
-    draw.text((margin_x, int(round(88 * scale))), f"ROLL: {roll_name}   •   FRAMES: {n_frames}   •   DATE: {date_str}", font=meta_font, fill=(180, 180, 180))
+    draw.text(
+        (margin_x, int(round(88 * scale))),
+        f"ROLLO: {roll_name}   •   CUADROS: {n_frames}   •   FECHA: {date_str}",
+        font=meta_font,
+        fill=(180, 180, 180),
+    )
     
-    # Draw Film Canister Badge
+    # Draw Film Canister Badge with accurately centered text
     badge_w, badge_h = int(round(160 * scale)), int(round(40 * scale))
     bx = total_w - margin_x - badge_w
     by = int(round(50 * scale))
     draw.rounded_rectangle([bx, by, bx + badge_w, by + badge_h], radius=max(3, int(round(6 * scale))), fill=(28, 30, 35), outline=(229, 149, 40), width=max(1, int(round(2 * scale))))
-    draw.text((bx + int(round(24 * scale)), by + int(round(12 * scale))), "HALURO LAB", font=frame_font, fill=(229, 149, 40))
+    badge_text = "HALURO LAB"
+    bbox = draw.textbbox((0, 0), badge_text, font=frame_font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = bx + (badge_w - tw) / 2 - bbox[0]
+    ty = by + (badge_h - th) / 2 - bbox[1]
+    draw.text((tx, ty), badge_text, font=frame_font, fill=(229, 149, 40))
     
     # Draw Frames
     border_pad = max(2, int(round(4 * scale)))
@@ -93,8 +106,8 @@ def generate_contact_sheet(
         x = margin_x + c * (thumb_width + spacing_x)
         y = margin_top + r * (thumb_h + spacing_y)
         
-        # Fit image maintaining aspect ratio
-        if frame.width != thumb_width or frame.height > thumb_h:
+        # Fit image maintaining aspect ratio inside slot
+        if frame.width > thumb_width or frame.height > thumb_h or (frame.width < thumb_width and frame.height < thumb_h):
             thumb = frame.copy()
             thumb.thumbnail((thumb_width, thumb_h), Image.Resampling.BICUBIC)
         else:
@@ -113,8 +126,14 @@ def generate_contact_sheet(
         
         sheet.paste(thumb, (px, py))
         
-        # Frame Number Marker (e.g. "01", "02")
-        frame_str = f"▶ {idx + 1:02d}A  DX"
+        # Frame Number Marker + optional custom filename stem
+        lbl_suffix = ""
+        if frame_labels and idx < len(frame_labels) and frame_labels[idx]:
+            raw_lbl = str(frame_labels[idx]).strip()
+            if len(raw_lbl) > 14:
+                raw_lbl = raw_lbl[:13] + "…"
+            lbl_suffix = f" · {raw_lbl}"
+        frame_str = f"▶ {idx + 1:02d}A  DX{lbl_suffix}"
         draw.text((px, py + thumb.height + int(round(6 * scale))), frame_str, font=frame_font, fill=(190, 120, 20))
 
         layout_boxes.append({

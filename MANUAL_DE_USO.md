@@ -11,26 +11,23 @@ Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfic
    - [Windows 11](#windows-11)
 2. [Arquitectura de la Interfaz y Mesa de Luz](#2-arquitectura-de-la-interfaz-y-mesa-de-luz)
    - [Importación de Archivos](#importación-de-archivos)
-   - [Visor Central y Herramientas de Inspección](#visor-central-y-herramientas-de-inspección)
    - [Atajos de Teclado Universales](#atajos-de-teclado-universales)
 3. [Modo 1: Laboratorio de Inversión de Negativos](#3-modo-1-laboratorio-de-inversión-de-negativos)
    - [El Concepto Clave: D-min (Densidad Mínima)](#el-concepto-clave-d-min-densidad-mínima)
    - [Muestreo Óptico del Soporte Base](#muestreo-óptico-del-soporte-base)
    - [Perfiles de Escáner de Laboratorio (Fuji Frontier vs. Noritsu)](#perfiles-de-escáner-de-laboratorio-fuji-frontier-vs-noritsu)
    - [Cabezal Dicroico CMY y Balance de 3 Vías](#cabezal-dicroico-cmy-y-balance-de-3-vías)
-   - [Control de Revelado: Forzado y Sub-revelado (Push/Pull)](#control-de-revelado-forzado-y-sub-revelado-pushpull)
-4. [Modo 2: Cuarto Oscuro (Catálogo de Emulsiones)](#4-modo-2-cuarto-oscuro-catálogo-de-emulsiones)
+   - [Control de Revelado: Latitud Pull ↔ Push](#control-de-revelado-latitud-pull--push)
+4. [Modo 2: Emulación · 72 Películas Químicas](#4-modo-2-emulación--72-películas-químicas)
    - [Las 72 Emulsiones Clásicas](#las-72-emulsiones-clásicas)
-   - [Clasificación por Familias Fotoquímicas](#clasificación-por-familias-fotoquímicas)
-   - [Ajustes de Química y Óptica](#ajustes-de-química-y-óptica)
 5. [Efectos Fotoquímicos y Ópticos](#5-efectos-fotoquímicos-y-ópticos)
    - [Halación Analógica (Capa Antihalo)](#halación-analógica-capa-antihalo)
    - [Grano de Haluro de Plata (Cúbico vs. Tabular T-Grain)](#grano-de-haluro-de-plata-cúbico-vs-tabular-t-grain)
    - [Virados Químicos de Papel (B&N)](#virados-químicos-de-papel-bn)
 6. [Metadatos Analógicos (Analog EXIF) y Exportación](#6-metadatos-analógicos-analog-exif-y-exportación)
    - [Registro de Cámara, Lente y Revelado](#registro-de-cámara-lente-y-revelado)
-   - [Formatos de Salida (TIFF 16-bit vs. JPEG)](#formatos-de-salida-tiff-16-bit-vs-jpeg)
-   - [Procesamiento por Lotes](#procesamiento-por-lotes)
+   - [Formatos de Salida (TIFF 16-bit, PNG y JPEG)](#formatos-de-salida-tiff-16-bit-png-y-jpeg)
+   - [Procesamiento por Lotes y Mesa de Luz de Contactos](#procesamiento-por-lotes-y-mesa-de-luz-de-contactos)
 7. [Preguntas Frecuentes y Resolución de Problemas](#7-preguntas-frecuentes-y-resolución-de-problemas)
 
 ---
@@ -73,22 +70,25 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 La interfaz de Haluro está organizada en tres áreas principales diseñadas para minimizar la fatiga visual en sesiones prolongadas de edición:
 
-![Mesa de Luz y Bienvenida](docs/images/01_mesa_de_luz.png)
+![Mesa de Luz y Bienvenida guiada](docs/images/01_mesa_de_luz.png)
+
+![Espacio de Trabajo completo en Modo Emulación](docs/images/02_espacio_trabajo_darkrooms.png)
 
 1. **Barra Superior (Cabecera):**
-   - Selector de modo: **«Modo Darkrooms»** (emulación de películas) vs. **«Modo Negativo»** (inversión química de negativos).
-   - Acceso a muestras rápidas de calibración (`Cargar muestra RAW`).
-   - Botón de importación manual (`Importar archivos`) y atajo `⌘O` / `Ctrl+O`.
-   - Botón de exportación rápida (`Exportar copia`).
+   - Selector de modo: **«Emulación · 72»** (simulación de películas químicas) vs. **«Revelar negativo»** (inversión densitométrica de negativos C-41 y B&N).
+   - **Muestra:** Carga automática de una fotografía RAW o un negativo de prueba según el modo activo.
+   - **Importar:** Selector de archivos (`⌘O` / `Ctrl+O`) para cargar fotografías o escaneos individuales o en rollo.
+   - Utilidades rápidas: **Luz roja de cuarto oscuro (`L`)**, **Historial de versiones reveladas**, **Atajos de teclado (`?`)** y **Acerca de Haluro / Actualizaciones**.
+   - Grupo de exportación contextual: botón principal **Guardar** (que cambia a **Guardar contactos** en la pestaña *Contactos*), menú desplegable con **Guardar como…** (`⇧⌘S` / `Ctrl+Shift+S`) y **Guardar solo contactos**, más **Revelar rollo** para procesado completo en paralelo.
 
-2. **Mesa de Luz Central:**
-   - Área de previsualización con aceleración gráfica y soporte para pantallas Retina / High-DPI.
-   - Densitómetro flotante en tiempo real: lee valores RGB normalizados en cualquier punto de la imagen.
-   - Barra de herramientas inferior con controles de zoom (Ajustar, 100%, 200%), rotación y visualizador comparativo de pantalla dividida (Split Screen / Antes y Después).
+2. **Mesa de Luz Central y Tira de 35 mm:**
+   - Área de previsualización de alta fidelidad (con pantalla de bienvenida guiada cuando la mesa de luz está vacía) e indicador de edición no destructiva (`Original intacto`, resolución y latencia).
+   - Barra de herramientas con modos de vista (**Dividida** `1`, **Revelada** `2`, **Original** `\`, **Contactos** `3`), rotación izquierda/derecha (`⇧R` / `R`), espejo horizontal de emulsión (`F`), lupa (`-`, **Ajustar** `0`, `+` o rueda del ratón) y transferencia de recetas (**Copiar**, **Pegar**, **Sincronizar rollo**).
+   - Tira perforada de 35 mm inferior con navegación por fotogramas (`←` / `→`), punto ámbar en tomas personalizadas, botón **+ Añadir** y **× Vaciar**.
 
 3. **Paneles Laterales:**
-   - **Panel Izquierdo:** Selección de emulsión (catálogo de 72 películas en modo Darkrooms) o calibración del soporte base D-min y perfiles de escáner (en modo Negativo).
-   - **Panel Derecho (Inspector):** Parámetros de química analógica, curvas tonales, cabezal dicroico CMY, grano, halación y metadatos analógicos.
+   - **Panel Izquierdo:** Catálogo buscable de 72 películas con filtros en español (`Todas`, `★ Favoritas`, `Negativo C-41`, `Diapositiva E-6`, `Cine`, `Plata B&N`, `Cross-Pro`) en modo *Emulación*, o calibración de soporte base D-min, perfiles de escáner y virados B&N en modo *Revelar negativo*.
+   - **Panel Derecho (Inspector):** **Densitómetro RGB** en vivo (lectura de sombras y luces recortadas), controles de **Química y óptica** / **Curva tonal y proceso**, **Ampliadora CMY y 3 vías**, **Filtros y nitidez óptica**, **Ficha técnica EXIF analógica** y selector de **Formato maestro** (`JPG 4:4:4`, `PNG`, `TIFF 16b`).
 
 ---
 
@@ -109,21 +109,28 @@ Para importar, basta con **arrastrar y soltar** uno o varios archivos directamen
 | `⌘ + O` | `Ctrl + O` | Abrir selector de archivos para importar |
 | `⌘ + Z / ⇧ + ⌘ + Z` | `Ctrl + Z / Ctrl + Y` | Deshacer y rehacer ajustes sobre el fotograma activo |
 | `←` / `→` | `←` / `→` | Saltar al fotograma anterior o siguiente del rollo |
+| `1` / `2` / `3` | `1` / `2` / `3` | Cambiar entre vista **Dividida**, **Revelada** y **Contactos** |
+| `\` (mantener) | `\` (mantener) | Mostrar temporalmente el fotograma original sin procesar |
 | `I` | `I` | Activar cuentagotas para muestreo de soporte base D-min |
-| `\` | `\` | Alternar vista comparativa (Original vs. Revelado) |
-| `Espacio + Arrastrar` | `Espacio + Arrastrar` | Desplazamiento panorámico (Pan) sobre la mesa de luz |
-| `⌘ + 0` | `Ctrl + 0` | Ajustar imagen completa al tamaño de la ventana |
-| `⌘ + 1` | `Ctrl + 1` | Zoom 100% (píxel por píxel para evaluar grano y nitidez) |
-| `⌘ + S` | `Ctrl + S` | Abrir cuadro de diálogo de exportación |
-| `R` | `R` | Rotar imagen 90° en sentido horario |
+| `W` | `W` | Activar cuentagotas de gris neutro sobre el positivo |
+| `R` / `⇧ + R` | `R` / `Shift + R` | Rotar imagen 90° en sentido horario o antihorario |
+| `F` | `F` | Voltear horizontalmente (espejo de emulsión) |
+| `+` / `-` / `0` | `+` / `-` / `0` | Acercar, alejar o ajustar el zoom completo en la mesa de luz |
+| `Arrastrar (con zoom)` | `Arrastrar (con zoom)` | Desplazamiento panorámico sobre la fotografía o la hoja de contactos |
+| `⇧ + ⌘ + C` / `V` | `Ctrl + Shift + C` / `V` | Copiar y pegar la receta óptica al fotograma activo |
+| `⌘ + S` | `Ctrl + S` | Guardar copia maestra (o contactos) en Descargas |
+| `⇧ + ⌘ + S` | `Ctrl + Shift + S` | Abrir diálogo **Guardar como…** |
+| `L` | `L` | Alternar **Luz roja** ambiental de cuarto oscuro |
+| `?` | `?` | Abrir o cerrar la guía de atajos de teclado |
+| `Doble clic` | `Doble clic` | Restablecer un deslizador individual a su punto neutro |
 
 ---
 
 ## 3. Modo 1: Laboratorio de Inversión de Negativos
 
-El **Modo Negativo** convierte digitalizaciones de película en copias positivas exactas utilizando física densitométrica en lugar de una simple inversión aritmética de curvas RGB.
+El modo **Revelar negativo** convierte digitalizaciones de película en copias positivas exactas utilizando física densitométrica en lugar de una simple inversión aritmética de curvas RGB.
 
-![Modo Negativo e Inversión](docs/images/03_modo_negativo_inversion.png)
+![Modo Revelar negativo e inversión](docs/images/03_modo_negativo_inversion.png)
 
 ### El Concepto Clave: D-min (Densidad Mínima)
 
@@ -135,15 +142,15 @@ Si se invierte un negativo sin restar matemáticamente el D-min exacto de esa em
 
 ### Muestreo Óptico del Soporte Base
 
-1. Haz clic en la pestaña **«Modo Negativo»** en la barra superior.
+1. Haz clic en la pestaña **«Revelar negativo»** en la barra superior.
 2. En el panel izquierdo, ubica la sección **«Soporte base (D-min) y rollo»**.
-3. Presiona la tecla `I` o pulsa sobre el icono del **Cuentagotas D-min**.
+3. Presiona la tecla `I` o pulsa el botón **«Muestrear»** (también puedes usar **«Auto»** para detección automática).
 4. En el visor central, haz clic sobre una zona de película virgen no expuesta (el reborde perforado del carrete o el espacio entre fotogramas).
 5. Haluro medirá los valores de absorción en 16 bits y neutralizará la máscara naranja de forma instantánea y no destructiva.
 
 > [!TIP]
 > **¿Qué hacer si el escaneo no tiene bordes visibles?**  
-> Si tu fotografía fue recortada al ras y no tienes acceso al reborde virgen, pulsa el botón **«Equilibrio de escena (Sin bordes)»** en el panel derecho. El motor analizará el histograma de densidad de las sombras más densas para deducir el valor base del sustrato.
+> Si tu fotografía fue recortada al ras y no tienes acceso al reborde virgen, pulsa **«Auto»** en *Soporte base (D-min) y rollo*, utiliza **«Análisis de rollo y márgenes»**, o pulsa **«Auto equilibrio»** / el cuentagotas **«Gris neutro (W)»** en la sección **«Ampliadora CMY y 3 vías»** del panel derecho.
 
 ---
 
@@ -170,24 +177,26 @@ Igual que en una ampliadora de laboratorio químico (como una LPL o Beseler con 
 * **Magenta (M):** Controla la relación entre verdes y magentas (esencial para ajustar el matiz de la piel).
 * **Amarillo (Y):** Calibra la calidez general neutralizando sombras azuladas.
 
-El **Balance de 3 Vías** permite aislar estos ajustes por zonas de luminancia:
+El **Balance de 3 Vías** permite aislar estos ajustes por zonas de luminancia (**Global**, **Sombras**, **Medios** y **Luces**):
 * **Sombras:** Corrige la base tonal de los tonos más oscuros sin afectar el cielo ni los rostros.
-* **Medios Tonos:** Ajusta el cuerpo central de la exposición (tonos de piel, follaje, ropa).
-* **Altas Luces:** Limpia los blancos puros evitando que se tiñan al mover la temperatura general.
+* **Medios:** Ajusta el cuerpo central de la exposición (tonos de piel, follaje, ropa).
+* **Luces:** Limpia los blancos puros evitando que se tiñan al mover la temperatura general.
+
+Además, la sección **«Curva tonal y proceso»** incluye el control **Densidad neutra (Medios)** para aclarar u oscurecer la densidad de los medios tonos manteniendo intacta la cromaticidad neutra calibrada, mientras que **«Filtros y nitidez óptica»** añade acutancia en luminancia (*Apagada*, *Lab*, *Escáner*), *Intensidad de acutancia*, filtros ópticos (*Filtro 85B Cálido*, *Filtro Skylight (Anti-rojo)*, *Filtro Sombra (Anti-verde)*), *Halación y difusión suave* y *Acabado mate / velo suave*.
 
 ---
 
-### Control de Revelado: Forzado y Sub-revelado (Push/Pull)
+### Control de Revelado: Latitud Pull ↔ Push
 
-El deslizador de **Proceso Químico (EV)** simula la variación del tiempo de permanencia del negativo en el baño de revelador (C-41 o D-76):
-* **Push (+1 EV a +3 EV):** Aumenta el contraste de la curva característica (pendiente gamma más empinada) e incrementa el grano aparente. Ideal para negativos subexpuestos en la toma.
-* **Pull (-1 EV a -2 EV):** Suaviza la respuesta tonal, expande el rango dinámico en altas luces y produce sombras abiertas y sedosas.
+El deslizador **Latitud Pull ↔ Push** (y *Compensación de exposición* en modo Emulación) simula la variación de tiempo o densidad durante el revelado:
+* **Push (+0.10 a +1.00):** Aumenta el contraste de la curva característica y aporta mayor presencia tonal en negativos subexpuestos.
+* **Pull (-1.00 a -0.10):** Suaviza la respuesta tonal, protege las altas luces y abre las sombras.
 
 ---
 
-## 4. Modo 2: Cuarto Oscuro (Catálogo de Emulsiones)
+## 4. Modo 2: Emulación · 72 Películas Químicas
 
-El **Modo Darkrooms** aplica perfiles matemáticos y curvas características sensitométricas (pie, zona recta y hombro) sobre imágenes positivas (digitales o analógicas neutralizadas), recreando el comportamiento de 72 emulsiones de película legendarias.
+El modo **«Emulación · 72»** aplica perfiles matemáticos y curvas características sensitométricas (pie, zona recta y hombro) sobre imágenes positivas (digitales o escaneos ya invertidos), recreando en español el catálogo de 72 emulsiones clásicas con filtros por familia (**Todas**, **★ Favoritas**, **Negativo C-41**, **Diapositiva E-6**, **Cine**, **Plata B&N**, **Cross-Pro**).
 
 ![Catálogo de Películas Haluro](docs/images/06_catalogo_peliculas_cinestill.png)
 
@@ -233,34 +242,31 @@ Haluro no superpone capas transparentes de textura artificial. Cada efecto model
 
 ### Halación Analógica (Capa Antihalo)
 
-En una película tradicional, la luz intensa atraviesa la emulsión y rebota en la base plástica hacia la capa roja, generando un halo difuso alrededor de los puntos luminosos.
+En una película tradicional (como CineStill 800T), la luz intensa atraviesa la emulsión y rebota en la base plástica hacia la capa roja, generando un halo difuso alrededor de los puntos luminosos.
 
-* **Intensidad de Halación:** Controla la cantidad de dispersión de luz roja alrededor de las altas luces especulares (faroles, destellos solares, bombillas).
-* **Radio Óptico:** Determina el alcance físico de la dispersión de fotones en la base del soporte.
+* **Halación en altas luces (`0.0x` a `3.0x`):** Regula la intensidad del halo rojizo alrededor de altas luces especulares (faroles, destellos solares, neones).
 
 ---
 
 ### Grano de Haluro de Plata (Cúbico vs. Tabular T-Grain)
 
-El grano fotográfico es el resultado de la acumulación microscópica de cúmulos de plata metálica reducida durante el revelado.
+El grano fotográfico surge de cúmulos microscópicos de plata metálica reducida durante el revelado:
 
-* **Modo de Grano Clásico (Cúbico):** Cristales tridimensionales irregulares. Produce una textura orgánica, crujiente y tridimensional, propia de películas como Tri-X, HP5 o Gold.
-* **Modo de Grano Tabular (T-Grain):** Cristales laminares aplanados paralelos al soporte. Proporciona una superficie fina y regular, característica de T-Max y Delta.
-* **Controles:**
-  * *Intensidad:* Densidad de cúmulos de plata por milímetro cuadrado.
-  * *Tamaño:* Equivalente a la sensibilidad ISO de la emulsión (fino para ISO 50/100, grueso para ISO 800/3200).
-  * *Nitidez:* Controla la acutancia del grano (simula el uso de reveladores de alta acutancia como Rodinal vs. reveladores solventes como D-76).
+* **Grano Cúbico Clásico:** Propio de emulsiones como Tri-X, HP5 Plus o Kodak Gold; aporta textura orgánica y tridimensional.
+* **Grano Tabular (T-Grain):** Característico de T-Max y Delta; ofrece microestructura fina y gran acutancia óptica.
+* **Grano de haluro de plata (`0.0x` a `3.0x`):** Escala proporcionalmente la densidad del grano físico calibrado para cada emulsión seleccionada, junto con **Viñeteo óptico (`0.0x` a `2.0x`)** y el interruptor **Sello de fecha en cuarzo ámbar**.
 
 ---
 
 ### Virados Químicos de Papel (B&N)
 
-En el laboratorio clásico, las copias en papel baritado se sumergen en baños metálicos secundarios para proteger la plata y modificar su matiz:
+En el modo **«Revelar negativo»** al seleccionar **«Plata B&N»**, la sección **«Medio fotoquímico y acabado»** ofrece 10 procesos y acabados tradicionales:
 
-* **Selenio:** Reemplaza la plata libre por seleniuro de plata. Enfría sutilmente los tonos medios y profundiza drásticamente los negros (D-max) sin alterar las luces altas.
-* **Sepia:** Convierte la plata en sulfuro de plata, otorgando una calidez nostálgica y permanente a la copia.
-* **Cianotipia / Virado Azul:** Imprime un tono azul Prusia profundo en sombras y medios tonos.
-* **Virado al Oro:** Proporciona un acabado rojizo cálido y protege contra la oxidación química por siglos.
+* **Gelatina de Plata Neutra:** Copia baritada clásica sin virado químico.
+* **Selenio #1, Selenio #2 y Selenio #3:** Virados progresivos al selenio para profundizar negros y enfriar tonos medios.
+* **Platino / Paladio Artesanal:** Tono cálido mate de rango dinámico extendido.
+* **Sepia Sulfuro / Kodak Brown y Virado Cobre y Hierro (Split):** Tonalidades cálidas y duotono clásico.
+* **Clorobromuro Cálido (Fomatone), Bromuro Frío Azul-Negro y Papel Algodón Mate Museo.**
 
 ---
 
@@ -268,31 +274,28 @@ En el laboratorio clásico, las copias en papel baritado se sumergen en baños m
 
 ### Registro de Cámara, Lente y Revelado
 
-Al trabajar con fotografía híbrida, la cámara digital que escanea el negativo sobrescribe los metadatos de la toma con los suyos (por ejemplo, «Sony A7 IV + Lente Macro 90mm»).
+Al digitalizar negativos con una cámara digital o escáner, los metadatos originales reflejan el equipo de captura y no la toma en película.
 
-El cajón **«Metadatos Analógicos»** de Haluro te permite restituir la verdadera historia fotoquímica de la imagen:
+El panel desplegable **«Ficha técnica EXIF analógica»** incrusta nativamente en JPG, PNG y TIFF de 16 bits la historia completa del fotograma:
 
-* **Cámara Analógica:** (Ej. *Leica M6*, *Hasselblad 500 C/M*, *Pentax 67*, *Canon AE-1*).
-* **Lente Clásico:** (Ej. *Carl Zeiss Planar 80mm f/2.8*, *Summicron 35mm f/2*).
-* **Emulsión Utilizada:** (Ej. *Kodak Portra 400*).
-* **Número de Rollo / Fotograma:** (Ej. *Rollo #12 - Frame 18*).
-* **Laboratorio / Químico:** (Ej. *Revelado casero D-76 1+1 @ 20°C*).
-* **Fecha de Exposición:** Fecha real en que se disparó la película.
-
-Estos datos se incrustan en el estándar de metadatos EXIF/XMP del archivo resultante.
+* **Marca y Modelo de cámara:** (Ej. *Leica*, *M6*, *Hasselblad 500C/M*, *Pentax 67II*).
+* **Objetivo / Óptica:** (Ej. *35mm f/2 Summicron*).
+* **Película disparada e ISO expuesto:** (Ej. *Kodak Tri-X 400*, ISO *400*).
+* **Formato y Revelador / Proceso:** (`135 (35mm)`, `120 Medio Formato`, *C-41*, *ECN-2*, *Kodak D-76 (1+1)*).
+* **Escáner / Captura, Fotógrafo / Autor y Notas de cuarto oscuro:** (Ej. *Push +1 · Filtro amarillo*). Incluye botón **«Copiar pie técnico»** para compartir al instante.
 
 ---
 
-### Formatos de Salida (TIFF 16-bit vs. JPEG)
+### Formatos de Salida (TIFF 16-bit, PNG y JPEG)
 
-Haluro permite exportar en dos estándares profesionales:
+En la esquina inferior derecha (**Formato maestro**), Haluro ofrece tres opciones sin alterar nunca los originales:
 
-1. **TIFF de 16 Bits (Recomendado para Archivo y Master):**
-   - Espacio de color amplio sin pérdida de gradación tonal.
-   - Ideal si piensas realizar impresiones de gran formato o ajustes posteriores en Photoshop.
-2. **JPEG de Máxima Calidad (100% Calidad sRGB):**
-   - Curva sRGB incrustada para visualización idéntica en pantallas Retina, iPhone, Android y redes sociales.
-   - Metadatos optimizados para carga rápida sin pérdida de textura fotoquímica.
+1. **TIFF 16b (Recomendado para Archivo y Master):**
+   - TIFF de 16 bits por canal (48-bit RGB real) sin pérdida a 300 DPI con compresión Adobe Deflate y metadatos EXIF analógicos.
+2. **PNG:**
+   - Salida sin pérdida de alta compatibilidad con metadatos EXIF incrustados.
+3. **JPG 4:4:4:**
+   - JPEG de máxima calidad sin submuestreo cromático, ideal para pantallas Retina, móviles y publicación directa.
 
 ---
 
@@ -300,32 +303,34 @@ Haluro permite exportar en dos estándares profesionales:
 
 Haluro incluye herramientas interactivas y optimizadas para trabajar con rollos fotográficos completos:
 
+![Mesa de Luz Interactiva — Hoja de Contactos](docs/images/07_hoja_de_contactos.png)
+
 1. **Mesa de Luz Viva en Contactos (Tecla `3`):**
    - Pulsa la pestaña **«Contactos»** para previsualizar al instante una cuadrícula de estilo laboratorio clásico con tipografía de emulsión, borde de chasis y numeración de fotogramas (`01A`, `02A`...).
-   - **Interactiva con lupa:** Haz clic directamente sobre cualquier fotografía dentro de la hoja de contactos para abrirla de inmediato en el editor, o usa la rueda del ratón / botones `+`/`−` para inspeccionar detalles con zoom y arrastre panorámico.
-   - **Personalizable:** Edita el nombre del **Rollo** para estamparlo en la cabecera de la hoja y alterna la disposición entre **3, 4, 5 o 6 columnas**. Los fotogramas con ajustes propios muestran un punto ámbar en la tira inferior de 35 mm.
+   - **Interactiva con lupa:** Haz clic directamente sobre cualquier fotografía dentro de la hoja de contactos para editarla de inmediato, o usa la rueda del ratón / botones `+`/`−` para inspeccionar detalles con zoom y arrastre panorámico.
+   - **Personalizable:** Edita el campo **Rollo** en la barra superior de la hoja y alterna la disposición entre **3, 4, 5 o 6 columnas**. Los fotogramas con ajustes propios muestran un punto ámbar en la tira inferior de 35 mm.
 
 2. **Barra Contextual y Guardar Exclusivamente la Hoja de Contactos:**
-   - Al entrar en **«Contactos»**, el botón principal naranja superior cambia automáticamente a **«Guardar contactos»** (y también permanece accesible desde cualquier vista con **«Guardar contactos»** / `Guardar como…`). Exporta la hoja completa en alta resolución sin procesar fotogramas sueltos en disco.
+   - Al entrar en **«Contactos»**, el botón principal naranja superior cambia automáticamente a **«Guardar contactos»** (y también permanece accesible desde cualquier vista mediante el menú desplegable junto a **Guardar** → **«Guardar solo contactos»** o **«Guardar como…»**). Exporta la hoja completa en alta resolución sin procesar fotogramas sueltos en disco.
 
 3. **Revelar Rollo Completo con Progreso en Vivo (Motor Multinúcleo):**
-   - El botón **«Revelar rollo»** procesa todos los fotogramas del carrete en paralelo a máxima resolución nativa (TIFF 16-bit o JPEG), mostrando una barra de progreso en tiempo real por fotograma, archivo actual, cronómetro y opción de cancelar en cualquier momento, añadiendo automáticamente la hoja de contactos `SHEET.jpg` a la carpeta del rollo.
+   - El botón **«Revelar rollo»** procesa todos los fotogramas del carrete en paralelo a máxima resolución nativa (JPG 4:4:4, PNG o TIFF 16-bit), mostrando una barra de progreso en tiempo real por fotograma, archivo actual, cronómetro y opción de cancelar limpiamente en cualquier momento, añadiendo automáticamente la hoja de contactos a la carpeta del rollo.
 
 ---
 
 ## 7. Preguntas Frecuentes y Resolución de Problemas
 
 #### ¿Por qué el visor se ve oscuro o con tinte extraño al abrir mi RAW?
-Asegúrate de haber seleccionado el perfil de iluminación correcto en **«Proceso y captura»**. Si utilizas una mesa de luz LED económica con índice de reproducción cromática bajo (CRI < 90), activa la compensación de luz fría para equilibrar el espectro del sensor.
+Asegúrate de haber seleccionado el perfil de origen e iluminación correcto en **«Digitalización y luz de escaneo»** (*Cámara RAW*, *Escáner RAW* o *Plano TIFF*, y luz *Blanca CRI*, *Fría >9k* o *Cálida*).
 
 #### En Mac, ¿cómo evito tener que ir a Ajustes cada vez que abro la app?
 El aviso de seguridad de macOS Sequoia solo aparece **una única vez** tras descargar el archivo de internet. Una vez que pulsas *«Abrir de todos modos»* en *Ajustes del Sistema > Privacidad y seguridad*, tu Mac recuerda la autorización de forma permanente.
 
-#### ¿Puedo guardar mis propias fórmulas de revelado?
-Sí. En la esquina superior derecha del panel Inspector puedes hacer clic en **«Guardar Preset»** para almacenar tu combinación favorita de película, grano, halación y virado dicroico bajo un nombre personalizado.
+#### ¿Cómo replico mi fórmula en todo el rollo o recupero versiones anteriores?
+En la barra central del visor usa **«Copiar»** (`⇧⌘C`) y **«Pegar»** (`⇧⌘V`) para transferir recetas entre tomas individuales, o pulsa **«Sincronizar rollo»** para aplicar el revelado actual a todo el carrete. Además, el botón **«Historial de versiones reveladas»** (reloj en la barra superior) guarda y permite restaurar tus recetas no destructivas anteriores, y cuentas con **Deshacer / Rehacer** en tiempo real (`⌘Z` / `⇧⌘Z` o `Ctrl+Z` / `Ctrl+Y`).
 
 #### ¿Cómo mantengo Haluro actualizado con las últimas mejoras?
-Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez que inicias la aplicación (o al pulsar **«Comprobar ahora»** en la ventana *Acerca de*), Haluro consulta en segundo plano si existe una nueva versión oficial en GitHub. Si hay una versión más reciente, verás un distintivo sutil en la barra superior (`✨ Nueva versión`) que te mostrará las novedades y te permitirá descargar el instalador específico para tu equipo (macOS Apple Silicon, macOS Intel o Windows) en un solo clic.
+Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez que inicias la aplicación (o al pulsar **«Comprobar ahora»** en la ventana *Acerca de*), Haluro consulta en segundo plano si existe una nueva versión oficial en GitHub. Si hay una versión más reciente, verás un distintivo en la barra superior (`Nueva versión`) que te mostrará las novedades y te permitirá descargar el instalador específico para tu equipo (macOS Apple Silicon, macOS Intel o Windows) en un solo clic.
 
 ---
 
