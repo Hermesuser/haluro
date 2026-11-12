@@ -63,9 +63,14 @@ Write-Host "    Versión: $Version" -ForegroundColor Green
 $MetaDir = Join-Path $RepoRoot ".pkgmeta"
 New-Item -ItemType Directory -Force -Path $MetaDir | Out-Null
 
+# The Inno Setup script needs an ABSOLUTE repository root: it is rendered
+# outside packaging\windows, so the old relative "..\.." no longer resolved.
+$RepoRootForInno = $RepoRoot -replace '/', '\'
+
 $IssPath = Join-Path $MetaDir "haluro_installer.iss"
 (Get-Content (Join-Path $RepoRoot "packaging\windows\haluro_installer.iss.in") -Raw) `
-    -replace "@@VERSION@@", $Version | Set-Content -Path $IssPath -Encoding UTF8
+    -replace "@@VERSION@@", $Version `
+    -replace "@@REPOROOT@@", $RepoRootForInno | Set-Content -Path $IssPath -Encoding UTF8
 
 $VersionInfoPath = Join-Path $RepoRoot "packaging\windows\version_info.txt"
 (Get-Content (Join-Path $RepoRoot "packaging\windows\version_info.txt.in") -Raw) `
@@ -106,6 +111,12 @@ if ($IsccCandidates.Count -gt 0) {
     $IsccExe = $IsccCandidates[0]
     Write-Host "    Compilando instalador moderno con Inno Setup ($IsccExe) ..." -ForegroundColor Green
     & $IsccExe $IssPath
+    # A native command failure does not raise under ErrorActionPreference, so
+    # the exit code has to be checked explicitly or the build would report
+    # success with a missing installer.
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup falló con el código $LASTEXITCODE"
+    }
 } else {
     Write-Warning "Inno Setup 6 (ISCC.exe) no detectado; se generó el paquete Portable listo para usar: $PortableZip"
 }
