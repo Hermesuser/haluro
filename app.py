@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -88,6 +88,11 @@ ALLOWED_INPUT_EXTS = RAW_EXTENSIONS | HEIF_EXTENSIONS | {".jpg", ".jpeg", ".png"
 UPLOAD_RETENTION_DAYS = 30
 UPLOAD_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB
 
+# Workspace hygiene: the developed archive (previews + recipe sidecars) also
+# needs retention, otherwise it grows without bound on every export.
+DEVELOPED_RETENTION_DAYS = 90
+DEVELOPED_MAX_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB
+
 
 def _prune_workspace() -> None:
     """Drop stale uploads and trim the workspace to a size budget.
@@ -128,7 +133,43 @@ def _prune_workspace() -> None:
             continue
 
 
+def _prune_developed_dir() -> None:
+    """Drop stale developed previews and sidecars to keep the archive bounded."""
+    cutoff = time.time() - (DEVELOPED_RETENTION_DAYS * 86400)
+    try:
+        entries = sorted(DEVELOPED_DIR.glob("*"), key=lambda p: p.stat().st_mtime)
+    except OSError:
+        return
+
+    total = 0
+    survivors = []
+    for item in entries:
+        try:
+            st = item.stat()
+        except OSError:
+            continue
+        if item.is_file() and st.st_mtime < cutoff:
+            try:
+                item.unlink()
+            except OSError:
+                pass
+            continue
+        total += st.st_size if item.is_file() else 0
+        survivors.append((st.st_mtime, item))
+
+    for _mtime, item in survivors:
+        if total <= DEVELOPED_MAX_BYTES:
+            break
+        try:
+            size = item.stat().st_size
+            item.unlink()
+            total -= size
+        except OSError:
+            continue
+
+
 _prune_workspace()
+_prune_developed_dir()
 
 app = Flask(
     __name__,
@@ -145,7 +186,33 @@ app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # 300 MB max per upload
 #   * TRUSTED_HOSTS rejects any request whose Host header is not loopback.
 #   * API_TOKEN must be echoed in the X-Haluro-Token header on every
 #     state-changing call; the frontend injects it from a per-process secret.
-API_TOKEN = secrets.token_urlsafe(32)
+def _load_or_create_api_token() -> str:
+    """Lee el token de sesión desde disco o crea uno nuevo y lo persiste.
+
+    El token se genera una vez por instalación y se reutiliza entre reinicios,
+    de modo que el frontend no pierde la sesión cada vez que se reinicia el
+    backend. Se almacena en el directorio de datos del usuario
+    (`USER_DATA_ROOT / "session.token"`).
+    """
+    token_file = USER_DATA_ROOT / "session.token"
+    try:
+        if token_file.is_file():
+            token = token_file.read_text(encoding="utf-8").strip()
+            if token:
+                return token
+    except OSError:
+        pass
+    token = secrets.token_urlsafe(32)
+    try:
+        token_file.write_text(token, encoding="utf-8")
+    except OSError:
+        # Si no se puede escribir (permisos, solo lectura), se usa en memoria
+        # solo para esta sesión.
+        pass
+    return token
+
+
+API_TOKEN = _load_or_create_api_token()
 ALLOWED_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 app.config["TRUSTED_HOSTS"] = ["127.0.0.1", "localhost", "::1"]
 
@@ -156,6 +223,71 @@ Image.MAX_IMAGE_PIXELS = 120_000_000  # 120 MP ≈ 480 MB per float32 RGB array
 MAX_BATCH_FRAMES = 200
 # Maximum number of concurrent full-resolution developments (memory bound).
 MAX_FULL_RES_WORKERS = 2
+
+# --- Export destination allow-list -------------------------------------------
+# Rutas enviadas por JSON (no vía diálogo nativo) deben residir dentro de
+# alguna de estas raíces. Esto evita que un cliente escriba en directorios
+# sensibles del sistema (p. ej. /etc, ~/Library, C:\Windows).
+EXPORT_ALLOWED_ROOTS = (DEVELOPED_DIR, get_downloads_dir())
+
+# Rutas aprobadas explícitamente por el usuario mediante diálogo nativo
+# ("Guardar como…"). Se identifican por un token de vida corta para evitar
+# que un tercero reutilice una ruta antigua.
+_dialog_approved_paths: dict[str, Path] = {}
+_DIALOG_TOKEN_TTL_SECONDS = 300  # 5 minutos
+
+
+def _approve_dialog_path(path: Path | str) -> str:
+    """Registra una ruta elegida por diálogo nativo y devuelve un token de uso único."""
+    token = secrets.token_urlsafe(16)
+    _dialog_approved_paths[token] = Path(path).expanduser().resolve()
+    return token
+
+
+def _consume_dialog_token(token: str | None) -> Path | None:
+    """Consume y devuelve la ruta asociada a un token de diálogo, o None si es inválido/expiró."""
+    if not token:
+        return None
+    path = _dialog_approved_paths.pop(token, None)
+    return path
+
+
+# --- Rate limiting simple (ventana fija por endpoint e IP) -------------------
+# El backend solo escucha en loopback, pero un script local o una pestaña
+# maliciosa podrían saturar los 8 hilos de Waitress con revelados full-res.
+_rate_limit_state: dict[str, list[float]] = {}
+_RATE_LIMIT_WINDOW = 60.0  # segundos
+_RATE_LIMIT_MAX = {
+    "/api/upload": 30,
+    "/api/develop_full": 10,
+    "/api/negative/develop_full": 10,
+    "/api/batch/develop_roll_start": 5,
+    "/api/export_single": 20,
+    "/api/export_and_download": 20,
+    "/api/save_direct_to_downloads": 20,
+    "/api/save_to_path": 20,
+    "/api/save_zip_to_downloads": 10,
+    "/api/negative/save_to_downloads": 20,
+    "/api/negative/save_to_path": 20,
+    "/api/negative/save_contact_sheet": 10,
+    "/api/negative/contact_sheet_preview": 20,
+    "/api/contact_sheet_preview": 20,
+}
+
+
+def _rate_limited(path: str) -> bool:
+    """Devuelve True si se superó el cupo de peticiones para `path` en la ventana actual."""
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW
+    timestamps = _rate_limit_state.get(path, [])
+    timestamps = [t for t in timestamps if t > window_start]
+    max_allowed = _RATE_LIMIT_MAX.get(path, 60)
+    if len(timestamps) >= max_allowed:
+        _rate_limit_state[path] = timestamps
+        return True
+    timestamps.append(now)
+    _rate_limit_state[path] = timestamps
+    return False
 
 
 @app.after_request
@@ -168,6 +300,13 @@ def _apply_security_headers(response):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Cross-Origin-Embedder-Policy", "require-corp")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
+        "magnetometer=(), gyroscope=(), accelerometer=()",
+    )
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; "
@@ -220,6 +359,13 @@ def _guard_local_only():
                 return jsonify({"error": "Origen no permitido."}), 403
         if request.headers.get("X-Haluro-Token") != API_TOKEN:
             return jsonify({"error": "Sesión local no válida. Recarga la aplicación."}), 403
+
+    # Rate limiting para operaciones de escritura pesada (evita DoS local)
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if request.path in _RATE_LIMIT_MAX and _rate_limited(request.path):
+            return jsonify(
+                {"error": "Demasiadas peticiones a este endpoint. Inténtelo de nuevo más tarde."}
+            ), 429
     return None
 
 
@@ -386,8 +532,17 @@ def _normalize_ext(fmt_str):
     return ALLOWED_OUTPUT_EXTS.get(fmt, ".jpg")
 
 
-def _validate_destination_path(raw_path: str) -> tuple[Path | None, str | None]:
-    """Validate user export destination path: must have an allowed image extension and a writable directory."""
+def _validate_destination_path(
+    raw_path: str,
+    dialog_token: str | None = None,
+) -> tuple[Path | None, str | None]:
+    """Validate user export destination path.
+
+    El destino debe tener una extensión de imagen permitida y residir dentro de
+    una raíz autorizada (`DEVELOPED_DIR` o `~/Downloads`), salvo que presente un
+    token de diálogo nativo válido y no expirado (ruta elegida explícitamente
+    por el usuario mediante "Guardar como…").
+    """
     if not raw_path or not isinstance(raw_path, str):
         return None, "Ruta de destino inválida o vacía."
     try:
@@ -399,18 +554,48 @@ def _validate_destination_path(raw_path: str) -> tuple[Path | None, str | None]:
     if ext not in ALLOWED_OUTPUT_EXTS.values() and ext not in {".jpg", ".jpeg", ".png", ".tiff", ".tif"}:
         return None, f"Extensión de archivo no permitida ({ext}). Use .jpg, .png o .tiff."
 
-    parent = dest.parent
-    if not parent.exists():
+    # 1. Ruta aprobada por diálogo nativo (token de un solo uso)
+    approved = _consume_dialog_token(dialog_token)
+    if approved is not None:
+        if dest == approved:
+            parent = dest.parent
+            if not parent.exists():
+                try:
+                    parent.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    return None, f"No se puede crear la carpeta de destino: {exc}"
+            return dest, None
+        return None, "El destino no coincide con la ruta aprobada por el diálogo."
+
+    # 2. Ruta dentro de las raíces permitidas
+    for root in EXPORT_ALLOWED_ROOTS:
         try:
-            parent.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            return None, f"No se puede crear la carpeta de destino: {exc}"
+            dest.relative_to(root)
+        except ValueError:
+            continue
+        parent = dest.parent
+        if not parent.exists():
+            try:
+                parent.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                return None, f"No se puede crear la carpeta de destino: {exc}"
+        return dest, None
 
-    return dest, None
+    return None, (
+        "Directorio de destino no permitido. Use ~/Downloads, la carpeta de "
+        "revelados de la aplicación o elija una ubicación con el diálogo nativo."
+    )
 
 
-@functools.lru_cache(maxsize=24)
-def _cached_original_b64(resolved_path_str, mtime_ns, max_dim, rotate, flip_h, crop_milli=0):
+# Presupuesto de memoria para la caché de previews originales (base64 en RAM).
+# Cada entrada puede ocupar varios cientos de KB; limitamos el total a ~48 MB
+# y el número de entradas a 12 para evitar presión de memoria en sesiones largas.
+_CACHED_ORIGINAL_MAX_BYTES = 48 * 1024 * 1024
+_cached_original_bytes_total = 0
+
+
+@functools.lru_cache(maxsize=12)
+def _cached_original_b64_cached(resolved_path_str, mtime_ns, max_dim, rotate, flip_h, crop_milli=0):
     """Encode original reference preview once and serve from RAM on subsequent slider moves."""
     lin = load_image_linear(resolved_path_str, max_dim=max_dim, rotate=rotate, flip_h=flip_h)
     if crop_milli > 2:
@@ -423,6 +608,21 @@ def _cached_original_b64(resolved_path_str, mtime_ns, max_dim, rotate, flip_h, c
     buf = io.BytesIO()
     Image.fromarray(srgb).save(buf, format="JPEG", quality=86)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _cached_original_b64(resolved_path_str, mtime_ns, max_dim, rotate, flip_h, crop_milli=0):
+    """Wrapper con control de presupuesto de bytes para la caché de previews originales."""
+    global _cached_original_bytes_total
+    result = _cached_original_b64_cached(
+        resolved_path_str, mtime_ns, max_dim, rotate, flip_h, crop_milli
+    )
+    # Estimación del tamaño de la entrada (base64 ≈ 4/3 del binario).
+    entry_size = len(result) * 3 // 4
+    _cached_original_bytes_total += entry_size
+    if _cached_original_bytes_total > _CACHED_ORIGINAL_MAX_BYTES:
+        _cached_original_b64_cached.cache_clear()
+        _cached_original_bytes_total = 0
+    return result
 
 
 @functools.lru_cache(maxsize=64)
@@ -1019,10 +1219,9 @@ def api_contact_sheet_preview():
 
     cache_dir = DEVELOPED_DIR / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    # The cache file is namespaced per mode: simulation and negative sheets used
-    # to share one path, so two overlapping requests served each other's image.
-    _mode_tag = "simulation"
-    sheet_cache_path = cache_dir / f"sheet_preview_{_mode_tag}.jpg"
+    # Nombre único por request: evita que dos peticiones concurrentes se
+    # sobrescriban la hoja de contacto de preview.
+    sheet_cache_path = cache_dir / f"sheet_preview_simulation_{uuid.uuid4().hex[:12]}.jpg"
     sheet.save(sheet_cache_path, format="JPEG", quality=90)
 
     elapsed = round(time.time() - t_start, 2)
@@ -1343,7 +1542,8 @@ def api_choose_save_path():
     chosen = choose_save_path_dialog(raw_default)
     if not chosen:
         return jsonify({"cancelled": True})
-    return jsonify({"chosen_path": chosen, "cancelled": False})
+    token = _approve_dialog_path(chosen)
+    return jsonify({"chosen_path": chosen, "dialog_token": token, "cancelled": False})
 
 
 @app.route("/api/native_save_dialog", methods=["POST"])
@@ -1366,13 +1566,15 @@ def api_native_save_dialog():
     if not chosen:
         return jsonify({"cancelled": True})
 
-    data_with_dest = {**data, "dest_path": chosen}
+    token = _approve_dialog_path(chosen)
+    data_with_dest = {**data, "dest_path": chosen, "dialog_token": token}
     return _save_simulation_to_dest(data_with_dest, reveal=True)
 
 
 def _save_simulation_to_dest(data, reveal=False):
     dest_path = data.get("dest_path")
-    dest, err = _validate_destination_path(dest_path)
+    dialog_token = data.get("dialog_token")
+    dest, err = _validate_destination_path(dest_path, dialog_token=dialog_token)
     if err:
         return jsonify({"error": err}), 400
     filename = data.get("filename", "SAMPLE.CR2")
@@ -1880,7 +2082,8 @@ def api_negative_save_to_path():
     """Save full-resolution inverted negative to a user-specified path."""
     data = request.json or {}
     dest_path = data.get("dest_path")
-    dest, err = _validate_destination_path(dest_path)
+    dialog_token = data.get("dialog_token")
+    dest, err = _validate_destination_path(dest_path, dialog_token=dialog_token)
     if err:
         return jsonify({"error": err}), 400
     return _export_negative_common(data, dest, reveal=False)
@@ -2026,8 +2229,9 @@ def api_negative_contact_sheet_preview():
 
     cache_dir = DEVELOPED_DIR / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    _mode_tag = "negative"
-    sheet_cache_path = cache_dir / f"sheet_preview_{_mode_tag}.jpg"
+    # Nombre único por request: evita que dos peticiones concurrentes se
+    # sobrescriban la hoja de contacto de preview.
+    sheet_cache_path = cache_dir / f"sheet_preview_negative_{uuid.uuid4().hex[:12]}.jpg"
     sheet.save(sheet_cache_path, format="JPEG", quality=90)
 
     elapsed = round(time.time() - t_start, 2)
@@ -2058,8 +2262,9 @@ def api_negative_save_contact_sheet():
     profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
 
     dest_path = data.get("dest_path")
+    dialog_token = data.get("dialog_token")
     if dest_path:
-        target_path, err = _validate_destination_path(dest_path)
+        target_path, err = _validate_destination_path(dest_path, dialog_token=dialog_token)
         if err:
             return jsonify({"error": err}), 400
     else:
@@ -2134,211 +2339,15 @@ _batch_jobs_lock = threading.Lock()
 _batch_jobs = {}
 
 
-def _update_batch_job(job_id, **kwargs):
-    with _batch_jobs_lock:
-        if job_id in _batch_jobs:
-            _batch_jobs[job_id].update(kwargs)
-
-
 def _run_batch_roll_worker(job_id, data):
-    job = _batch_jobs[job_id]
-    cancel_event = job["cancel_event"]
-    t_start = time.time()
+    """Ejecuta un trabajo de revelado de rollo delegando en RollBatchJob."""
+    from engine.roll_processor import RollBatchJob
 
-    try:
-        app_mode = data.get("app_mode", "simulation")
-        filenames = _bounded_frames(data.get("filenames", []))
-        gen_sheet = bool(data.get("sheet", True))
-        out_ext = _normalize_ext(data.get("format", "jpg"))
-        raw_roll_name = str(data.get("roll_name", "HALURO ROLL")).strip()[:40] or "HALURO ROLL"
-        roll_name = secure_filename(raw_roll_name) or "HALURO_ROLL"
-        columns = _int(data, "columns", 4, 2, 8)
-        analog_meta = _parse_analog_meta(data)
-        per_frame_recipes = data.get("per_frame_recipes") or {}
+    job = RollBatchJob(job_id, data)
+    job.run()
 
-        is_neg = app_mode == "negative"
-        if is_neg:
-            params = _parse_negative_params(data)
-            profile_key = params["profile_key"]
-            profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
-            roll_folder = f"{roll_name}_neg_{profile_key}"
-            sheet_film_name = f"Negativo · {profile_info['name']}"
-        else:
-            film_key = _canonical_film_key(data.get("film", "portra400"))
-            ev = _num(data, "ev", 0.0, -10.0, 10.0)
-            halation = _num(data, "halation", 1.0, 0.0, 5.0)
-            grain = _num(data, "grain", 1.0, 0.0, 5.0)
-            vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
-            add_date = bool(data.get("date", False))
-            rotate = _int(data, "rotate", 0, 0, 360)
-            flip_h = bool(data.get("flip_h", False))
-            film_info = get_film(film_key)
-            roll_folder = f"{roll_name}_{film_key}"
-            sheet_film_name = film_info["name"]
-
-        out_roll_dir = DEVELOPED_DIR / roll_folder
-        out_roll_dir.mkdir(parents=True, exist_ok=True)
-
-        total = len(filenames)
-        indexed_results = {}
-        completed_count = 0
-        progress_lock = threading.Lock()
-
-        def _worker_task(idx_and_name):
-            idx, fname = idx_and_name
-            if cancel_event.is_set():
-                return None
-
-            fpath = _resolve_source_file(fname)
-            if not fpath:
-                return None
-
-            if is_neg:
-                fr_raw = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
-                frame_params = _parse_negative_params({**data, **fr_raw}) if isinstance(fr_raw, dict) else params
-                f_prof_key = _canonical_profile_key(frame_params["profile_key"])
-                img, srgb_f = process_negative_to_image(fpath, max_dim=None, return_float=True, **frame_params)
-                out_name = f"{fpath.stem}_positive_{f_prof_key}{out_ext}"
-            else:
-                fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
-                f_film = _canonical_film_key(fr.get("film", film_key)) if isinstance(fr, dict) else film_key
-                f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
-                f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
-                f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
-                f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
-                f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
-                f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
-                f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
-                img, srgb_f = develop_frame(
-                    fpath,
-                    film_key=f_film,
-                    ev_adjust=f_ev,
-                    halation_mult=f_hal,
-                    grain_mult=f_grn,
-                    vignette_mult=f_vig,
-                    add_date=f_date,
-                    max_dim=None,
-                    rotate=f_rot,
-                    flip_h=f_flip,
-                    return_float=True,
-                )
-                out_name = f"{fpath.stem}_{f_film}{out_ext}"
-
-            if cancel_event.is_set():
-                return None
-
-            target_path = out_roll_dir / out_name
-            save_output_image(
-                img,
-                target_path,
-                source_path=fpath,
-                quality=96,
-                float_srgb=srgb_f,
-                analog_meta=analog_meta,
-            )
-            return (idx, fpath.name, out_name, img)
-
-        max_workers = min(MAX_FULL_RES_WORKERS, max(1, os.cpu_count() or 1))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(_worker_task, (i, fn)) for i, fn in enumerate(filenames)]
-            for fut in as_completed(futures):
-                if cancel_event.is_set():
-                    for pending_f in futures:
-                        pending_f.cancel()
-                    _update_batch_job(
-                        job_id,
-                        status="cancelled",
-                        current_file="Proceso cancelado por el usuario.",
-                        elapsed_seconds=round(time.time() - t_start, 1),
-                    )
-                    return
-
-                res = fut.result()
-                if res:
-                    idx, src_name, out_name, img = res
-                    indexed_results[idx] = (out_name, img)
-                    with progress_lock:
-                        completed_count += 1
-                        pct = int(round((completed_count / max(1, total)) * 90))
-                        _update_batch_job(
-                            job_id,
-                            completed=completed_count,
-                            percent=pct,
-                            current_file=src_name,
-                            elapsed_seconds=round(time.time() - t_start, 1),
-                        )
-
-        if cancel_event.is_set():
-            _update_batch_job(
-                job_id,
-                status="cancelled",
-                current_file="Proceso cancelado por el usuario.",
-                elapsed_seconds=round(time.time() - t_start, 1),
-            )
-            return
-
-        valid_filenames = []
-        developed_images = []
-        output_files = []
-        for idx in sorted(indexed_results.keys()):
-            out_name, img = indexed_results[idx]
-            valid_filenames.append(filenames[idx])
-            output_files.append(out_name)
-            developed_images.append(img)
-
-        sheet_created = False
-        if gen_sheet and developed_images:
-            _update_batch_job(
-                job_id,
-                percent=94,
-                current_file="Componiendo hoja de contactos de archivo…",
-                elapsed_seconds=round(time.time() - t_start, 1),
-            )
-            batch_sheet_film, frame_labels = _resolve_sheet_meta(
-                valid_filenames,
-                per_frame_recipes,
-                app_mode,
-                profile_key if is_neg else film_key,
-                sheet_film_name,
-            )
-            sheet = generate_contact_sheet(
-                developed_images,
-                roll_name=raw_roll_name,
-                film_name=batch_sheet_film,
-                columns=columns,
-                frame_labels=frame_labels,
-            )
-            sheet_path = out_roll_dir / "SHEET.jpg"
-            sheet.save(sheet_path, quality=93, subsampling=0, icc_profile=get_srgb_icc_bytes())
-            output_files.append("SHEET.jpg")
-            sheet_created = True
-
-        elapsed = round(time.time() - t_start, 2)
-        _update_batch_job(
-            job_id,
-            status="completed",
-            completed=len(developed_images),
-            percent=100,
-            current_file="¡Rollo completado!",
-            elapsed_seconds=elapsed,
-            result={
-                "success": True,
-                "roll_dir": str(out_roll_dir),
-                "roll_folder": roll_folder,
-                "files": output_files,
-                "sheet": sheet_created,
-                "total_frames": len(developed_images),
-                "elapsed_seconds": elapsed,
-            },
-        )
-    except Exception as exc:
-        logger.exception("Batch roll job failed: %s", exc)
-        _update_batch_job(
-            job_id,
-            status="error",
-            error=str(exc),
-            elapsed_seconds=round(time.time() - t_start, 1),
-        )
+    with _batch_jobs_lock:
+        _batch_jobs[job_id] = job
 
 
 @app.route("/api/batch/develop_roll_start", methods=["POST"])
@@ -2349,23 +2358,14 @@ def api_batch_develop_roll_start():
         return jsonify({"error": "No hay fotogramas para procesar"}), 400
 
     job_id = str(uuid.uuid4())[:10]
+    from engine.roll_processor import RollBatchJob
+
     with _batch_jobs_lock:
         if len(_batch_jobs) > 20:
             oldest = list(_batch_jobs.keys())[:-10]
             for k in oldest:
                 _batch_jobs.pop(k, None)
-        _batch_jobs[job_id] = {
-            "job_id": job_id,
-            "status": "running",
-            "total": len(filenames),
-            "completed": 0,
-            "percent": 2,
-            "current_file": "Preparando cámara oscura…",
-            "elapsed_seconds": 0.0,
-            "result": None,
-            "error": None,
-            "cancel_event": threading.Event(),
-        }
+        _batch_jobs[job_id] = RollBatchJob(job_id, data)
 
     t = threading.Thread(target=_run_batch_roll_worker, args=(job_id, data), daemon=True)
     t.start()
@@ -2378,7 +2378,7 @@ def api_batch_develop_status(job_id):
         job = _batch_jobs.get(job_id)
         if not job:
             return jsonify({"status": "not_found", "error": "Trabajo no encontrado"}), 404
-        payload = {k: v for k, v in job.items() if k != "cancel_event"}
+        payload = job.payload() if hasattr(job, "payload") else {k: v for k, v in job.items() if k != "cancel_event"}
     return jsonify(payload)
 
 
@@ -2388,10 +2388,16 @@ def api_batch_develop_cancel(job_id):
         job = _batch_jobs.get(job_id)
         if not job:
             return jsonify({"success": False, "error": "Trabajo no encontrado"}), 404
-        job["cancel_event"].set()
-        if job["status"] == "running":
-            job["status"] = "cancelling"
-            job["current_file"] = "Deteniendo hilos de procesamiento…"
+        if hasattr(job, "cancel_event"):
+            job.cancel_event.set()
+            if job.status == "running":
+                job.status = "cancelling"
+                job.current_file = "Deteniendo hilos de procesamiento…"
+        else:
+            job["cancel_event"].set()
+            if job["status"] == "running":
+                job["status"] = "cancelling"
+                job["current_file"] = "Deteniendo hilos de procesamiento…"
     return jsonify({"success": True})
 
 

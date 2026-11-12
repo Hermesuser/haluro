@@ -1,0 +1,45 @@
+# Haluro — Docker Compose para desarrollo y pruebas (backend solo, sin GUI)
+version: "3.9"
+
+services:
+  haluro-backend:
+    build: .
+    container_name: haluro-backend
+    ports:
+      - "5050:5050"
+    environment:
+      - HALURO_DATA_DIR=/data/haluro
+      - HALURO_USE_SYSTEM_APPDATA=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - haluro_data:/data/haluro
+      - ./samples:/app/samples:ro
+      - ./luts:/app/luts:ro
+      - ./templates:/app/templates:ro
+      - ./static:/app/static:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:5050/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  haluro-tests:
+    build:
+      context: .
+      target: base
+    container_name: haluro-tests
+    command: ["python", "-m", "pytest", "tests/", "-v"]
+    environment:
+      - HALURO_DATA_DIR=/tmp/haluro-test-data
+      - HALURO_USE_SYSTEM_APPDATA=1
+    volumes:
+      - .:/app:ro
+      - haluro_test_cache:/root/.cache/pytest
+    depends_on:
+      haluro-backend:
+        condition: service_healthy
+
+volumes:
+  haluro_data:
+  haluro_test_cache:

@@ -8,6 +8,7 @@ and provides direct download links tailored to the user's computer.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import platform
@@ -52,6 +53,23 @@ def parse_semver(version_str: str) -> tuple[int, ...]:
     while len(components) < 3:
         components.append(0)
     return tuple(components[:3])
+
+
+def compute_file_sha256(path: Path | str) -> str:
+    """Calcula el resumen SHA-256 de un archivo local (útil para verificar instaladores descargados)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_checksum(path: Path | str, expected_hex: str) -> bool:
+    """Verifica que el SHA-256 de `path` coincida con `expected_hex` (comparación constante)."""
+    if not expected_hex:
+        return False
+    actual = compute_file_sha256(path)
+    return hashlib.compare_digest(actual.lower(), expected_hex.strip().lower())
 
 
 def get_client_platform() -> dict[str, str]:
@@ -126,6 +144,7 @@ def check_for_updates(
         "release_date": "",
         "description": "",
         "highlights": [],
+        "checksums": {},
     }
 
     try:
@@ -183,6 +202,7 @@ def check_for_updates(
         "release_date": str(remote.get("release_date", "")),
         "description": str(remote.get("description", "")),
         "highlights": list(remote.get("highlights", [])),
+        "checksums": remote.get("checksums", {}),
     }
 
 

@@ -440,6 +440,12 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(haluro_app, "DEVELOPED_DIR", developed.resolve())
     monkeypatch.setattr(haluro_app, "get_downloads_dir", lambda: downloads.resolve())
     monkeypatch.setattr(haluro_app, "reveal_in_file_manager", lambda _p: True)
+    # Durante los tests, tmp_path también es una raíz de exportación válida.
+    monkeypatch.setattr(
+        haluro_app,
+        "EXPORT_ALLOWED_ROOTS",
+        (developed.resolve(), downloads.resolve(), tmp_path.resolve()),
+    )
 
     haluro_app.app.config["TESTING"] = True
     with haluro_app.app.test_client() as test_client:

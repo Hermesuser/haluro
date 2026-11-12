@@ -8,6 +8,9 @@
 
 const FAVORITES_KEY = "haluro_favorites_v2";
 const ANALOG_EXIF_STORAGE_KEY = "haluro_analog_exif_v23";
+const USER_PREFS_KEY = "haluro_user_prefs_v1";
+const FRAME_RECIPES_KEY = "haluro_frame_recipes_v1";
+const MAX_STORED_FRAMES = 50;
 
 /**
  * Local-session guard.
@@ -76,6 +79,142 @@ function saveFavorites(favSet) {
     localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favSet]));
   } catch (_) {
     // Ignore storage quota errors
+  }
+}
+
+// =============================================================
+// PERSISTENCIA DE PREFERENCIAS DE USUARIO (entre sesiones)
+// =============================================================
+
+const USER_PREFS_DEFAULTS = {
+  appMode: "simulation",
+  selectedFilm: "portra400",
+  // Simulación
+  ev: 0.0,
+  halation: 1.0,
+  grain: 1.0,
+  vignette: 1.0,
+  date: false,
+  rotate: 0,
+  flip_h: false,
+  outputFormat: "jpg",
+  viewMode: "split",
+  splitPercent: 50,
+  zoom: 1.0,
+  panX: 0,
+  panY: 0,
+  // Negativo
+  filmType: "color",
+  scanSource: "camera_raw",
+  preSaturation: 1.0,
+  lightSource: "standard",
+  colorMethod: "dynamic",
+  toneVariant: "standard",
+  printFinish: "none",
+  finishAmount: 1.0,
+  bwToner: "neutral",
+  bwTonerStrength: 1.0,
+  profile: "frontier",
+};
+
+function loadUserPreferences() {
+  try {
+    const raw = localStorage.getItem(USER_PREFS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { ...USER_PREFS_DEFAULTS, ...parsed };
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveUserPreferences() {
+  try {
+    const prefs = {
+      appMode: state.appMode,
+      selectedFilm: state.selectedFilm,
+      ev: state.ev,
+      halation: state.halation,
+      grain: state.grain,
+      vignette: state.vignette,
+      date: state.date,
+      rotate: state.rotate,
+      flip_h: state.flip_h,
+      outputFormat: state.outputFormat,
+      viewMode: state.viewMode,
+      splitPercent: state.splitPercent,
+      zoom: state.zoom,
+      panX: state.panX,
+      panY: state.panY,
+      filmType: negativeState.filmType,
+      scanSource: negativeState.scanSource,
+      preSaturation: negativeState.preSaturation,
+      lightSource: negativeState.lightSource,
+      colorMethod: negativeState.colorMethod,
+      toneVariant: negativeState.toneVariant,
+      printFinish: negativeState.printFinish,
+      finishAmount: negativeState.finishAmount,
+      bwToner: negativeState.bwToner,
+      bwTonerStrength: negativeState.bwTonerStrength,
+      profile: negativeState.profile,
+    };
+    localStorage.setItem(USER_PREFS_KEY, JSON.stringify(prefs));
+  } catch (_) {
+    // Ignore storage quota errors
+  }
+}
+
+// Persistencia de recetas por frame entre sesiones (no destructivo)
+function loadStoredFrameRecipes() {
+  try {
+    const raw = localStorage.getItem(FRAME_RECIPES_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveStoredFrameRecipes() {
+  try {
+    const framesByName = {};
+    for (const frame of state.frames) {
+      if (!frame.filename) continue;
+      const entry = {};
+      if (frame.simRecipe) entry.simRecipe = frame.simRecipe;
+      if (frame.negRecipe) entry.negRecipe = frame.negRecipe;
+      if (frame.pickStatus) entry.pickStatus = frame.pickStatus;
+      framesByName[frame.filename] = entry;
+    }
+    // Limitar cuota: mantener solo los últimos N frames
+    const names = Object.keys(framesByName);
+    if (names.length > MAX_STORED_FRAMES) {
+      const keep = names.slice(names.length - MAX_STORED_FRAMES);
+      const trimmed = {};
+      for (const n of keep) trimmed[n] = framesByName[n];
+      Object.assign(framesByName, trimmed);
+    }
+    localStorage.setItem(FRAME_RECIPES_KEY, JSON.stringify(framesByName));
+  } catch (_) {
+    // Ignore storage quota errors
+  }
+}
+
+function restoreFrameRecipe(frame) {
+  if (!frame || !frame.filename) return;
+  try {
+    const raw = localStorage.getItem(FRAME_RECIPES_KEY);
+    if (!raw) return;
+    const store = JSON.parse(raw);
+    const entry = store[frame.filename];
+    if (!entry) return;
+    if (entry.simRecipe) frame.simRecipe = clonePlain(entry.simRecipe);
+    if (entry.negRecipe) frame.negRecipe = clonePlain(entry.negRecipe);
+    if (entry.pickStatus !== undefined) frame.pickStatus = entry.pickStatus;
+    // Reconstruir stacks de undo/redo vacíos para este frame
+    ensureFrameHistory(frame);
+  } catch (_) {
+    // Ignorar errores de almacenamiento
   }
 }
 
@@ -477,6 +616,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   syncRuntimePlatform();
   await fetchFilms();
+  await applyStoredPreferences();
   await loadSamplePhoto(false);
 
   // Smart update checker: silently query remote version manifest after 2.5s
@@ -484,6 +624,120 @@ document.addEventListener("DOMContentLoaded", async () => {
     checkForUpdates(false);
   }, 2500);
 });
+
+async function applyStoredPreferences() {
+  const prefs = loadUserPreferences();
+  if (!prefs) return;
+
+  // Restaurar modo de aplicación
+  if (prefs.appMode && prefs.appMode !== state.appMode) {
+    await switchStudioMode(prefs.appMode);
+  }
+
+  // Restaurar película seleccionada (solo si existe en el catálogo cargado)
+  if (prefs.selectedFilm) {
+    const filmExists = state.films.some((f) => f.key === prefs.selectedFilm);
+    if (filmExists) {
+      state.selectedFilm = prefs.selectedFilm;
+      selectFilm(prefs.selectedFilm);
+    }
+  }
+
+  // Restaurar controles de simulación
+  for (const key of ["ev", "halation", "grain", "vignette", "date", "rotate", "flip_h", "outputFormat", "viewMode", "splitPercent", "zoom", "panX", "panY"]) {
+    if (key in prefs) state[key] = prefs[key];
+  }
+
+  // Restaurar controles de negativo
+  for (const key of ["filmType", "scanSource", "preSaturation", "lightSource", "colorMethod", "toneVariant", "printFinish", "finishAmount", "bwToner", "bwTonerStrength", "profile"]) {
+    if (key in prefs) negativeState[key] = prefs[key];
+  }
+
+  // Aplicar valores a sliders y UI
+  applyPrefsToUI(prefs);
+}
+
+function applyPrefsToUI(prefs) {
+  const setSlider = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined) {
+      el.value = val;
+      el.dispatchEvent(new Event("input"));
+    }
+  };
+  const setCheckbox = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined) el.checked = Boolean(val);
+  };
+
+  if (prefs.ev !== undefined) setSlider("evSlider", prefs.ev);
+  if (prefs.halation !== undefined) setSlider("halationSlider", prefs.halation);
+  if (prefs.grain !== undefined) setSlider("grainSlider", prefs.grain);
+  if (prefs.vignette !== undefined) setSlider("vignetteSlider", prefs.vignette);
+  if (prefs.date !== undefined) setCheckbox("dateToggle", prefs.date);
+  if (prefs.rotate !== undefined) {
+    const el = document.getElementById("rotateSlider");
+    if (el) el.value = prefs.rotate;
+  }
+  if (prefs.flip_h !== undefined) setCheckbox("flipHToggle", prefs.flip_h);
+  if (prefs.outputFormat !== undefined) {
+    const el = document.getElementById("outputFormatSelect");
+    if (el) el.value = prefs.outputFormat;
+  }
+
+  // Negativo UI
+  if (prefs.filmType !== undefined) {
+    const btn = document.getElementById(prefs.filmType === "color" ? "btnTypeColor" : "btnTypeBW");
+    if (btn) btn.click();
+  }
+  if (prefs.lightSource !== undefined) {
+    const btn = document.querySelector(`#negLightSourceBar .seg-btn[data-light="${prefs.lightSource}"]`);
+    if (btn) btn.click();
+  }
+  if (prefs.toneVariant !== undefined) {
+    const btn = document.querySelector(`#negToneVariantBar .seg-btn[data-tone="${prefs.toneVariant}"]`);
+    if (btn) btn.click();
+  }
+  if (prefs.printFinish !== undefined) {
+    const el = document.getElementById("negPrintFinishSelect");
+    if (el) el.value = prefs.printFinish;
+  }
+  if (prefs.bwToner !== undefined) {
+    const el = document.getElementById("negBwTonerSelect");
+    if (el) el.value = prefs.bwToner;
+  }
+  if (prefs.profile !== undefined) {
+    // selectNegativeProfile hace click interno; aplicamos directamente si existe
+    const card = document.querySelector(`#negProfileList .profile-card[data-profile="${prefs.profile}"]`);
+    if (card) card.click();
+  }
+  if (prefs.finishAmount !== undefined) setSlider("negFinishAmountSlider", prefs.finishAmount * 100);
+  if (prefs.bwTonerStrength !== undefined) setSlider("negBwTonerStrengthSlider", prefs.bwTonerStrength * 100);
+  if (prefs.borderBuffer !== undefined) setSlider("negBufferSlider", prefs.borderBuffer * 100);
+  if (prefs.cropPct !== undefined) setSlider("negCropSlider", prefs.cropPct * 100);
+  if (prefs.brightness !== undefined) setSlider("negBrightnessSlider", prefs.brightness);
+  if (prefs.midtoneNd !== undefined) setSlider("negMidtoneNdSlider", prefs.midtoneNd);
+  if (prefs.contrast !== undefined) setSlider("negContrastSlider", prefs.contrast);
+  if (prefs.pushPull !== undefined) setSlider("negPushPullSlider", prefs.pushPull);
+  if (prefs.lights !== undefined) setSlider("negLightsSlider", prefs.lights);
+  if (prefs.darks !== undefined) setSlider("negDarksSlider", prefs.darks);
+  if (prefs.whites !== undefined) setSlider("negWhitesSlider", prefs.whites);
+  if (prefs.blacks !== undefined) setSlider("negBlacksSlider", prefs.blacks);
+  if (prefs.blackClip !== undefined) setSlider("negBlackClipSlider", prefs.blackClip);
+  if (prefs.whiteClip !== undefined) setSlider("negWhiteClipSlider", prefs.whiteClip);
+  if (prefs.clipProtect !== undefined) setCheckbox("negClipProtectToggle", prefs.clipProtect);
+  if (prefs.inkyBlacks !== undefined) setSlider("negInkyBlacksSlider", prefs.inkyBlacks);
+  if (prefs.rpTone !== undefined) setSlider("negRpToneSlider", prefs.rpTone);
+  if (prefs.saturation !== undefined) setSlider("negSatSlider", prefs.saturation);
+  if (prefs.sharpenMode !== undefined) {
+    const btn = document.querySelector(`#negSharpenModeBar .seg-btn[data-sharpen="${prefs.sharpenMode}"]`);
+    if (btn) btn.click();
+  }
+  if (prefs.sharpenAmount !== undefined) setSlider("negSharpenAmountSlider", prefs.sharpenAmount * 100);
+  if (prefs.warming85 !== undefined) setSlider("negWarming85Slider", prefs.warming85);
+  if (prefs.temp !== undefined) setSlider("negTempSlider", prefs.temp);
+  if (prefs.tint !== undefined) setSlider("negTintSlider", prefs.tint);
+}
 
 async function fetchFilms() {
   try {
@@ -634,6 +888,7 @@ function selectFilm(key) {
   saveActiveFrameRecipe();
   updateActiveRecipeBanner();
   requestPreview();
+  saveUserPreferences();
 }
 
 // =============================================================
@@ -764,9 +1019,11 @@ async function importFiles(fileList) {
         if (existingIdx >= 0) {
           state.frames[existingIdx] = entry;
           state.activeFrameIndex = existingIdx;
+          restoreFrameRecipe(state.frames[existingIdx]);
         } else {
           state.frames.push(entry);
           state.activeFrameIndex = state.frames.length - 1;
+          restoreFrameRecipe(state.frames[state.activeFrameIndex]);
         }
       });
 
@@ -1449,6 +1706,7 @@ function renderFilmStrip() {
 async function switchStudioMode(mode) {
   if (mode !== "simulation" && mode !== "negative") return;
   state.appMode = mode;
+  saveUserPreferences();
 
   if (negativeState.eyedropperActive) {
     setEyedropperActive(false);
@@ -1943,6 +2201,7 @@ function saveActiveFrameRecipe() {
     frame.simRecipe = snapshotSimRecipe();
   }
   updateActiveThumbEditedIndicator();
+  saveStoredFrameRecipes();
 }
 
 function setSliderSilent(sliderId, labelId, val, textVal) {
@@ -5125,6 +5384,7 @@ function initUIListeners() {
       if (lbl) lbl.textContent = formatter(val);
       onValue(val);
       saveActiveFrameRecipe();
+      saveUserPreferences();
       // Keyed per control so two sliders moved in quick succession do not
       // cancel each other's pending render.
       triggerDebouncedPreview(el.id || "default");

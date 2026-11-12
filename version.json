@@ -21,5 +21,11 @@
     "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-Portable-2.5.0-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
+  "checksums": {
+    "macos_arm64": "2fef6e2f9b530da7013343e58bd1857705836bc28d7790e0c166e7ab3f5df81a",
+    "macos_x86_64": "",
+    "windows_x86_64": "",
+    "windows_portable": ""
+  },
   "min_supported_version": "2.0.0"
 }
