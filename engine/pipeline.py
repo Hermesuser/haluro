@@ -223,6 +223,42 @@ def build_curve_lut(points, size=256):
     return np.clip(lut, -0.5, 1.5).astype(np.float32)
 
 
+def apply_local_exposure_offset(display, mask, ev_offset):
+    """
+    Aplica un offset de exposición local a través de una máscara.
+
+    Parámetros
+    ----------
+    display : ndarray float32, display-referred (después de la curva tonal).
+    mask : ndarray float32 o bool, misma forma que display.
+        Valores 0.0 = sin efecto, 1.0 = efecto máximo.
+    ev_offset : float
+        Stops de exposición. Positivo = aclarar (dodge), negativo = oscurecer (burn).
+
+    Retorna
+    -------
+    ndarray float32, misma forma que display. La máscara se mezcla con la
+    exposición global de modo que los bordes queden suaves.
+    """
+    # Ganancia por stops: 2^EV
+    gain = 2.0 ** ev_offset
+
+    # La máscara debe tener el mismo shape que display.
+    # Asegurarse de que broadcast sea correcto.
+    if mask.shape != display.shape:
+        mask = np.broadcast_to(mask, display.shape).astype(np.float32)
+    else:
+        mask = mask.astype(np.float32)
+
+    # Mezcla: display * (1 - mask + mask * gain)
+    # Esto equivale a: donde mask=0 -> display sin cambiar
+    #                 donde mask=1 -> display * gain (aclarar u oscurecer)
+    result = display * (1.0 - mask + mask * gain)
+
+    # Clip a rango display-referred habitual [0, 1]
+    return np.clip(result, 0.0, 1.0)
+
+
 def apply_user_curves(display, curve_spec):
     """Aplica las curvas de usuario sobre la imagen ya revelada.
 

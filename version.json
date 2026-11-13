@@ -1,28 +1,25 @@
 {
-  "version": "2.7.0",
-  "release_date": "2026-11-12",
-  "name": "Haluro v2.7.0",
+  "version": "2.7.1",
+  "release_date": "2026-11-13",
+  "name": "Haluro v2.7.1",
   "title": "Curva tonal de usuario: editor de curvas por canal",
-  "description": "Haluro incorpora un editor de curva tonal en el modo Emulación: dibuja la respuesta tonal punto a punto sobre el histograma, con curva maestra (RGB), curva de luminancia que conserva el matiz y curvas por canal R, G y B. La curva se guarda como puntos de control (no como imagen), viaja con la receta por fotograma y el motor construye la misma tabla monótona en la vista previa y en la exportación, de modo que lo que ves es exactamente lo que exportas. Incluye ademas las zonas tonales por exposicion (sombras, tonos medios y luces) y la correccion de la barra del visor al maximizar la ventana.",
+  "description": "Haluro 2.7.1: editor de curva tonal + máscaras de exposición local (dodge & burn digital)",
   "highlights": [
-    "Curva tonal de usuario: clic para anadir un punto, arrastre para moverlo y doble clic para quitarlo, con el histograma de la imagen como fondo.",
-    "Cinco canales: RGB (maestra), Luz (conserva el matiz al reescalar los tres canales) y R, G y B por separado.",
-    "La curva viaja como DATOS (puntos de control), no como pixeles: pesa unos bytes, se guarda por fotograma y se copia, sincroniza con el rollo y deshace sin tocar ningun otro mecanismo.",
-    "Interpolacion monotonica por tramos (PCHIP) en el motor: la curva nunca se pasa de si misma, asi que no aparecen bandas ni dientes en las sombras.",
-    "Lo que ves es lo que exportas: el cliente y el motor construyen la misma tabla (diferencia maxima medida: 0.008).",
-    "Zonas tonales: sombras, tonos medios y luces reparten la exposicion en luz lineal antes de la respuesta de la emulsion, con las tres zonas en particion de la unidad.",
-    "Interfaz sin solapes al maximizar la ventana, «Importar» accesible por teclado y contraste corregido en el modo luz roja."
+    "Editor de curva tonal: 5 canales (RGB, Luz, R, G, B), puntos de control, interpolación monótona PCHIP",
+    "Máscaras de exposición local: pincel, gradiente lineal/radial, offset EV -2.0 a +2.0",
+    "Las máscaras viajan por la receta por fotograma: copiar/pegar, sincronizar rollo, deshacer/rehacer",
+    "Interfaz responsiva 700-2560px, WCAG AA modo luz roja, enfoque por teclado",
+    "DMG arm64 y x86_64 firmados y verificados"
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.7.0/Haluro-2.7.0-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.7.0/Haluro-2.7.0-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.7.0/Haluro-Setup-2.7.0-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.7.0/Haluro-Portable-2.7.0-Win11-x64.zip",
-    "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
+    "macos_arm64": "dist/Haluro-2.7.1-macOS-arm64.dmg",
+    "macos_x86_64": "dist/Haluro-2.7.1-macOS-x86_64.dmg",
+    "windows_x86_64": "",
+    "windows_portable": ""
   },
   "checksums": {
-    "macos_arm64": "c7227ac744e4df925dd5f08286d09b51622c1cfa17417f96acbe6d6d96167025",
-    "macos_x86_64": "87dc404f793a88850cc78bd15c0004892c0d8c43350fa193c55aff246260dabd",
+    "macos_arm64": "97117273d92565c848337868c40c16a9f3e3bb7320f10124459d5ed5159a9c18",
+    "macos_x86_64": "e346d0a513220fe4db845da8c35dd27e0f9fc87e6f10c18c7c37c89952589402",
     "windows_x86_64": "",
     "windows_portable": ""
   },

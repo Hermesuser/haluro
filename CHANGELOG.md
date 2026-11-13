@@ -9,7 +9,23 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
-## [2.7.0] — 2026-11-12
+
+
+## [2.7.1] — 2026-11-13
+
+### Herramientas locales — Máscaras de exposición
+
+- **Máscaras de exposición local** (dodge & burn digital): nueva sección **«Máscaras de exposición»** en el modo «Emulación · 72».
+- **Herramientas:** pincel, gradiente lineal, gradiente radial.
+- **Offset EV:** slider -2.0 a +2.0 stops; positivo = aclarar (dodge), negativo = oscurecer (burn).
+- **Parámetros finos:** tamaño (píxeles), durez (hardness 0–100), flujo (flow 0–100).
+- **Máscara acumulativa:** cada trazo se suma al historial (hasta 20 pasos), con deshacer/rehacer (<kbd>Z</k>/<kbd>Shift+Z</k>).
+- **Guardado por fotograma:** las máscaras viajan con la receta, se copian/pegan con el rollo y se sincronizan.
+- **Preview en tiempo real:** la máscara se superpone sobre la imagen developed en el canvas.
+- **Interfaz responsiva:** 700–2560px sin solapes, WCAG AA modo luz roja, enfoque por teclado.
+
+---
+
 
 ### Motor de imagen — Curva tonal de usuario
 

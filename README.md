@@ -253,6 +253,8 @@ python cli.py invert negativo_01.tif \
      - Catálogo de 72 emulsiones en español        - Proceso Color C-41 o Plata B&N y luz
      - Compensación de exposición                  - Muestrear D-min (I) y Análisis de rollo
      - Zonas tonales: sombras, medios y luces      - Curva tonal: Densidad neutra y Pull/Push
+     - Máscaras de exposición local (dodge & burn digital) - nuevas en 2.7.1
+     - Máscaras de exposición local (dodge & burn digital) - pincel, gradiente lineal/radial, offset EV
      - Curva de usuario por canal (RGB, Luz, R/G/B) - 10 acabados y virados químicos de papel
      - Halación en altas luces                     - Ampliadora CMY, 3 vías y Gris neutro (W)
      - Sello de fecha en cuarzo ámbar              - Filtros ópticos y nitidez (Lab/Escáner)

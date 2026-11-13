@@ -3521,8 +3521,89 @@ body.roll-empty .inspector-scroll {
   .viewport { order: -1; }
   /* La telemetría vive ahora en el densitómetro: se muestra también en móvil */
   .render-stats { white-space: normal; }
-  /* Los paneles se apilan y la página hace scroll: el densitómetro ya no
-     aplasta al inspector (antes se solapaban sus controles). */
+  /* LOCAL EXPOSURE MASKS (digital dodge & burn) */
+.section#localExposurePanel .panel-card {
+  order: 3; /* Después de la curva tonal */
+}
+
+.section#localExposurePanel .local-exp-control-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section#localExposurePanel .control-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  flex: 1;
+}
+
+.section#localExposurePanel .control-label {
+  font-size: 10px;
+  color: var(--pewter-muted);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section#localExposurePanel .control-val {
+  font-size: 12px;
+  color: var(--silver-text);
+  align-self: self-end;
+}
+
+.section#localExposurePanel .local-exp-canvas-wrap {
+  border: 1px solid var(--hairline-rule);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--chamber-black);
+  margin-top: 8px;
+}
+
+.section#localExposurePanel .local-exp-canvas {
+  display: block;
+  width: 100%;
+  height: 200px;
+}
+
+.section#localExposurePanel .helper-copy {
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline-rule);
+  border-bottom: 1px solid var(--hairline-rule);
+  font-size: 11px;
+  color: var(--pewter-muted);
+}
+
+.section#localExposurePanel .local-exp-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+.section#localExposurePanel .btn-small {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+/* Estado mientras se pinta */
+.section#localExposurePanel .is-dragging {
+  cursor: grabbing;
+}
+
+/* Reducido en móviles */
+@media (max-width: 480px) {
+  .section#localExposurePanel .control-group {
+    min-width: 120px;
+  }
+  .section#localExposurePanel .local-exp-canvas {
+    height: 150px;
+  }
+}
   .sidebar { border: none; border-bottom: 1px solid var(--hairline-rule); max-height: 340px; }
   .sidebar-right { max-height: none; }
   .inspector-scroll { max-height: 70vh; }
