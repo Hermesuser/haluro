@@ -747,6 +747,15 @@ html, body {
   gap: 10px;
 }
 
+/* Los paneles son hijos flexibles de un contenedor con scroll: sin esto se
+   comprimen cuando no caben y su contenido se desborda sobre el pie,
+   montándose encima de otros controles. Deben mantener su altura y dejar que
+   el contenedor haga scroll. */
+.pane-scroll > *,
+.inspector-scroll > * {
+  flex-shrink: 0;
+}
+
 .panel-card {
   background-color: var(--slate-well);
   border: 1px solid var(--hairline-rule);

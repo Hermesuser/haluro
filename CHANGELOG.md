@@ -29,6 +29,10 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 - Cobertura completa: previsualización, exportación individual, lotes, hoja de
   contactos, revelado de rollo completo, receta por fotograma, copiar/pegar,
   sincronizar rollo, deshacer/rehacer, persistencia de preferencias e historial.
+- **Inspector con scroll real.** Los paneles laterales son hijos flexibles de un
+  contenedor con scroll: sin `flex-shrink: 0` podían comprimirse cuando no
+  cabían y su contenido se desbordaba sobre el pie del inspector. Ahora
+  mantienen su altura y el contenedor se desplaza.
 
 ---
 
