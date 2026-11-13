@@ -167,6 +167,107 @@ def apply_tonal_zones(lin, shadows=0.0, mids=0.0, highlights=0.0):
     return lin * np.power(2.0, gain_ev)
 
 
+def build_curve_lut(points, size=256):
+    """Construye una LUT de 256 entradas a partir de los puntos de control.
+
+    La interpolación es *monótona por tramos* (PCHIP): respeta la forma que el
+    fotógrafo ve dibujada y nunca introduce sobreoscilaciones, que en una
+    curva tonal producen bandas y dientes en las sombras.
+
+    Los puntos son pares ``[x, y]`` con x en [0, 1] (posición de entrada) e y
+    libre (salida). Se permiten salidas fuera de [0, 1] para poder «cortar»
+    negros y luces al gusto.
+    """
+    pts = []
+    for p in points or []:
+        try:
+            x = float(p[0])
+            y = float(p[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if not (np.isfinite(x) and np.isfinite(y)):
+            continue
+        pts.append((float(np.clip(x, 0.0, 1.0)), float(np.clip(y, -0.5, 1.5))))
+    if not pts:
+        return None
+
+    pts.sort(key=lambda t: t[0])
+    xs = np.array([p[0] for p in pts], dtype=np.float64)
+    ys = np.array([p[1] for p in pts], dtype=np.float64)
+
+    # Puntos duplicados en x rompen el interpolador: se promedian sus alturas.
+    keep_x, keep_y = [], []
+    for x, y in zip(xs, ys, strict=True):
+        if keep_x and abs(x - keep_x[-1]) < 1e-6:
+            keep_y[-1] = 0.5 * (keep_y[-1] + y)
+        else:
+            keep_x.append(x)
+            keep_y.append(y)
+    xs = np.array(keep_x, dtype=np.float64)
+    ys = np.array(keep_y, dtype=np.float64)
+
+    if len(xs) == 1:
+        # Un solo punto define una recta que pasa por (x, y).
+        x0, y0 = float(xs[0]), float(ys[0])
+        lut = np.clip((np.arange(size, dtype=np.float64) / (size - 1) - x0) + y0, -0.5, 1.5)
+        return lut.astype(np.float32)
+
+    grid = np.linspace(0.0, 1.0, size, dtype=np.float64)
+    try:
+        from scipy.interpolate import PchipInterpolator
+
+        lut = PchipInterpolator(xs, ys, extrapolate=True)(grid)
+    except Exception:
+        # Respaldo lineal si el interpolador no está disponible.
+        lut = np.interp(grid, xs, ys)
+    return np.clip(lut, -0.5, 1.5).astype(np.float32)
+
+
+def apply_user_curves(display, curve_spec):
+    """Aplica las curvas de usuario sobre la imagen ya revelada.
+
+    La curva de usuario se evalúa en espacio *display-referred* (el mismo en el
+    que se ven las curvas de un revelador): por eso se aplica después de la
+    respuesta de la emulsión y antes del grano.
+
+    Canales:
+      - ``rgb``: curva maestra sobre R, G y B.
+      - ``r`` / ``g`` / ``b``: curva por canal.
+      - ``l``: curva de luminancia; se reescala el RGB proporcionalmente para
+        conservar el tono (el matiz no debe cambiar al mover la curva).
+    """
+    if not isinstance(curve_spec, dict) or not curve_spec:
+        return display
+
+    out = display
+    # Curva maestra: se aplica sobre los tres canales.
+    master = build_curve_lut(curve_spec.get("rgb"))
+    if master is not None:
+        idx = np.clip((out * 255.0).astype(np.int32), 0, 255)
+        out = master[idx]
+
+    # Curvas por canal (r, g, b).
+    for i, key in enumerate(("r", "g", "b")):
+        lut = build_curve_lut(curve_spec.get(key))
+        if lut is None:
+            continue
+        chan = out[..., i]
+        idx = np.clip((chan * 255.0).astype(np.int32), 0, 255)
+        out[..., i] = lut[idx]
+
+    # Curva de luminancia: se preserva el matiz escalando los tres canales.
+    lut = build_curve_lut(curve_spec.get("l"))
+    if lut is not None:
+        luma = np.sum(out * LUMA, axis=-1, keepdims=True)
+        idx = np.clip((luma * 255.0).astype(np.int32), 0, 255)
+        new_luma = lut[idx]
+        # Cuando el negro es 0 la división no vale: se deja esa zona quieta.
+        scale = np.where(luma > 1e-4, new_luma / np.maximum(luma, 1e-4), 1.0)
+        out = out * scale
+
+    return out
+
+
 def shift_hues(rgb, hue_rules):
     """Shift selective hues (e.g. skin tones, greens, skies)."""
     y = np.sum(rgb * LUMA, axis=-1, keepdims=True)
@@ -1008,6 +1109,7 @@ def develop_frame(
     shadows=0.0,
     mids=0.0,
     highlights=0.0,
+    curve=None,
     add_date=False,
     max_dim=None,
     rotate=0,
@@ -1095,6 +1197,10 @@ def develop_frame(
                 display = shift_hues(display, film["hues"])
 
     display = np.clip(display, 0.0, 1.0)
+    
+    # 4b. User tone curve (display-referred: same space as a darkroom curve)
+    if curve:
+        display = apply_user_curves(display, curve)
     
     # 5. Film Grain
     grain_amt = film.get("grain", 0.015) * grain_mult

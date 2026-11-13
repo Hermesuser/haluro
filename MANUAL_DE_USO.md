@@ -88,7 +88,7 @@ La interfaz de Haluro está organizada en tres áreas principales diseñadas par
 
 3. **Paneles Laterales:**
    - **Panel Izquierdo:** Catálogo buscable de 72 películas con filtros en español (`Todas`, `★ Favoritas`, `Negativo C-41`, `Diapositiva E-6`, `Cine`, `Plata B&N`, `Cross-Pro`) en modo *Emulación*, o calibración de soporte base D-min, perfiles de escáner y virados B&N en modo *Revelar negativo*.
-   - **Panel Derecho (Inspector):** **Densitómetro RGB** en vivo (lectura de sombras y luces recortadas), controles de **Química y óptica** / **Zonas tonales** (sombras, tonos medios y luces) / **Curva tonal y proceso**, **Ampliadora CMY y 3 vías**, **Filtros y nitidez óptica**, **Ficha técnica EXIF analógica** y selector de **Formato maestro** (`JPG 4:4:4`, `PNG`, `TIFF 16b`).
+   - **Panel Derecho (Inspector):** **Densitómetro RGB** en vivo (lectura de sombras y luces recortadas), controles de **Química y óptica** / **Zonas tonales** (sombras, tonos medios y luces) / **Curva tonal** (editor de curva) / **Curva tonal y proceso**, **Ampliadora CMY y 3 vías**, **Filtros y nitidez óptica**, **Ficha técnica EXIF analógica** y selector de **Formato maestro** (`JPG 4:4:4`, `PNG`, `TIFF 16b`).
 
 ---
 
@@ -258,6 +258,19 @@ Tres decisiones fotográficas que explican su comportamiento:
 3. **Cada zona tiene su meseta.** Las sombras mandan con toda su fuerza en los negros profundos, los medios en el gris medio y las luces en las altas luces, con transiciones suaves entre ellas.
 
 Como el resto de controles, son **no destructivos**, se guardan **por fotograma**, viajan con **Copiar/Pegar receta** y con **Sincronizar rollo**, y se pueden deshacer con `Z`.
+
+---
+
+### Curva Tonal (Editor de Curvas)
+
+La sección **«Curva tonal»** del inspector permite manipular la respuesta tonal con la misma lógica que una curva de papel en el ampliador: los puntos que dibuja son la exposición en cada punto de la imagen.
+
+* **Canales:** `RGB` (curva maestra sobre los tres canales), `Luz` (curva de luminancia, que **conserva el matiz**), y los canales `R`, `G` y `B` por separado.
+* **Interacción:** clic para añadir un punto, arrastre para moverlo, doble clic para quitarlo. Los extremos inferior izquierdo y superior derecho están siempre implícitos, salvo que coloques un punto justo ahí para levantar los negros o bajar las luces.
+* **Fondo:** el histograma de la imagen te dice dónde está la información antes de que muevas nada.
+* **Interpolación monótona por tramos:** la curva nunca «se pasa de la curva», así que no aparecen bandas ni dientes en las sombras.
+
+La curva se guarda como **puntos de control**, no como una imagen: pesa unos pocos bytes, viaja con la receta por fotograma, se copia, se sincroniza con el rollo, se deshace con `Z` y se aplica **igual en la previsualización y en la exportación** (el motor construye la misma tabla que ves dibujada).
 
 ---
 

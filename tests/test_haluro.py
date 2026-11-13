@@ -1687,3 +1687,99 @@ def test_contact_sheet_stems_aspect_and_mixed_roll_meta(tmp_path: Path) -> None:
 
 
 
+
+
+def test_user_tone_curve_is_monotone_and_channel_aware():
+    """La curva de usuario: monótona, identidad por defecto y fiel al matiz."""
+    from engine.pipeline import apply_user_curves, build_curve_lut
+
+    # Sin puntos no hay curva: la imagen no se toca.
+    assert build_curve_lut([]) is None
+    assert build_curve_lut(None) is None
+    ramp = np.linspace(0.0, 1.0, 256, dtype=np.float32)
+    img = np.repeat(ramp.reshape(1, -1, 1), 3, axis=2)
+    assert np.allclose(apply_user_curves(img.copy(), {}), img)
+    assert np.allclose(apply_user_curves(img.copy(), {"rgb": []}), img)
+
+    # La LUT es monótona: una curva tonal no puede crear ondulaciones.
+    lut = build_curve_lut([[0, 0], [0.25, 0.45], [0.75, 0.8], [1, 1]])
+    assert lut is not None
+    diffs = np.diff(lut.astype(np.float64))
+    assert np.all(diffs >= -1e-6), "la curva debe ser monótona"
+
+    # Una curva que levanta las sombras sube las sombras y deja las luces.
+    out = apply_user_curves(img.copy(), {"rgb": [[0, 0], [0.25, 0.45], [0.75, 0.8], [1, 1]]})
+    assert out[0, 32, 0] > img[0, 32, 0] + 0.1
+    assert out[0, 250, 0] == pytest.approx(img[0, 250, 0], abs=0.02)
+
+    # La curva de luminancia conserva el matiz (proporción entre canales).
+    color = np.array([[[0.8, 0.3, 0.15]]], dtype=np.float32)
+    curved = apply_user_curves(color.copy(), {"l": [[0, 0], [0.5, 0.7], [1, 1]]})[0, 0]
+    src_px = color[0, 0]
+    assert curved[0] / curved[1] == pytest.approx(src_px[0] / src_px[1], rel=0.02)
+
+    # La curva por canal sólo toca ese canal.
+    out2 = apply_user_curves(img.copy(), {"r": [[0, 0], [1, 0.5]]})
+    assert out2[0, 128, 0] == pytest.approx(0.251, abs=0.02)
+    assert out2[0, 128, 1] == pytest.approx(img[0, 128, 1], abs=1e-6)
+
+    # Puntos duplicados o fuera de rango no rompen nada.
+    weird = build_curve_lut([[0.2, 0.3], [0.2, 0.4], [5, 9], [-3, -2], [float("nan"), 1]])
+    assert weird is not None
+    assert np.all(np.isfinite(weird))
+
+
+def test_user_tone_curve_reaches_preview_and_export(client, tmp_path: Path) -> None:
+    """La curva viaja como datos por la API y se aplica al exportar."""
+    import base64
+    import io
+
+    res_sample = client.post("/api/load_sample")
+    assert res_sample.status_code == 200
+
+    curve = {"rgb": [[0.0, 0.0], [0.25, 0.45], [0.75, 0.8], [1.0, 1.0]]}
+
+    def preview_bytes(payload):
+        body = {"filename": "SAMPLE.CR2", "film": "portra400", "include_original": False}
+        body.update(payload)
+        res = client.post("/api/preview", json=body)
+        assert res.status_code == 200
+        data = res.get_json()["developed"].split(",", 1)[1]
+        return Image.open(io.BytesIO(base64.b64decode(data))).convert("RGB")
+
+    neutral = preview_bytes({})
+    curved = preview_bytes({"curve": curve})
+    assert neutral.tobytes() != curved.tobytes()
+
+    # Una curva inválida se ignora (la imagen no se toca).
+    invalid = preview_bytes({"curve": {"rgb": "no-es-una-curva"}})
+    assert invalid.tobytes() == neutral.tobytes()
+
+    # Export a disco con la curva aplicada.
+    out_png = tmp_path / "exports" / "curva.png"
+    res_save = client.post(
+        "/api/save_to_path",
+        json={
+            "filename": "SAMPLE.CR2",
+            "dest_path": str(out_png),
+            "film": "portra400",
+            "curve": curve,
+        },
+    )
+    assert res_save.status_code == 200
+    assert out_png.is_file()
+
+    # La receta por fotograma puede llevar su propia curva: la hoja de
+    # contactos usa la curva de CADA fotograma, no la global.
+    res_sheet = client.post(
+        "/api/contact_sheet_preview",
+        json={
+            "filenames": ["SAMPLE.CR2"],
+            "film": "portra400",
+            "curve": curve,
+            "per_frame_recipes": {"SAMPLE.CR2": {"film": "portra400", "curve": curve}},
+            "columns": 2,
+        },
+    )
+    assert res_sheet.status_code == 200
+    assert res_sheet.get_json().get("sheet")

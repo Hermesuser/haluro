@@ -734,6 +734,59 @@ html, body {
 }
 
 /* =============================================================
+   CURVA TONAL — EDITOR DE CURVAS
+   ============================================================= */
+
+.curve-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 9px;
+  background-color: var(--chamber-black);
+  border: 1px solid var(--hairline-rule);
+  border-radius: var(--radius-md);
+}
+
+.curve-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--pewter-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 2px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.curve-tab:hover { color: var(--silver-text); }
+
+.curve-tab.active {
+  background-color: var(--slate-well);
+  color: var(--sodium-amber);
+}
+
+.curve-canvas-wrap {
+  position: relative;
+  border: 1px solid var(--hairline-rule);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--chamber-black);
+}
+
+.curve-canvas {
+  display: block;
+  width: 100%;
+  height: 248px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.curve-canvas.is-dragging { cursor: grabbing; }
+
+/* =============================================================
    PANELS, CARDS & PRECISION SLIDERS
    ============================================================= */
 

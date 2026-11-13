@@ -244,6 +244,9 @@ const state = {
   shadows: 0.0,
   mids: 0.0,
   highlights: 0.0,
+  // Tone curve: control points per channel (null = identity)
+  curve: null,
+  curveChannel: "rgb",
   date: false,
 
   // Shared non-destructive geometry & export
@@ -612,6 +615,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initAnalogExifControls();
   initUIListeners();
   enhanceControlPrecision();
+  initCurveEditor();
   syncNegProcessPanels();
   selectCmyZone("global");
   initSplitSlider();
@@ -1990,6 +1994,7 @@ async function requestPreview(forceOriginal = false) {
           shadows: state.shadows,
           mids: state.mids,
           highlights: state.highlights,
+          curve: curvePayload(state.curve),
           date: state.date,
           rotate: state.rotate,
           flip_h: state.flip_h,
@@ -2127,6 +2132,7 @@ function snapshotSimRecipe() {
     shadows: state.shadows,
     mids: state.mids,
     highlights: state.highlights,
+    curve: state.curve ? cloneCurve(state.curve) : null,
     date: state.date,
     rotate: state.rotate,
     flip_h: state.flip_h,
@@ -2245,6 +2251,7 @@ function applySimRecipeToUI(rec) {
   state.shadows = Number(rec.shadows ?? 0.0);
   state.mids = Number(rec.mids ?? 0.0);
   state.highlights = Number(rec.highlights ?? 0.0);
+  state.curve = rec.curve ? cloneCurve(rec.curve) : null;
   state.date = Boolean(rec.date);
   if (typeof rec.rotate === "number") state.rotate = rec.rotate;
   if (typeof rec.flip_h === "boolean") state.flip_h = rec.flip_h;
@@ -2264,6 +2271,7 @@ function applySimRecipeToUI(rec) {
   setSliderSilent("shadowsSlider", "shadowsVal", state.shadows, formatZoneEv(state.shadows));
   setSliderSilent("midsSlider", "midsVal", state.mids, formatZoneEv(state.mids));
   setSliderSilent("highlightsSlider", "highlightsVal", state.highlights, formatZoneEv(state.highlights));
+  drawCurveEditor();
   const dt = document.getElementById("dateToggle");
   if (dt) dt.checked = state.date;
   updateActiveRecipeBanner();
@@ -3341,13 +3349,413 @@ function initEyedropperViewport() {
 }
 
 // =============================================================
+// EDITOR DE CURVA TONAL
+//
+// La curva se guarda como PUNTOS DE CONTROL (datos), nunca como píxeles:
+// así cabe en la receta por fotograma, se copia, se sincroniza con el rollo,
+// se deshace y se exporta sin tocar ningún otro mecanismo de la app.
+// El motor (engine/pipeline.py) convierte esos puntos en una LUT monótona.
+//
+// Convención: x = posición de entrada (0 sombra, 1 luz), y = salida.
+// El eje y crece hacia arriba: un punto por encima de la diagonal aclara.
+// =============================================================
+
+const CURVE_CHANNELS = ["rgb", "l", "r", "g", "b"];
+const CURVE_CHANNEL_LABELS = { rgb: "RGB", l: "Luz", r: "R", g: "G", b: "B" };
+
+function emptyCurve() {
+  return { rgb: null, l: null, r: null, g: null, b: null };
+}
+
+function cloneCurve(curve) {
+  const out = emptyCurve();
+  if (!curve || typeof curve !== "object") return out;
+  for (const ch of CURVE_CHANNELS) {
+    const pts = curve[ch];
+    if (Array.isArray(pts) && pts.length) {
+      out[ch] = pts.map((p) => [Number(p[0]) || 0, Number(p[1]) || 0]);
+    }
+  }
+  return out;
+}
+
+function curveIsIdentity(curve) {
+  if (!curve) return true;
+  return CURVE_CHANNELS.every((ch) => !curve[ch] || !curve[ch].length);
+}
+
+function curvePayload(curve) {
+  // Sólo se envían los canales modificados: una receta sin curva no crece.
+  const out = {};
+  for (const ch of CURVE_CHANNELS) {
+    const pts = curve?.[ch];
+    if (Array.isArray(pts) && pts.length) {
+      out[ch] = pts.map((p) => [
+        Math.round(Math.min(Math.max(p[0], 0), 1) * 1000) / 1000,
+        Math.round(Math.min(Math.max(p[1], 0), 1) * 1000) / 1000,
+      ]);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function curvePoints(curve, channel) {
+  const pts = curve?.[channel];
+  return Array.isArray(pts) ? pts : [];
+}
+
+/** Curva efectiva: los extremos (0,0) y (1,1) siempre están, salvo que el
+ *  usuario haya colocado un punto justo ahí (para levantar negros o bajar
+ *  luces). Es el mismo modelo que usan los reveladores. */
+function curveEffectivePoints(curve, channel) {
+  const pts = curvePoints(curve, channel).map((p) => [p[0], p[1]]);
+  if (!pts.length) return [];
+  const hasLow = pts.some((p) => p[0] <= 1e-6);
+  const hasHigh = pts.some((p) => p[0] >= 1 - 1e-6);
+  if (!hasLow) pts.unshift([0, 0]);
+  if (!hasHigh) pts.push([1, 1]);
+  return pts.sort((a, b) => a[0] - b[0]);
+}
+
+function curveChannelHasEdits(curve, channel) {
+  return curvePoints(curve, channel).length > 0;
+}
+
+// -------------------------------------------------------------
+// Dibujo
+// -------------------------------------------------------------
+
+let curveHistBins = null;
+
+function curveCanvasGeometry() {
+  const canvas = document.getElementById("curveCanvas");
+  if (!canvas) return null;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 272;
+  const cssH = canvas.clientHeight || 248;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+  }
+  return { canvas, ctx: canvas.getContext("2d"), dpr, cssW, cssH };
+}
+
+function drawCurveEditor() {
+  const geo = curveCanvasGeometry();
+  if (!geo) return;
+  const { ctx, dpr, cssW, cssH } = geo;
+
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  // Fondo del canal activo (sutil tinte por canal)
+  const channel = state.curveChannel;
+  const tints = {
+    rgb: "rgba(236, 238, 242, 0.85)",
+    l: "rgba(236, 238, 242, 0.85)",
+    r: "rgba(229, 75, 75, 0.9)",
+    g: "rgba(75, 210, 138, 0.9)",
+    b: "rgba(92, 162, 250, 0.9)",
+  };
+  const accent = tints[channel] || tints.rgb;
+
+  // Histograma de fondo (luminancia de la imagen desarrollada)
+  if (curveHistBins) {
+    const { yBins, maxPeak } = curveHistBins;
+    ctx.beginPath();
+    ctx.moveTo(0, cssH);
+    for (let i = 0; i < 256; i++) {
+      const x = (i / 255) * cssW;
+      const norm = Math.min(1, yBins[i] / maxPeak);
+      ctx.lineTo(x, cssH - Math.pow(norm, 0.78) * (cssH * 0.72));
+    }
+    ctx.lineTo(cssW, cssH);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(236, 238, 242, 0.10)";
+    ctx.fill();
+  }
+
+  // Rejilla de cuartos
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+  ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75].forEach((p) => {
+    const x = Math.round(cssW * p) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, cssH);
+    ctx.stroke();
+    const y = Math.round(cssH * p) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(cssW, y);
+    ctx.stroke();
+  });
+
+  // Diagonal neutra (referencia)
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.13)";
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(0, cssH);
+  ctx.lineTo(cssW, 0);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Curva
+  const pts = curveEffectivePoints(state.curve, channel);
+  const toPx = (p) => [p[0] * cssW, (1 - p[1]) * cssH];
+
+  if (pts.length) {
+    ctx.beginPath();
+    // Curva interpolada (monótona por tramos, como en el motor)
+    const lut = sampleCurveMonotone(pts, 96);
+    lut.forEach((p, i) => {
+      const [px, py] = toPx(p);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+  }
+
+  // Puntos de control
+  const user = curvePoints(state.curve, channel);
+  user.forEach((p, i) => {
+    const [px, py] = toPx(p);
+    ctx.beginPath();
+    ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#131518";
+    ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (curveDragIndex === i) {
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(229, 149, 40, 0.55)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
+  });
+
+  ctx.restore();
+}
+
+/** Muestreo de la curva con interpolación monótona por tramos (PCHIP).
+ *  Reproduce en el cliente lo que el motor hará en el servidor: el usuario ve
+ *  exactamente la curva que se va a exportar. */
+function sampleCurveMonotone(points, samples = 96) {
+  const pts = points.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+  if (!pts.length) return [];
+  if (pts.length === 1) return [[pts[0][0], pts[0][1]]];
+
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+
+  // Pendientes (método de Fritsch-Carlson: monótono y sin sobreoscilación)
+  const n = xs.length;
+  const dx = [];
+  const dy = [];
+  const slope = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(xs[i + 1] - xs[i]);
+    dy.push(ys[i + 1] - ys[i]);
+    slope.push(dx[i] === 0 ? 0 : dy[i] / dx[i]);
+  }
+  const m = new Array(n);
+  m[0] = slope[0];
+  m[n - 1] = slope[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (slope[i - 1] * slope[i] <= 0) {
+      m[i] = 0;
+    } else {
+      const w1 = 2 * dx[i] + dx[i - 1];
+      const w2 = dx[i] + 2 * dx[i - 1];
+      m[i] = (w1 + w2) / (w1 / slope[i - 1] + w2 / slope[i]);
+    }
+  }
+
+  const out = [];
+  for (let s = 0; s < samples; s++) {
+    const x = s / (samples - 1);
+    let i = 0;
+    while (i < n - 2 && xs[i + 1] < x) i++;
+    const h = dx[i] || 1e-6;
+    const t = (x - xs[i]) / h;
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const h00 = 2 * t3 - 3 * t2 + 1;
+    const h10 = t3 - 2 * t2 + t;
+    const h01 = -2 * t3 + 3 * t2;
+    const h11 = t3 - t2;
+    const y =
+      h00 * ys[i] + h10 * h * m[i] + h01 * ys[i + 1] + h11 * h * m[i + 1];
+    out.push([x, Math.min(Math.max(y, 0), 1)]);
+  }
+  return out;
+}
+
+// -------------------------------------------------------------
+// Interacción
+// -------------------------------------------------------------
+
+let curveDragIndex = -1;
+
+function curvePointFromEvent(ev) {
+  const canvas = document.getElementById("curveCanvas");
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.min(Math.max((ev.clientX - rect.left) / rect.width, 0), 1);
+  const y = Math.min(Math.max(1 - (ev.clientY - rect.top) / rect.height, 0), 1);
+  return [x, y];
+}
+
+function curveHitTest(pos) {
+  const pts = curvePoints(state.curve, state.curveChannel);
+  const canvas = document.getElementById("curveCanvas");
+  if (!canvas || !pts.length) return -1;
+  const rect = canvas.getBoundingClientRect();
+  const r = 12 / Math.max(rect.width, 1);
+  for (let i = 0; i < pts.length; i++) {
+    const dx = Math.abs(pts[i][0] - pos[0]);
+    const dy = Math.abs(pts[i][1] - pos[1]);
+    if (dx <= r && dy <= r * (rect.height / Math.max(rect.width, 1)) * 1.6) return i;
+  }
+  return -1;
+}
+
+function curveAddPoint(pos) {
+  const channel = state.curveChannel;
+  if (!state.curve) state.curve = emptyCurve();
+  const pts = curvePoints(state.curve, channel).map((p) => [p[0], p[1]]);
+  // Un punto por posición: si ya hay uno muy cerca, se sustituye.
+  const near = pts.findIndex((p) => Math.abs(p[0] - pos[0]) < 0.012);
+  if (near >= 0) {
+    pts[near] = [pos[0], pos[1]];
+  } else {
+    pts.push([pos[0], pos[1]]);
+    pts.sort((a, b) => a[0] - b[0]);
+  }
+  state.curve[channel] = pts;
+}
+
+function curveRemovePoint(index) {
+  const channel = state.curveChannel;
+  const pts = curvePoints(state.curve, channel).map((p) => [p[0], p[1]]);
+  if (index < 0 || index >= pts.length) return;
+  pts.splice(index, 1);
+  state.curve[channel] = pts.length ? pts : null;
+  if (!state.curve[channel]) delete state.curve[channel];
+}
+
+function curveMovePoint(index, pos) {
+  const channel = state.curveChannel;
+  const pts = curvePoints(state.curve, channel).map((p) => [p[0], p[1]]);
+  if (index < 0 || index >= pts.length) return;
+  pts[index] = [pos[0], pos[1]];
+  pts.sort((a, b) => a[0] - b[0]);
+  state.curve[channel] = pts;
+  curveDragIndex = pts.findIndex((p) => p[0] === pts[Math.min(index, pts.length - 1)][0]);
+}
+
+function setCurveChannel(channel) {
+  if (!CURVE_CHANNELS.includes(channel)) return;
+  state.curveChannel = channel;
+  document.querySelectorAll("#curveTabs .curve-tab").forEach((btn) => {
+    const active = btn.dataset.channel === channel;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  drawCurveEditor();
+}
+
+function initCurveEditor() {
+  const canvas = document.getElementById("curveCanvas");
+  if (!canvas) return;
+
+  document.querySelectorAll("#curveTabs .curve-tab").forEach((btn) => {
+    btn.addEventListener("click", () => setCurveChannel(btn.dataset.channel));
+  });
+
+  document.getElementById("resetCurveBtn")?.addEventListener("click", () => {
+    pushUndoSnapshotForFrame();
+    const channel = state.curveChannel;
+    if (state.curve) {
+      delete state.curve[channel];
+    }
+    saveActiveFrameRecipe();
+    drawCurveEditor();
+    triggerDebouncedPreview("curve");
+  });
+
+  canvas.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    const pos = curvePointFromEvent(ev);
+    if (!pos) return;
+    const hit = curveHitTest(pos);
+    if (hit < 0) {
+      pushUndoSnapshotForFrame();
+      curveAddPoint(pos);
+      saveActiveFrameRecipe();
+      drawCurveEditor();
+      triggerDebouncedPreview("curve");
+      curveDragIndex = curvePoints(state.curve, state.curveChannel).length - 1;
+    } else {
+      pushUndoSnapshotForFrame();
+      curveDragIndex = hit;
+      canvas.classList.add("is-dragging");
+    }
+    canvas.setPointerCapture?.(ev.pointerId);
+    ev.preventDefault();
+  });
+
+  canvas.addEventListener("pointermove", (ev) => {
+    if (curveDragIndex < 0) return;
+    const pos = curvePointFromEvent(ev);
+    if (!pos) return;
+    curveMovePoint(curveDragIndex, pos);
+    drawCurveEditor();
+    triggerDebouncedPreview("curve");
+  });
+
+  const endDrag = (ev) => {
+    if (curveDragIndex >= 0) {
+      curveDragIndex = -1;
+      canvas.classList.remove("is-dragging");
+      saveActiveFrameRecipe();
+      saveUserPreferences();
+    }
+    canvas.releasePointerCapture?.(ev.pointerId);
+  };
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+
+  canvas.addEventListener("dblclick", (ev) => {
+    const pos = curvePointFromEvent(ev);
+    if (!pos) return;
+    const hit = curveHitTest(pos);
+    if (hit < 0) return;
+    pushUndoSnapshotForFrame();
+    curveRemovePoint(hit);
+    saveActiveFrameRecipe();
+    drawCurveEditor();
+    triggerDebouncedPreview("curve");
+    ev.preventDefault();
+  });
+}
+
+
+// =============================================================
 // REAL-TIME RGB & LUMINANCE DENSITOMETER HISTOGRAM
 // =============================================================
 
-function renderHistogramFromImage(imgEl) {
-  const canvas = document.getElementById("histogramCanvas");
-  if (!canvas || !imgEl || !imgEl.naturalWidth) return;
-
+/**
+ * Muestrea la imagen-developed y devuelve los histogramas por canal.
+ * Lo comparten el densitómetro y el editor de curva tonal.
+ */
+function computeHistBins(imgEl) {
+  if (!imgEl || !imgEl.naturalWidth) return null;
   if (!offscreenHistCanvas) {
     offscreenHistCanvas = document.createElement("canvas");
   }
@@ -3384,6 +3792,26 @@ function renderHistogramFromImage(imgEl) {
     if (luma >= 253 || r >= 254 || g >= 254 || b >= 254) highlightClipCount += 1;
   }
 
+  // Normalize ignoring extreme spikes at bin 0 and 255 for clean legibility
+  let maxPeak = 1;
+  for (let b = 2; b < 254; b++) {
+    maxPeak = Math.max(maxPeak, rBins[b], gBins[b], bBins[b], yBins[b]);
+  }
+  return { rBins, gBins, bBins, yBins, maxPeak, totalPixels, shadowClipCount, highlightClipCount };
+}
+
+function renderHistogramFromImage(imgEl) {
+  const canvas = document.getElementById("histogramCanvas");
+  if (!canvas || !imgEl || !imgEl.naturalWidth) return;
+
+  const bins = computeHistBins(imgEl);
+  if (!bins) return;
+  const { rBins, gBins, bBins, yBins, maxPeak, totalPixels, shadowClipCount, highlightClipCount } = bins;
+
+  // El editor de curva usa el mismo histograma como fondo
+  curveHistBins = bins;
+  drawCurveEditor();
+
   // Update clipping indicators
   const shadowPct = (shadowClipCount / totalPixels) * 100;
   const highPct = (highlightClipCount / totalPixels) * 100;
@@ -3396,12 +3824,6 @@ function renderHistogramFromImage(imgEl) {
   if (clipH) {
     clipH.textContent = `Luces ${highPct.toFixed(1)}%`;
     clipH.classList.toggle("warn", highPct > 1.5);
-  }
-
-  // Normalize ignoring extreme spikes at bin 0 and 255 for clean legibility
-  let maxPeak = 1;
-  for (let b = 2; b < 254; b++) {
-    maxPeak = Math.max(maxPeak, rBins[b], gBins[b], bBins[b], yBins[b]);
   }
 
   const dpr = window.devicePixelRatio || 1;
@@ -4540,6 +4962,7 @@ async function saveDirectToDownloads() {
             shadows: state.shadows,
             mids: state.mids,
             highlights: state.highlights,
+            curve: curvePayload(state.curve),
             date: state.date,
             rotate: state.rotate,
             flip_h: state.flip_h,
@@ -4627,6 +5050,7 @@ async function saveAsWithDialog() {
             shadows: state.shadows,
             mids: state.mids,
             highlights: state.highlights,
+            curve: curvePayload(state.curve),
             date: state.date,
             rotate: state.rotate,
             flip_h: state.flip_h,

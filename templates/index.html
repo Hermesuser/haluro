@@ -732,6 +732,29 @@
               <input type="range" class="bipolar-range" id="highlightsSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0" aria-labelledby="lblHighlights">
             </div>
           </section>
+
+          <!-- TONE CURVE: control points travel as data inside the recipe -->
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Curva tonal</h3>
+              <button class="reset-link" id="resetCurveBtn" title="Restablecer la curva del canal activo">Restablecer</button>
+            </div>
+
+            <div class="curve-tabs" id="curveTabs" role="tablist" aria-label="Canal de la curva tonal">
+              <button type="button" class="curve-tab active" data-channel="rgb" role="tab" aria-selected="true" title="Curva maestra sobre los tres canales">RGB</button>
+              <button type="button" class="curve-tab" data-channel="l" role="tab" aria-selected="false" title="Curva de luminancia (conserva el matiz)">Luz</button>
+              <button type="button" class="curve-tab" data-channel="r" role="tab" aria-selected="false" title="Canal rojo">R</button>
+              <button type="button" class="curve-tab" data-channel="g" role="tab" aria-selected="false" title="Canal verde">G</button>
+              <button type="button" class="curve-tab" data-channel="b" role="tab" aria-selected="false" title="Canal azul">B</button>
+            </div>
+
+            <div class="curve-canvas-wrap">
+              <canvas id="curveCanvas" class="curve-canvas" height="248"
+                      role="application"
+                      aria-label="Editor de curva tonal. Clic para añadir un punto, arrastrar para moverlo, doble clic para quitarlo."></canvas>
+            </div>
+            <p class="helper-copy">Clic para añadir un punto · Arrastra para moverlo · Doble clic para quitarlo.</p>
+          </section>
         </div>
 
         <!-- CONTROLS FOR MODE 2: NEGATIVE LAB -->

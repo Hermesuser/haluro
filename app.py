@@ -989,6 +989,44 @@ def api_thumbnail(filename):
     return send_file(io.BytesIO(jpeg_bytes), mimetype="image/jpeg", max_age=3600)
 
 
+# --- Curva tonal de usuario ---------------------------------------------------
+# La curva viaja como DATOS (puntos de control), no como píxeles: así cabe en la
+# receta por fotograma, se copia, se sincroniza con el rollo y se exporta sin
+# tocar ningún otro mecanismo de la aplicación.
+_CURVE_CHANNELS = ("rgb", "r", "g", "b", "l")
+_MAX_CURVE_POINTS = 32
+
+
+def _parse_curve(value):
+    """Valida y normaliza una curva de usuario: dict canal -> lista de [x, y].
+
+    Devuelve ``None`` si la curva es vacía o inválida (la imagen no se toca).
+    """
+    if not isinstance(value, dict) or not value:
+        return None
+    out = {}
+    for channel in _CURVE_CHANNELS:
+        pts = value.get(channel)
+        if not isinstance(pts, (list, tuple)) or not pts:
+            continue
+        clean = []
+        for p in list(pts)[:_MAX_CURVE_POINTS]:
+            try:
+                x = float(p[0])
+                y = float(p[1])
+            except (TypeError, ValueError, IndexError):
+                continue
+            if not (math.isfinite(x) and math.isfinite(y)):
+                continue
+            clean.append([
+                round(min(max(x, 0.0), 1.0), 5),
+                round(min(max(y, -0.5), 1.5), 5),
+            ])
+        if clean:
+            out[channel] = clean
+    return out or None
+
+
 @app.route("/api/preview", methods=["POST"])
 def api_preview():
     data = request.json or {}
@@ -1001,6 +1039,7 @@ def api_preview():
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+    curve = _parse_curve(data.get("curve"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1021,6 +1060,7 @@ def api_preview():
         shadows=shadows,
         mids=mids,
         highlights=highlights,
+        curve=curve,
         add_date=add_date,
         max_dim=1280,
         rotate=rotate,
@@ -1058,6 +1098,7 @@ def api_develop_full():
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+    curve = _parse_curve(data.get("curve"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1089,6 +1130,7 @@ def api_develop_full():
         f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
         f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
+        f_curve = _parse_curve(fr.get("curve")) if isinstance(fr, dict) else curve
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1103,6 +1145,7 @@ def api_develop_full():
             shadows=f_shadows,
             mids=f_mids,
             highlights=f_highlights,
+            curve=f_curve,
             add_date=f_date,
             max_dim=None,
             rotate=f_rot,
@@ -1180,6 +1223,7 @@ def api_contact_sheet_preview():
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+    curve = _parse_curve(data.get("curve"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1203,6 +1247,7 @@ def api_contact_sheet_preview():
         f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
         f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
+        f_curve = _parse_curve(fr.get("curve")) if isinstance(fr, dict) else curve
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1217,6 +1262,7 @@ def api_contact_sheet_preview():
             shadows=f_shadows,
             mids=f_mids,
             highlights=f_highlights,
+            curve=f_curve,
             add_date=f_date,
             max_dim=720,
             rotate=f_rot,
@@ -1274,6 +1320,7 @@ def api_save_contact_sheet():
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+    curve = _parse_curve(data.get("curve"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1313,6 +1360,7 @@ def api_save_contact_sheet():
         f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
         f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
+        f_curve = _parse_curve(fr.get("curve")) if isinstance(fr, dict) else curve
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1327,6 +1375,7 @@ def api_save_contact_sheet():
             shadows=f_shadows,
             mids=f_mids,
             highlights=f_highlights,
+            curve=f_curve,
             add_date=f_date,
             max_dim=1400,
             rotate=f_rot,
@@ -1386,6 +1435,7 @@ def api_export_single():
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+    curve = _parse_curve(data.get("curve"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1411,6 +1461,7 @@ def api_export_single():
         shadows=shadows,
         mids=mids,
         highlights=highlights,
+        curve=curve,
         add_date=add_date,
         max_dim=None,
         rotate=rotate,
@@ -1467,6 +1518,11 @@ def api_export_and_download():
     shadows = float(request.args.get("shadows", 0.0))
     mids = float(request.args.get("mids", 0.0))
     highlights = float(request.args.get("highlights", 0.0))
+    try:
+        _curve_arg = json.loads(request.args.get("curve", "null"))
+    except (TypeError, ValueError):
+        _curve_arg = None
+    curve = _parse_curve(_curve_arg)
     add_date = request.args.get("date", "false").lower() == "true"
 
     fpath = _resolve_source_file(filename)
@@ -1483,6 +1539,7 @@ def api_export_and_download():
         shadows=shadows,
         mids=mids,
         highlights=highlights,
+        curve=curve,
         add_date=add_date,
         max_dim=None,
     )
@@ -1508,6 +1565,7 @@ def api_save_direct_to_downloads():
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+    curve = _parse_curve(data.get("curve"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1540,6 +1598,7 @@ def api_save_direct_to_downloads():
         shadows=shadows,
         mids=mids,
         highlights=highlights,
+        curve=curve,
         add_date=add_date,
         max_dim=None,
         rotate=rotate,
@@ -1637,6 +1696,7 @@ def _save_simulation_to_dest(data, reveal=False):
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+    curve = _parse_curve(data.get("curve"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1658,6 +1718,7 @@ def _save_simulation_to_dest(data, reveal=False):
         shadows=shadows,
         mids=mids,
         highlights=highlights,
+        curve=curve,
         add_date=add_date,
         max_dim=None,
         rotate=rotate,
