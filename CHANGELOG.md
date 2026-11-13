@@ -11,50 +11,6 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 
 
-## [2.7.1] — 2026-11-13
-
-### Herramientas locales — Máscaras de exposición
-
-- **Máscaras de exposición local** (dodge & burn digital): nueva sección **«Máscaras de exposición»** en el modo «Emulación · 72».
-- **Herramientas:** pincel, gradiente lineal, gradiente radial.
-- **Offset EV:** slider -2.0 a +2.0 stops; positivo = aclarar (dodge), negativo = oscurecer (burn).
-- **Parámetros finos:** tamaño (píxeles), durez (hardness 0–100), flujo (flow 0–100).
-- **Máscara acumulativa:** cada trazo se suma al historial (hasta 20 pasos), con deshacer/rehacer (<kbd>Z</k>/<kbd>Shift+Z</k>).
-- **Guardado por fotograma:** las máscaras viajan con la receta, se copian/pegan con el rollo y se sincronizan.
-- **Preview en tiempo real:** la máscara se superpone sobre la imagen developed en el canvas.
-- **Interfaz responsiva:** 700–2560px sin solapes, WCAG AA modo luz roja, enfoque por teclado.
-
----
-
-
-### Motor de imagen — Curva tonal de usuario
-
-- **Editor de curva en el modo «Emulación · 72».** Nueva sección **«Curva
-  tonal»**: se dibuja la respuesta tonal punto a punto sobre el histograma de la
-  imagen (clic añade, arrastre mueve, doble clic quita).
-- **Cinco canales:** `RGB` (curva maestra), `Luz` (curva de luminancia, que
-  reescala los tres canales proporcionalmente y **conserva el matiz**) y `R`,
-  `G`, `B` por separado.
-- **La curva viaja como datos, no como píxeles.** Son puntos de control: pesan
-  unos bytes, caben en la receta por fotograma, se copian, se sincronizan con el
-  rollo, se deshacen y se guardan en las preferencias. No ha hecho falta tocar
-  ningún otro mecanismo de la aplicación.
-- **Interpolación monótona por tramos (PCHIP) en el motor:** la curva nunca se
-  «pasa de sí misma», así que no aparecen bandas ni dientes en las sombras.
-  Se permiten salidas fuera de [0, 1] para cortar negros y luces al gusto.
-- **Lo que ves es lo que exportas:** el cliente dibuja la misma interpolación
-  que aplica el motor (diferencia máxima medida: 0.008 sobre 256 muestras).
-- **La curva se aplica en espacio display-referred**, después de la respuesta
-  de la emulsión y antes del grano: es el espacio en el que funcionan las curvas
-  de un revelador.
-- Cobertura completa: previsualización, exportación individual, lotes, hoja de
-  contactos, revelado de rollo, receta por fotograma, copiar/pegar, sincronizar
-  rollo, deshacer/rehacer e historial.
-- Coste en la previsualización: despreciable (una LUT de 256 entradas por
-  canal).
-
----
-
 ## [2.6.0] — 2026-11-12
 
 ### Motor de imagen — Zonas tonales

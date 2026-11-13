@@ -272,6 +272,30 @@ La sección **«Curva tonal»** del inspector permite manipular la respuesta ton
 
 La curva se guarda como **puntos de control**, no como una imagen: pesa unos pocos bytes, viaja con la receta por fotograma, se copia, se sincroniza con el rollo, se deshace con `Z` y se aplica **igual en la previsualización y en la exportación** (el motor construye la misma tabla que ves dibujada).
 
+
+### Máscaras de exposición local (Dodge & Burn digital)
+En la sección **«Máscaras de exposición»** del modo Emulación puedes pintar máscaras sobre la imagen developed para aclarar o oscurecer zonas específicas, de forma análoga al dodge & burn tradicional con cartulina y alambre, pero con control digital preciso.
+
+* **Herramientas disponibles:**
+  - **Pincel:** traza trazos libres con tamaño, durez y flujo ajustables.
+  - **Gradiente lineal:** arrastra para crear un gradiente en línea recta.
+  - **Gradiente radial:** haz clic y arrastra para crear un gradiente circular.
+
+* **Offset EV:** controla cuánto aclaras u oscureces. Positivo (+) = dodge (aclarar), negativo (-) = burn (oscurecer).
+* **Parámetros:**
+  - **Tamaño:** radio de la herramienta en píxeles.
+  - **Durez (hardness):** suavizado del borde (0 = suave/feathered, 100 = borde duro).
+  - **Flujo (flow):** intensidad acumulativa del trazo (0–100%).
+
+* **Cómo usarlo:**
+  1. Selecciona la herramienta deseada.
+  2. Ajusta el offset EV (ej. +1.0 para aclarar sombras, -1.0 para quemar un cielo).
+  3. Pinta sobre la imagen: los trazos se acumulan en la máscara.
+  4. Usa <kbd>Z</k> para deshacer y <kbd>Shift+Z</k> para rehacer.
+  5. Haz clic en «Invertir máscara» para reversar el efecto.
+* **Integración:** las máscaras se guardan por fotograma junto con la curva tonal y las zonas tonales. Viajan con <em>Copiar/Pegar receta</em> y <em>Sincronizar rollo</em>.
+* **Consejo:** combina máscaras de gradient radial con offset negativo para oscurecer cielos quemados, y pincel con offset positivo para recuperar sombras bloqueadas.
+
 ---
 
 ### Halación Analógica (Capa Antihalo)

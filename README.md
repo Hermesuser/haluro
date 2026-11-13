@@ -254,6 +254,8 @@ python cli.py invert negativo_01.tif \
      - Compensación de exposición                  - Muestrear D-min (I) y Análisis de rollo
      - Zonas tonales: sombras, medios y luces      - Curva tonal: Densidad neutra y Pull/Push
      - Máscaras de exposición local (dodge & burn digital) - nuevas en 2.7.1
+     - Máscaras de exposición local (dodge & burn digital) - nuevas en 2.7.1
+     - Máscaras de exposición local (dodge & burn digital) - pincel, gradiente lineal/radial, offset EV
      - Máscaras de exposición local (dodge & burn digital) - pincel, gradiente lineal/radial, offset EV
      - Curva de usuario por canal (RGB, Luz, R/G/B) - 10 acabados y virados químicos de papel
      - Halación en altas luces                     - Ampliadora CMY, 3 vías y Gris neutro (W)
@@ -343,7 +345,7 @@ git push -u origin main
 Haluro incluye un flujo de integración continua en `.github/workflows/release.yml`. Para compilar y publicar automáticamente los binarios nativos para macOS y Windows 11:
 ```bash
 # La versión se resuelve desde engine/__init__.py: no la escribas a mano aquí.
-git tag -a v2.5.0 -m "Haluro v2.5.0 — Sesión Local Segura y Revelado Determinista"
+git tag -a v2.7.1 -m "Haluro v2.5.0 — Sesión Local Segura y Revelado Determinista"
 
 # Subir la etiqueta a GitHub
 git push origin v2.5.0
