@@ -1,29 +1,27 @@
 {
-  "version": "2.5.0",
+  "version": "2.5.1",
   "release_date": "2026-11-12",
-  "name": "Haluro v2.5.0",
-  "title": "Local-Session Hardening, Deterministic Grain and Measured Hurter–Driffield Transfer",
-  "description": "Auditoría de seguridad y calidad aplicada de punta a punta: protección de sesión local con token CSRF y validación de origen, eliminación del path traversal en las rutas de salida, grano determinista que hace coincidir la previsualización con la exportación, escala correcta de TIFF de 16 bits, transferencia Hurter–Driffield basada en la densidad medida, y una cadena de empaquetado con versión única.",
+  "name": "Haluro v2.5.1",
+  "title": "Interfaz sin solapes: barra del visor adaptable, teclado y contraste en luz roja",
+  "description": "Corrección de la interfaz de la mesa de luz: la barra del visor se adapta al ancho real de su columna (consultas de contenedor) y ya no solapa los controles al maximizar la ventana; la telemetria de revelado pasa al densimetro; «Importar» vuelve a ser accesible con el teclado; se restauran los anillos de foco; se corrige el contraste del boton activo en el modo luz roja; y se amplian las zonas de pulsacion.",
   "highlights": [
-    "Sesión local protegida: token CSRF por proceso, cabecera Host restringida a loopback y comprobación de Origin en cada petición que modifica estado (bloquea DNS rebinding y POST desde páginas ajenas).",
-    "Path traversal corregido: las claves de película y de perfil negativo se canonicalizan contra el catálogo y toda ruta de salida se valida dentro de su directorio, de modo que ningún parámetro puede escribir fuera de la aplicación.",
-    "Grano determinista: la previsualización y el archivo exportado comparten ahora exactamente el mismo patrón de grano; antes el RNG global lo re-sorteaba en cada render y bajo concurrencia cambiaba entre fotogramas.",
-    "TIFF de 16 bits corregido: la escala se deriva de la profundidad declarada y no del contenido, lo que evita un error de 2.430x en escaneos subexpuestos que quedan por debajo de 255.",
-    "Transferencia Hurter–Driffield real: el rango de densidad óptica medido determina ahora la curva de reconstrucción, de modo que un rollo empujado y uno plano ya no comparten la misma respuesta tonal.",
-    "Memoria: la hoja de contactos reduce cada fotograma a miniatura al cargarlo y las conversiones de espacio de color ya no duplican sus arrays temporales.",
-    "Accesibilidad: la tecla Tab vuelve a recorrer la interfaz, el modo mesa limpia se mueve a Cmd/Ctrl+Alt+Z y el fondo de los modales se marca inerte de forma compatible con WebKit antiguo.",
-    "Empaquetado: la versión se resuelve desde engine/__init__.py en macOS y Windows, con un trabajo de CI para ambas plataformas y comprobación de lint en cada compilación."
+    "Barra del visor sin solapes: los puntos de ruptura se miden contra el ancho real de la columna central (consultas de contenedor) y no contra el de la ventana, con tres niveles de compactacion progresiva.",
+    "La telemetria (Original intacto, resolucion y tiempo de revelado) se reubica en el densimetro RGB: deja de competir por el espacio con las herramientas de trabajo.",
+    "Teclado: «Importar» vuelve al recorrido de tabulacion (el input de fichero ya no se oculta con display:none) y los campos de formulario conservan el anillo de foco.",
+    "Contraste: el boton activo «Dividida» era ilegible en el modo luz roja (rojo sobre rojo, ratio 1:1). Verificado: cero textos por debajo de WCAG AA en ambos temas.",
+    "Zonas de pulsacion ampliadas sin cambiar el tamano visual, tooltip con el nombre integro donde el texto se recorta y fecha del historial que ya no se parte a mitad.",
+    "Inspector del panel derecho aplastado en ventanas estrechas: los paneles se apilan y la pagina hace scroll en lugar de montarse unos sobre otros."
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-2.5.0-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-Setup-2.5.0-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.5.0/Haluro-Portable-2.5.0-Win11-x64.zip",
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-2.5.1-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-2.5.1-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-Setup-2.5.1-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-Portable-2.5.1-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "checksums": {
-    "macos_arm64": "3b579b435be730fe41ee3c9e0fa24a51c1a61f00722579b769205cf6c57b3ca0",
-    "macos_x86_64": "",
+    "macos_arm64": "aa4287d28e2cc5b49db18d84c12c4dc53683448f61ef5f2685dbaf583724c3a9",
+    "macos_x86_64": "eedba1e05b72cb7a24a401f9bcc98fa1097c50b991a73715035a712b1a2a9355",
     "windows_x86_64": "",
     "windows_portable": ""
   },

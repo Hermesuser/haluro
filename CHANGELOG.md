@@ -9,7 +9,7 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
-## [No publicado]
+## [2.5.1] — 2026-11-12
 
 ### Interfaz — Solapes en la barra del visor al maximizar la ventana
 
@@ -59,6 +59,17 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 - **Zonas de pulsación ampliadas** sin cambiar el tamaño visual: clasificar,
   quitar fotograma y alternar el orden del catálogo.
 - **La fecha del historial ya no se parte a mitad** de «2026-11-12 10:21:24».
+
+### Empaquetado
+
+- **Se publica la serie 2.5.1 para macOS** con los DMG de Apple Silicon y
+  Intel rebuilt desde este mismo código:
+  - `Haluro-2.5.1-macOS-arm64.dmg`
+  - `Haluro-2.5.1-macOS-x86_64.dmg`
+- **`rawpy` queda fijado a `<0.26`.** Es la última serie con ruedas macOS
+  Intel: fijarlo permite que ambos DMG se construyan con **el mismo motor**
+  (LibRaw) en lugar de dos versiones distintas según la arquitectura.
+- La build Intel se genera con un CPython 3.12 x86_64 bajo Rosetta 2.
 
 ---
 

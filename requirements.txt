@@ -4,7 +4,7 @@ flask>=3.0.0,<4.0.0
 Pillow>=13.0.0,<14.0.0
 numpy>=1.26.0,<3.0.0
 scipy>=1.12.0,<2.0.0
-rawpy>=0.21.0,<1.0.0
+rawpy>=0.21.0,<0.26.0  # <0.26: es la última serie con ruedas macOS Intel (x86_64); permite que ambos DMG usen el mismo motor.
 pywebview>=5.0.0,<7.0.0
 waitress>=3.0.0,<4.0.0
 pythonnet>=3.0.3; sys_platform == 'win32'
