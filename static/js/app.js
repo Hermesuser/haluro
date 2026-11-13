@@ -820,6 +820,7 @@ function renderFilmShelf() {
     const title = document.createElement("span");
     title.className = "film-title";
     title.textContent = film.name;
+    title.title = film.name; // el nombre puede recortarse: el tooltip lo revela
 
     const badges = document.createElement("div");
     badges.className = "film-badges-right";
@@ -1592,6 +1593,7 @@ function renderFilmStrip() {
     const nameCap = document.createElement("div");
     nameCap.className = "frame-name-caption";
     nameCap.textContent = frame.name;
+    nameCap.title = frame.name; // el rótulo se recorta en fotogramas largos
 
     const badge = document.createElement("div");
     badge.className = "frame-number-badge";
@@ -5046,7 +5048,13 @@ async function openHistoryModal() {
       const metaEl = document.createElement("div");
       metaEl.className = "history-meta";
       const resTxt = meta.output_resolution ? ` · ${meta.output_resolution}` : "";
-      metaEl.textContent = `${recipeTitle}${resTxt} · ${item.mtime}`;
+      const leadEl = document.createElement("span");
+      leadEl.textContent = `${recipeTitle}${resTxt} · `;
+      const dateEl = document.createElement("span");
+      dateEl.className = "history-meta-date";
+      dateEl.textContent = item.mtime;
+      metaEl.appendChild(leadEl);
+      metaEl.appendChild(dateEl);
 
       info.appendChild(nameEl);
       info.appendChild(metaEl);

@@ -41,6 +41,25 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
   en ventanas de 1120 px, y paso a la mesa de luz a una sola columna por debajo
   de 1024 px.
 
+### Interfaz — Accesibilidad de teclado, contraste y zonas de pulsación
+
+- **«Importar» era inalcanzable con el teclado.** El `<input type="file">` se
+  ocultaba con `display: none`, así que la acción principal de la barra de
+  herramientas quedaba fuera del recorrido de tabulación (sólo ratón o el atajo
+  «O»). Ahora se oculta sólo visualmente y la etiqueta muestra el anillo de foco.
+- **El anillo de foco se apagaba en los campos de formulario.** Las reglas
+  `outline: none` de la búsqueda, los selectores EXIF, la hoja de contactos y la
+  edición de valores apagaban también el indicador de teclado. Ahora sólo se
+  desactiva con puntero (`:focus:not(:focus-visible)`).
+- **Contraste corregido en el modo de luz roja.** El botón activo «Dividida»
+  quedaba en rojo sobre rojo (ratio 1:1) por una regla meant para los botones
+  ámbar. Verificado: cero textos por debajo de WCAG AA en ambos temas.
+- **Nombres completos donde el texto se recorta:** el catálogo de películas y el
+  rótulo del fotograma añaden tooltip con el nombre íntegro.
+- **Zonas de pulsación ampliadas** sin cambiar el tamaño visual: clasificar,
+  quitar fotograma y alternar el orden del catálogo.
+- **La fecha del historial ya no se parte a mitad** de «2026-11-12 10:21:24».
+
 ---
 
 ## [2.5.0] — 2026-11-12

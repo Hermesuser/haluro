@@ -69,9 +69,11 @@ body.theme-safelight .roll-cal-pill {
   background-color: rgba(255, 92, 64, 0.16);
 }
 
+/* Sólo los controles que descansan sobre fondo ámbar llevan texto oscuro.
+   `.mode-btn.active` va sobre `--slate-well` (rojo muy oscuro): forzarle texto
+   oscuro lo hacía ilegible en el modo de luz roja. */
 body.theme-safelight .btn-primary,
-body.theme-safelight .filter-pill.active,
-body.theme-safelight .mode-btn.active {
+body.theme-safelight .filter-pill.active {
   color: #160202;
 }
 
@@ -290,8 +292,24 @@ html, body {
   cursor: not-allowed;
 }
 
+/* El input de fichero se oculta SÓLO visualmente: así el botón «Importar»
+   sigue siendo alcanzable con el teclado (antes quedaba fuera del recorrido
+   de tabulación y sólo se podía usar con ratón o con el atajo «O»). */
+.upload-label {
+  position: relative;
+}
+
 .upload-label input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-label:focus-within {
+  outline: 2px solid var(--sodium-amber);
+  outline-offset: 2px;
 }
 
 /* =============================================================
@@ -492,12 +510,20 @@ html, body {
   background: var(--chamber-black);
   color: var(--pewter-muted);
   cursor: pointer;
+  position: relative;
   transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
 }
 
 .sort-toggle-btn:hover {
   color: var(--silver-text);
   border-color: var(--pewter-muted);
+}
+
+/* Zona de pulsación más cómoda (el botón es de texto y queda muy bajo) */
+.sort-toggle-btn::after {
+  content: "";
+  position: absolute;
+  inset: -6px -4px;
 }
 
 .sort-toggle-btn.active {
@@ -566,6 +592,10 @@ html, body {
 
 .search-box input:focus {
   border-color: var(--sodium-amber);
+}
+
+/* El anillo de foco sólo se apaga con puntero: con teclado se mantiene */
+.search-box input:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -890,6 +920,9 @@ html, body {
 
 .dark-select:focus {
   border-color: var(--sodium-amber);
+}
+
+.dark-select:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -1071,6 +1104,10 @@ html, body {
 .exif-field input:focus,
 .exif-field select:focus {
   border-color: var(--sodium-amber);
+}
+
+.exif-field input:focus:not(:focus-visible),
+.exif-field select:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -1261,6 +1298,9 @@ html, body {
   font-weight: 600;
   padding: 1px 4px;
   text-align: right;
+}
+
+.val-inline-edit:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -2123,8 +2163,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-family: var(--font-mono);
   font-size: 11px;
   padding: 4px 8px;
-  outline: none;
   transition: border-color 0.14s ease;
+}
+
+.sheet-input-sm:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .sheet-input-sm:focus {
@@ -2333,6 +2376,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .film-frame-thumb:hover .frame-remove-btn,
 .film-frame-thumb:focus-within .frame-remove-btn {
   opacity: 1;
+}
+
+/* Área de clic ampliada (sin cambiar el tamaño visual del botón) para que
+   quitar un fotograma no exija puntería de cirujano. */
+.frame-remove-btn::after {
+  content: "";
+  position: absolute;
+  inset: -3px -3px -7px -7px;
+  border-radius: inherit;
 }
 
 .frame-remove-btn:hover {
@@ -2640,6 +2692,14 @@ input[type="range"]::-webkit-slider-thumb:hover {
   opacity: 1;
 }
 
+/* Igual que el botón de quitar: más zona de pulsación sin agrandar el gráfico */
+.frame-pick-btn::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+}
+
 .film-frame-thumb.pick-pick .frame-pick-btn {
   background: rgba(41, 163, 122, 0.9);
   border-color: var(--emerald-ok);
@@ -2890,6 +2950,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--pewter-muted);
+}
+
+/* La fecha no se parte a mitad: «2026-11-12 10:21:24» viaja entero */
+.history-meta-date {
+  white-space: nowrap;
 }
 
 .history-actions {
