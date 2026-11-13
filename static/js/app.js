@@ -137,6 +137,9 @@ function saveUserPreferences() {
       halation: state.halation,
       grain: state.grain,
       vignette: state.vignette,
+      shadows: state.shadows,
+      mids: state.mids,
+      highlights: state.highlights,
       date: state.date,
       rotate: state.rotate,
       flip_h: state.flip_h,
@@ -237,6 +240,10 @@ const state = {
   halation: 1.0,
   grain: 1.0,
   vignette: 1.0,
+  // Tonal zones (exposure per zone, in stops)
+  shadows: 0.0,
+  mids: 0.0,
+  highlights: 0.0,
   date: false,
 
   // Shared non-destructive geometry & export
@@ -644,7 +651,7 @@ async function applyStoredPreferences() {
   }
 
   // Restaurar controles de simulación
-  for (const key of ["ev", "halation", "grain", "vignette", "date", "rotate", "flip_h", "outputFormat", "viewMode", "splitPercent", "zoom", "panX", "panY"]) {
+  for (const key of ["ev", "halation", "grain", "vignette", "shadows", "mids", "highlights", "date", "rotate", "flip_h", "outputFormat", "viewMode", "splitPercent", "zoom", "panX", "panY"]) {
     if (key in prefs) state[key] = prefs[key];
   }
 
@@ -674,6 +681,9 @@ function applyPrefsToUI(prefs) {
   if (prefs.halation !== undefined) setSlider("halationSlider", prefs.halation);
   if (prefs.grain !== undefined) setSlider("grainSlider", prefs.grain);
   if (prefs.vignette !== undefined) setSlider("vignetteSlider", prefs.vignette);
+  if (prefs.shadows !== undefined) setSlider("shadowsSlider", prefs.shadows);
+  if (prefs.mids !== undefined) setSlider("midsSlider", prefs.mids);
+  if (prefs.highlights !== undefined) setSlider("highlightsSlider", prefs.highlights);
   if (prefs.date !== undefined) setCheckbox("dateToggle", prefs.date);
   if (prefs.rotate !== undefined) {
     const el = document.getElementById("rotateSlider");
@@ -1977,6 +1987,9 @@ async function requestPreview(forceOriginal = false) {
           halation: state.halation,
           grain: state.grain,
           vignette: state.vignette,
+          shadows: state.shadows,
+          mids: state.mids,
+          highlights: state.highlights,
           date: state.date,
           rotate: state.rotate,
           flip_h: state.flip_h,
@@ -2099,6 +2112,11 @@ function buildNegativePayload() {
 // PER-FRAME RECIPE MEMORY, COPY/PASTE & ROLL SYNC
 // =============================================================
 
+function formatZoneEv(v) {
+  const n = Number(v) || 0;
+  return `${n > 0 ? "+" : ""}${n.toFixed(1)} EV`;
+}
+
 function snapshotSimRecipe() {
   return {
     film: state.selectedFilm,
@@ -2106,6 +2124,9 @@ function snapshotSimRecipe() {
     halation: state.halation,
     grain: state.grain,
     vignette: state.vignette,
+    shadows: state.shadows,
+    mids: state.mids,
+    highlights: state.highlights,
     date: state.date,
     rotate: state.rotate,
     flip_h: state.flip_h,
@@ -2221,6 +2242,9 @@ function applySimRecipeToUI(rec) {
   state.halation = Number(rec.halation ?? 1.0);
   state.grain = Number(rec.grain ?? 1.0);
   state.vignette = Number(rec.vignette ?? 1.0);
+  state.shadows = Number(rec.shadows ?? 0.0);
+  state.mids = Number(rec.mids ?? 0.0);
+  state.highlights = Number(rec.highlights ?? 0.0);
   state.date = Boolean(rec.date);
   if (typeof rec.rotate === "number") state.rotate = rec.rotate;
   if (typeof rec.flip_h === "boolean") state.flip_h = rec.flip_h;
@@ -2237,6 +2261,9 @@ function applySimRecipeToUI(rec) {
   setSliderSilent("halationSlider", "halationVal", state.halation, `${state.halation.toFixed(1)}x`);
   setSliderSilent("grainSlider", "grainVal", state.grain, `${state.grain.toFixed(1)}x`);
   setSliderSilent("vignetteSlider", "vignetteVal", state.vignette, `${state.vignette.toFixed(1)}x`);
+  setSliderSilent("shadowsSlider", "shadowsVal", state.shadows, formatZoneEv(state.shadows));
+  setSliderSilent("midsSlider", "midsVal", state.mids, formatZoneEv(state.mids));
+  setSliderSilent("highlightsSlider", "highlightsVal", state.highlights, formatZoneEv(state.highlights));
   const dt = document.getElementById("dateToggle");
   if (dt) dt.checked = state.date;
   updateActiveRecipeBanner();
@@ -4173,6 +4200,9 @@ function resetSimulationControls() {
       ["halationSlider", "1.0"],
       ["grainSlider", "1.0"],
       ["vignetteSlider", "1.0"],
+      ["shadowsSlider", "0.0"],
+      ["midsSlider", "0.0"],
+      ["highlightsSlider", "0.0"],
     ],
     () => {
       const dateToggle = document.getElementById("dateToggle");
@@ -4507,6 +4537,9 @@ async function saveDirectToDownloads() {
             halation: state.halation,
             grain: state.grain,
             vignette: state.vignette,
+            shadows: state.shadows,
+            mids: state.mids,
+            highlights: state.highlights,
             date: state.date,
             rotate: state.rotate,
             flip_h: state.flip_h,
@@ -4591,6 +4624,9 @@ async function saveAsWithDialog() {
             halation: state.halation,
             grain: state.grain,
             vignette: state.vignette,
+            shadows: state.shadows,
+            mids: state.mids,
+            highlights: state.highlights,
             date: state.date,
             rotate: state.rotate,
             flip_h: state.flip_h,
@@ -5412,6 +5448,26 @@ function initUIListeners() {
   });
   bindRange("vignetteSlider", "vignetteVal", (v) => `${v.toFixed(1)}x`, (v) => {
     state.vignette = v;
+  });
+  bindRange("shadowsSlider", "shadowsVal", formatZoneEv, (v) => {
+    state.shadows = v;
+  });
+  bindRange("midsSlider", "midsVal", formatZoneEv, (v) => {
+    state.mids = v;
+  });
+  bindRange("highlightsSlider", "highlightsVal", formatZoneEv, (v) => {
+    state.highlights = v;
+  });
+
+  document.getElementById("resetToneBtn")?.addEventListener("click", () => {
+    resetSlidersWithUndo(
+      [
+        ["shadowsSlider", "0.0"],
+        ["midsSlider", "0.0"],
+        ["highlightsSlider", "0.0"],
+      ],
+      () => {}
+    );
   });
 
   document.getElementById("dateToggle")?.addEventListener("change", (e) => {

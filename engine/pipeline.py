@@ -114,6 +114,59 @@ def apply_characteristic_curve(x, slope, pivot, black, white):
     return black + (white - black) / (1.0 + np.exp(-k * xx))
 
 
+def _smoothstep(edge0, edge1, x):
+    """Hermite interpolation between two edges, clipped to [0, 1]."""
+    t = np.clip((x - edge0) / max(edge1 - edge0, 1e-6), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def apply_tonal_zones(lin, shadows=0.0, mids=0.0, highlights=0.0):
+    """Zonas tonales (sombras / tonos medios / luces) como exposición en luz lineal.
+
+    Un control de zona no es un filtro de color: es un ajuste de exposición
+    sobre la luz que llega a la emulsión. Por eso se aplica en luz lineal
+    (multiplicar por 2 = un stop), antes de la respuesta de película.
+
+    Las tres máscaras forman una partición de la unidad (suman exactamente 1),
+    de modo que las zonas nunca se apilan: subir sombras y medios a la vez
+    equivale a un único ajuste ponderado, no a la suma de ambos. Es lo que
+    evita el «barro» típico de los controles tonales que se solapan.
+
+    Cada zona tiene meseta (plato) y transiciones suaves: las sombras mandan
+    con toda su fuerza en los negros profundos, los medios en el gris medio y
+    las luces en las altas luces. Sin meseta, el control de sombras solo
+    mordía el punto negro y el de luces el blanco puro.
+
+    Las máscaras se calculan sobre la luminancia *perceptual* (gamma 1/2.2):
+    un umbral sobre luz lineal colocaría el gris medio muy abajo y las
+    «sombras» se comieron los medios tonos.
+    """
+    shadows = float(shadows)
+    mids = float(mids)
+    highlights = float(highlights)
+    if abs(shadows) < 1e-4 and abs(mids) < 1e-4 and abs(highlights) < 1e-4:
+        return lin
+
+    luma = np.sum(lin * LUMA, axis=-1, keepdims=True)
+    # Luminancia perceptual: 0.5 ≈ gris medio (0.218 lineal).
+    lp = np.clip(luma, 0.0, 1.0) ** (1.0 / 2.2)
+
+    # Mesetas: sombras (<0.15), medios (0.45-0.55), luces (>0.85).
+    w_shadows = 1.0 - _smoothstep(0.15, 0.50, lp)
+    w_mids = _smoothstep(0.15, 0.45, lp) * (1.0 - _smoothstep(0.55, 0.85, lp))
+    w_highlights = _smoothstep(0.50, 0.85, lp)
+
+    # Normalización: partición exacta de la unidad (las zonas nunca se apilan).
+    total = w_shadows + w_mids + w_highlights
+    total = np.where(total > 1e-6, total, 1.0)
+    w_shadows = w_shadows / total
+    w_mids = w_mids / total
+    w_highlights = w_highlights / total
+
+    gain_ev = shadows * w_shadows + mids * w_mids + highlights * w_highlights
+    return lin * np.power(2.0, gain_ev)
+
+
 def shift_hues(rgb, hue_rules):
     """Shift selective hues (e.g. skin tones, greens, skies)."""
     y = np.sum(rgb * LUMA, axis=-1, keepdims=True)
@@ -952,6 +1005,9 @@ def develop_frame(
     halation_mult=1.0,
     grain_mult=1.0,
     vignette_mult=1.0,
+    shadows=0.0,
+    mids=0.0,
+    highlights=0.0,
     add_date=False,
     max_dim=None,
     rotate=0,
@@ -981,6 +1037,10 @@ def develop_frame(
     total_ev = film.get("ev", 0.0) + ev_adjust
     if abs(total_ev) > 1e-4:
         lin = lin * (2.0 ** total_ev)
+
+    # 1b. Tonal zones (shadows / midtones / highlights) as linear exposure
+    if abs(shadows) > 1e-4 or abs(mids) > 1e-4 or abs(highlights) > 1e-4:
+        lin = apply_tonal_zones(lin, shadows=shadows, mids=mids, highlights=highlights)
         
     # 2. Vignette
     if vignette_mult > 0.001:

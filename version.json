@@ -1,27 +1,28 @@
 {
-  "version": "2.5.1",
+  "version": "2.6.0",
   "release_date": "2026-11-12",
-  "name": "Haluro v2.5.1",
-  "title": "Interfaz sin solapes: barra del visor adaptable, teclado y contraste en luz roja",
-  "description": "Corrección de la interfaz de la mesa de luz: la barra del visor se adapta al ancho real de su columna (consultas de contenedor) y ya no solapa los controles al maximizar la ventana; la telemetria de revelado pasa al densimetro; «Importar» vuelve a ser accesible con el teclado; se restauran los anillos de foco; se corrige el contraste del boton activo en el modo luz roja; y se amplian las zonas de pulsacion.",
+  "name": "Haluro v2.6.0",
+  "title": "Zonas tonales: sombras, tonos medios y luces con exposición por zona",
+  "description": "Haluro incorpora control de zonas tonales en el modo Emulación: sombras, tonos medios y luces ajustan la exposicion de cada region del rango tonal en luz lineal, como se reparte la luz en un cuarto oscuro. Las tres zonas forman una particion de la unidad (nunca se apilan) y cada una tiene su meseta, de modo que las sombras mueven los negros, los medios el gris medio y las luces las altas luces. Ademas: correccion de la barra del visor al maximizar la ventana, «Importar» accesible por teclado, anillos de foco restaurados y contraste corregido en el modo luz roja.",
   "highlights": [
-    "Barra del visor sin solapes: los puntos de ruptura se miden contra el ancho real de la columna central (consultas de contenedor) y no contra el de la ventana, con tres niveles de compactacion progresiva.",
-    "La telemetria (Original intacto, resolucion y tiempo de revelado) se reubica en el densimetro RGB: deja de competir por el espacio con las herramientas de trabajo.",
-    "Teclado: «Importar» vuelve al recorrido de tabulacion (el input de fichero ya no se oculta con display:none) y los campos de formulario conservan el anillo de foco.",
-    "Contraste: el boton activo «Dividida» era ilegible en el modo luz roja (rojo sobre rojo, ratio 1:1). Verificado: cero textos por debajo de WCAG AA en ambos temas.",
-    "Zonas de pulsacion ampliadas sin cambiar el tamano visual, tooltip con el nombre integro donde el texto se recorta y fecha del historial que ya no se parte a mitad.",
-    "Inspector del panel derecho aplastado en ventanas estrechas: los paneles se apilan y la pagina hace scroll en lugar de montarse unos sobre otros."
+    "Zonas tonales: los controles Sombras, Tonos medios y Luces reparten la exposicion en luz lineal antes de la respuesta de la emulsion, asi que un punto de EV es luz real y no un filtro de color.",
+    "Las tres zonas suman exactamente el 100 % (particion de la unidad): subir sombras y medios a la vez reparte el peso en lugar de acumularlo, y por eso no aparece el barro tipico de los controles tonales que se solapan.",
+    "Cada zona tiene meseta y transiciones suaves: las sombras mandan en los negros profundos, los medios en el gris medio y las luces en las altas luces.",
+    "No destructivo de principio a fin: las zonas se guardan por fotograma, viajan con Copiar/Pegar receta y Sincronizar rollo, se deshacen con Z y nunca tocan el archivo original.",
+    "Interfaz sin solapes al maximizar la ventana: la barra del visor se adapta al ancho real de su columna mediante consultas de contenedor.",
+    "Teclado: «Importar» vuelve al recorrido de tabulacion y los campos de formulario conservan el anillo de foco.",
+    "Contraste: el boton activo «Dividida» era ilegible en el modo luz roja (rojo sobre rojo, ratio 1:1). Verificado: cero textos por debajo de WCAG AA en ambos temas."
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-2.5.1-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-2.5.1-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-Setup-2.5.1-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.5.1/Haluro-Portable-2.5.1-Win11-x64.zip",
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.6.0/Haluro-2.6.0-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.6.0/Haluro-2.6.0-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.6.0/Haluro-Setup-2.6.0-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.6.0/Haluro-Portable-2.6.0-Win11-x64.zip",
     "all_releases": "https://github.com/Hermesuser/haluro/releases/latest"
   },
   "checksums": {
-    "macos_arm64": "aa4287d28e2cc5b49db18d84c12c4dc53683448f61ef5f2685dbaf583724c3a9",
-    "macos_x86_64": "eedba1e05b72cb7a24a401f9bcc98fa1097c50b991a73715035a712b1a2a9355",
+    "macos_arm64": "",
+    "macos_x86_64": "",
     "windows_x86_64": "",
     "windows_portable": ""
   },

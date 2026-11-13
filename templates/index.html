@@ -699,6 +699,39 @@
               <label for="dateToggle" class="toggle-text">Sello de fecha en cuarzo ámbar</label>
             </div>
           </section>
+
+          <!-- TONAL ZONES: exposure per zone (shadows / midtones / highlights) -->
+          <section class="panel-card">
+            <div class="section-head">
+              <h3>Zonas tonales</h3>
+              <button class="reset-link" id="resetToneBtn" title="Restablecer las zonas tonales a neutro">Restablecer</button>
+            </div>
+            <p class="helper-copy">Ajusta la exposición de cada zona tonal, como si quemaras o esquivaras la imagen entera de una vez.</p>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span id="lblShadows">Sombras</span>
+                <span class="control-val" id="shadowsVal">0.0 EV</span>
+              </div>
+              <input type="range" class="bipolar-range" id="shadowsSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0" aria-labelledby="lblShadows">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span id="lblMids">Tonos medios</span>
+                <span class="control-val" id="midsVal">0.0 EV</span>
+              </div>
+              <input type="range" class="bipolar-range" id="midsSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0" aria-labelledby="lblMids">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span id="lblHighlights">Luces</span>
+                <span class="control-val" id="highlightsVal">0.0 EV</span>
+              </div>
+              <input type="range" class="bipolar-range" id="highlightsSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0" aria-labelledby="lblHighlights">
+            </div>
+          </section>
         </div>
 
         <!-- CONTROLS FOR MODE 2: NEGATIVE LAB -->

@@ -88,7 +88,7 @@ La interfaz de Haluro está organizada en tres áreas principales diseñadas par
 
 3. **Paneles Laterales:**
    - **Panel Izquierdo:** Catálogo buscable de 72 películas con filtros en español (`Todas`, `★ Favoritas`, `Negativo C-41`, `Diapositiva E-6`, `Cine`, `Plata B&N`, `Cross-Pro`) en modo *Emulación*, o calibración de soporte base D-min, perfiles de escáner y virados B&N en modo *Revelar negativo*.
-   - **Panel Derecho (Inspector):** **Densitómetro RGB** en vivo (lectura de sombras y luces recortadas), controles de **Química y óptica** / **Curva tonal y proceso**, **Ampliadora CMY y 3 vías**, **Filtros y nitidez óptica**, **Ficha técnica EXIF analógica** y selector de **Formato maestro** (`JPG 4:4:4`, `PNG`, `TIFF 16b`).
+   - **Panel Derecho (Inspector):** **Densitómetro RGB** en vivo (lectura de sombras y luces recortadas), controles de **Química y óptica** / **Zonas tonales** (sombras, tonos medios y luces) / **Curva tonal y proceso**, **Ampliadora CMY y 3 vías**, **Filtros y nitidez óptica**, **Ficha técnica EXIF analógica** y selector de **Formato maestro** (`JPG 4:4:4`, `PNG`, `TIFF 16b`).
 
 ---
 
@@ -240,6 +240,26 @@ El catálogo está clasificado en 5 familias químicas:
 Haluro no superpone capas transparentes de textura artificial. Cada efecto modela una propiedad física real de la materia fotográfica:
 
 ![Filtros Ópticos y Textura Fotoquímica](docs/images/05_optica_grano_exif.png)
+
+---
+
+### Zonas Tonales (Sombras, Tonos Medios y Luces)
+
+En el modo **«Emulación · 72»**, la sección **«Zonas tonales»** del inspector permite repartir la exposición entre las tres regiones del rango tonal, igual que se reparte la luz en un cuarto oscuro:
+
+* **Sombras (`-2.0 EV` a `+2.0 EV`):** Levanta o hunde los negros profundos y las sombras medias, sin arrastrar a las luces.
+* **Tonos medios (`-2.0 EV` a `+2.0 EV`):** Actúa sobre el gris medio, donde vive la exposición general del encuadre.
+* **Luces (`-2.0 EV` a `+2.0 EV`):** Recupera o compacta las altas luces sin tocar los negros.
+
+Tres decisiones fotográficas que explican su comportamiento:
+
+1. **Son exposición, no color.** El ajuste se aplica en luz lineal, antes de la respuesta de la emulsión: un punto de EV equivale a un punto de luz real, no a un filtro de color.
+2. **Las zonas no se apilan.** Las tres máscaras suman exactamente el 100 %, así que subir sombras y medios a la vez produce un reparto ponderado, no la suma de ambos: nunca se obtiene el «barro» típico de los controles tonales que se solapan.
+3. **Cada zona tiene su meseta.** Las sombras mandan con toda su fuerza en los negros profundos, los medios en el gris medio y las luces en las altas luces, con transiciones suaves entre ellas.
+
+Como el resto de controles, son **no destructivos**, se guardan **por fotograma**, viajan con **Copiar/Pegar receta** y con **Sincronizar rollo**, y se pueden deshacer con `Z`.
+
+---
 
 ### Halación Analógica (Capa Antihalo)
 

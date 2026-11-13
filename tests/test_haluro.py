@@ -973,6 +973,92 @@ def test_optical_vignette():
     assert 0.10 <= v2[0, 0, 0] <= 0.20
 
 
+def test_tonal_zones_isolate_shades_midtones_and_highlights():
+    """Sombras, medios y luces deben actuar como exposición en luz lineal y no apilarse."""
+    from engine.pipeline import apply_tonal_zones
+
+    # Rampa de 0 a 1 en luz lineal (1 fila, 1001 columnas).
+    ramp = np.linspace(0.0, 1.0, 1001, dtype=np.float32)
+    rgb = np.repeat(ramp.reshape(1, -1, 1), 3, axis=2)
+
+    def band_mean(img, lo, hi):
+        return float(img[0, lo:hi, 0].mean())
+
+    def band_ev(img, lo, hi):
+        a, b = band_mean(rgb, lo, hi), band_mean(img, lo, hi)
+        return float(np.log2(max(b, 1e-9) / max(a, 1e-9))) if a > 1e-6 else 0.0
+
+    # Las máscaras son PERCEPTUALES (gamma 1/2.2): el gris medio (Lp=0.5) cae
+    # en 0.5^2.2 = 0.218 lineal, no en 0.5. Las bandas se anclan ahí.
+    blacks = (0, 50)          # Lp 0.00 - 0.26
+    shadows = (50, 150)       # Lp 0.26 - 0.43
+    mids = (150, 280)         # Lp 0.43 - 0.56 (rodea el gris medio)
+    highs = (600, 950)        # Lp 0.80 - 0.98
+
+    # Neutro: la imagen no se toca
+    assert np.allclose(apply_tonal_zones(rgb.copy()), rgb)
+
+    # Sombras +2 EV: los negros profundos suba a tope; los medios no se mueven.
+    up = apply_tonal_zones(rgb.copy(), shadows=2.0)
+    assert band_ev(up, *blacks) > 1.5
+    assert band_ev(up, *shadows) > 0.5
+    assert abs(band_ev(up, *mids)) < 0.25
+    assert abs(band_ev(up, *highs)) < 0.05
+
+    # Luces +2 EV: las altas luces suben a tope; las sombras no se mueven.
+    up = apply_tonal_zones(rgb.copy(), highlights=2.0)
+    assert band_ev(up, *highs) > 1.5
+    assert abs(band_ev(up, *blacks)) < 0.05
+    assert abs(band_ev(up, *mids)) < 0.25
+
+    # Medios -2 EV: la zona media baja casi a tope.
+    down = apply_tonal_zones(rgb.copy(), mids=-2.0)
+    assert band_ev(down, *mids) < -1.5
+
+    # Las zonas NO se apilan: en el gris medio (Lp=0.5) sombras y luces valen
+    # cero, así que subir ambas a la vez no altera los medios.
+    both = apply_tonal_zones(rgb.copy(), shadows=2.0, highlights=2.0)
+    mid_linear = 0.5 ** 2.2
+    mid_idx = int(round(mid_linear * 1000))
+    assert float(both[0, mid_idx, 0]) == pytest.approx(float(rgb[0, mid_idx, 0]), rel=1e-5)
+
+
+def test_tonal_zones_reach_preview_and_export(client, tmp_path: Path) -> None:
+    """Las zonas tonales viajan por la API y se aplican al exportar."""
+    res_sample = client.post("/api/load_sample")
+    assert res_sample.status_code == 200
+
+    def preview_bytes(**kw):
+        payload = {"filename": "SAMPLE.CR2", "film": "portra400", "include_original": False}
+        payload.update(kw)
+        res = client.post("/api/preview", json=payload)
+        assert res.status_code == 200
+        import base64
+        import io
+        data = res.get_json()["developed"].split(",", 1)[1]
+        return Image.open(io.BytesIO(base64.b64decode(data))).convert("RGB")
+
+    neutral = preview_bytes()
+    lifted = preview_bytes(shadows=2.0)
+    assert neutral.tobytes() != lifted.tobytes()
+
+    # Export a disco con las zonas aplicadas
+    out_png = tmp_path / "exports" / "zonas.png"
+    res_save = client.post(
+        "/api/save_to_path",
+        json={
+            "filename": "SAMPLE.CR2",
+            "dest_path": str(out_png),
+            "film": "portra400",
+            "shadows": 2.0,
+            "mids": -1.0,
+            "highlights": 0.5,
+        },
+    )
+    assert res_save.status_code == 200
+    assert out_png.is_file()
+
+
 def test_negative_optical_filters_and_fade_glow():
     from engine.negative_inverter import process_negative_to_image
 

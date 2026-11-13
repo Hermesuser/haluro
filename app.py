@@ -998,6 +998,9 @@ def api_preview():
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+    shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+    mids = _num(data, "mids", 0.0, -4.0, 4.0)
+    highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1015,6 +1018,9 @@ def api_preview():
         halation_mult=halation,
         grain_mult=grain,
         vignette_mult=vignette,
+        shadows=shadows,
+        mids=mids,
+        highlights=highlights,
         add_date=add_date,
         max_dim=1280,
         rotate=rotate,
@@ -1049,6 +1055,9 @@ def api_develop_full():
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+    shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+    mids = _num(data, "mids", 0.0, -4.0, 4.0)
+    highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1077,6 +1086,9 @@ def api_develop_full():
         f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
         f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
         f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
+        f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
+        f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
+        f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1088,6 +1100,9 @@ def api_develop_full():
             halation_mult=f_hal,
             grain_mult=f_grn,
             vignette_mult=f_vig,
+            shadows=f_shadows,
+            mids=f_mids,
+            highlights=f_highlights,
             add_date=f_date,
             max_dim=None,
             rotate=f_rot,
@@ -1162,6 +1177,9 @@ def api_contact_sheet_preview():
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+    shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+    mids = _num(data, "mids", 0.0, -4.0, 4.0)
+    highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1182,6 +1200,9 @@ def api_contact_sheet_preview():
         f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
         f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
         f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
+        f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
+        f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
+        f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1193,6 +1214,9 @@ def api_contact_sheet_preview():
             halation_mult=f_hal,
             grain_mult=f_grn,
             vignette_mult=f_vig,
+            shadows=f_shadows,
+            mids=f_mids,
+            highlights=f_highlights,
             add_date=f_date,
             max_dim=720,
             rotate=f_rot,
@@ -1247,6 +1271,9 @@ def api_save_contact_sheet():
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+    shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+    mids = _num(data, "mids", 0.0, -4.0, 4.0)
+    highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1283,6 +1310,9 @@ def api_save_contact_sheet():
         f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
         f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
         f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
+        f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
+        f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
+        f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1294,6 +1324,9 @@ def api_save_contact_sheet():
             halation_mult=f_hal,
             grain_mult=f_grn,
             vignette_mult=f_vig,
+            shadows=f_shadows,
+            mids=f_mids,
+            highlights=f_highlights,
             add_date=f_date,
             max_dim=1400,
             rotate=f_rot,
@@ -1350,6 +1383,9 @@ def api_export_single():
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+    shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+    mids = _num(data, "mids", 0.0, -4.0, 4.0)
+    highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1372,6 +1408,9 @@ def api_export_single():
         halation_mult=halation,
         grain_mult=grain,
         vignette_mult=vignette,
+        shadows=shadows,
+        mids=mids,
+        highlights=highlights,
         add_date=add_date,
         max_dim=None,
         rotate=rotate,
@@ -1425,6 +1464,9 @@ def api_export_and_download():
     halation = float(request.args.get("halation", 1.0))
     grain = float(request.args.get("grain", 1.0))
     vignette = float(request.args.get("vignette", 1.0))
+    shadows = float(request.args.get("shadows", 0.0))
+    mids = float(request.args.get("mids", 0.0))
+    highlights = float(request.args.get("highlights", 0.0))
     add_date = request.args.get("date", "false").lower() == "true"
 
     fpath = _resolve_source_file(filename)
@@ -1438,6 +1480,9 @@ def api_export_and_download():
         halation_mult=halation,
         grain_mult=grain,
         vignette_mult=vignette,
+        shadows=shadows,
+        mids=mids,
+        highlights=highlights,
         add_date=add_date,
         max_dim=None,
     )
@@ -1460,6 +1505,9 @@ def api_save_direct_to_downloads():
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+    shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+    mids = _num(data, "mids", 0.0, -4.0, 4.0)
+    highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1489,6 +1537,9 @@ def api_save_direct_to_downloads():
         halation_mult=halation,
         grain_mult=grain,
         vignette_mult=vignette,
+        shadows=shadows,
+        mids=mids,
+        highlights=highlights,
         add_date=add_date,
         max_dim=None,
         rotate=rotate,
@@ -1583,6 +1634,9 @@ def _save_simulation_to_dest(data, reveal=False):
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+    shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+    mids = _num(data, "mids", 0.0, -4.0, 4.0)
+    highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1601,6 +1655,9 @@ def _save_simulation_to_dest(data, reveal=False):
         halation_mult=halation,
         grain_mult=grain,
         vignette_mult=vignette,
+        shadows=shadows,
+        mids=mids,
+        highlights=highlights,
         add_date=add_date,
         max_dim=None,
         rotate=rotate,

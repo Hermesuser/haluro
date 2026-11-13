@@ -9,6 +9,29 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.6.0] — 2026-11-12
+
+### Motor de imagen — Zonas tonales
+
+- **Sombras, tonos medios y luces en el modo «Emulación · 72».** Nueva sección
+  **«Zonas tonales»** en el inspector: reparte la exposición entre las tres
+  regiones del rango tonal, como se reparte la luz en un cuarto oscuro.
+- **Se aplican en luz lineal, antes de la respuesta de la emulsión**, así que un
+  punto de EV es luz real y no un filtro de color.
+- **Las zonas no se apilan.** Las tres máscaras suman exactamente el 100 %
+  (partición de la unidad): subir sombras y medios a la vez produce un reparto
+  ponderado, no la suma, y por eso no aparece el «barro» de los controles
+  tonales que se solapan.
+- **Cada zona tiene meseta.** Las sombras mandan en los negros profundos, los
+  medios en el gris medio y las luces en las altas luces, con transiciones
+  suaves. Las máscaras se calculan sobre la luminancia *perceptual*, no lineal.
+- Coste en la previsualización: despreciable (~3 ms sobre ~240 ms de render).
+- Cobertura completa: previsualización, exportación individual, lotes, hoja de
+  contactos, revelado de rollo completo, receta por fotograma, copiar/pegar,
+  sincronizar rollo, deshacer/rehacer, persistencia de preferencias e historial.
+
+---
+
 ## [2.5.1] — 2026-11-12
 
 ### Interfaz — Solapes en la barra del visor al maximizar la ventana

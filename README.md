@@ -252,9 +252,9 @@ python cli.py invert negativo_01.tif \
      [Modo 1: Emulación · 72]                      [Modo 2: Revelar negativo]
      - Catálogo de 72 emulsiones en español        - Proceso Color C-41 o Plata B&N y luz
      - Compensación de exposición                  - Muestrear D-min (I) y Análisis de rollo
-     - Halación en altas luces                     - Curva tonal: Densidad neutra y Pull/Push
-     - Grano de haluro de plata y viñeteo          - 10 acabados y virados químicos de papel
-     - Sello de fecha en cuarzo ámbar              - Ampliadora CMY, 3 vías y Gris neutro (W)
+     - Zonas tonales: sombras, medios y luces      - Curva tonal: Densidad neutra y Pull/Push
+     - Halación en altas luces                     - Ampliadora CMY, 3 vías y Gris neutro (W)
+     - Sello de fecha en cuarzo ámbar              - Filtros ópticos y nitidez (Lab/Escáner)
                  │                                 - Filtros ópticos y nitidez (Lab/Escáner)
                  │                                             │
                  └──────────────────────┬──────────────────────┘
