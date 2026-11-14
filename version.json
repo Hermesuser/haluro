@@ -1,25 +1,25 @@
 {
-  "version": "2.7.0",
-  "release_date": "2026-11-13",
-  "name": "Haluro v2.7.0",
-  "title": "Curva tonal de usuario: editor de curvas por canal",
-  "description": "Haluro 2.7.0: zonas tonales (sombras, tonos medios y luces) en modo Emulación + editor de curva tonal",
+  "version": "2.8.0",
+  "release_date": "2026-11-14",
+  "name": "Haluro v2.8.0",
+  "title": "Edición Cuarto Oscuro Completa (80 películas, Split Grade, Minilab y Exportación Archival)",
+  "description": "Haluro 2.8.0: 80 emulsiones, procesos químicos (Stand/Push/Pull), sustratos sin máscara, Flat-Field LED, Split Grade B&N, Curva y Tira f-stop compartidas, limpieza de motas sin IR, reciprocidad EXIF, Vista Esencial Minilab y marginadores con Dry-Down.",
   "highlights": [
-    "Zonas tonales: sombras, tonos medios y luces (partición de unidad, nunca se apilan)",
-    "Curva tonal de usuario: 5 canales (RGB, Luz, R, G, B), interpolación monótona PCHIP",
-    "Responsive toolbar: 0 overlaps 0 overflows 700-2560px",
-    "Contraste modo luz roja: WCAG AA en ambos temas",
-    "Accesibilidad: Importar reachable via Tab, focus rings con :focus-visible"
+    "Catálogo ampliado a 80 películas + procesos químicos (Stand/Rodinal, Push +1/+2, Pull −1)",
+    "Sustratos sin máscara naranja, visor de rebordes/sprockets y calibración Flat-Field LED",
+    "Positivado B&N Split Grade (Grado 00/5 + Pre-flash) y limpieza puntual de motas sin IR",
+    "Curva tonal compartida, Tira f-stop de 5 bandas, Vista Esencial y atajos estilo Fuji Frontier",
+    "Calculadora de reciprocidad Schwarzschild, presets EXIF y marginador Easel + Dry-Down"
   ],
   "download_urls": {
-    "macos_arm64": "dist/Haluro-2.7.0-macOS-arm64.dmg",
-    "macos_x86_64": "dist/Haluro-2.7.0-macOS-x86_64.dmg",
+    "macos_arm64": "dist/Haluro-2.8.0-macOS-arm64.dmg",
+    "macos_x86_64": "",
     "windows_x86_64": "",
     "windows_portable": ""
   },
   "checksums": {
-    "macos_arm64": "c7227ac744e4df925dd5f08286d09b51622c1cfa17417f96acbe6d6d96167025",
-    "macos_x86_64": "87dc404f793a88850cc78bd15c0004892c0d8c43350fa193c55aff246260dabd",
+    "macos_arm64": "ef19240d28aeb7ae29f6cfe2a73681b4c8ad1349a2f9b2222901c9a429cd5274",
+    "macos_x86_64": "",
     "windows_x86_64": "",
     "windows_portable": ""
   },

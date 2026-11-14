@@ -18,8 +18,8 @@ Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfic
    - [Perfiles de Escáner de Laboratorio (Fuji Frontier vs. Noritsu)](#perfiles-de-escáner-de-laboratorio-fuji-frontier-vs-noritsu)
    - [Cabezal Dicroico CMY y Balance de 3 Vías](#cabezal-dicroico-cmy-y-balance-de-3-vías)
    - [Control de Revelado: Latitud Pull ↔ Push](#control-de-revelado-latitud-pull--push)
-4. [Modo 2: Emulación · 72 Películas Químicas](#4-modo-2-emulación--72-películas-químicas)
-   - [Las 72 Emulsiones Clásicas](#las-72-emulsiones-clásicas)
+4. [Modo 2: Emulación · 80 Películas Químicas](#4-modo-2-emulación--80-películas-químicas)
+   - [Las 80 Emulsiones Clásicas](#las-80-emulsiones-clásicas)
 5. [Efectos Fotoquímicos y Ópticos](#5-efectos-fotoquímicos-y-ópticos)
    - [Halación Analógica (Capa Antihalo)](#halación-analógica-capa-antihalo)
    - [Grano de Haluro de Plata (Cúbico vs. Tabular T-Grain)](#grano-de-haluro-de-plata-cúbico-vs-tabular-t-grain)
@@ -75,7 +75,7 @@ La interfaz de Haluro está organizada en tres áreas principales diseñadas par
 ![Espacio de Trabajo completo en Modo Emulación](docs/images/02_espacio_trabajo_darkrooms.png)
 
 1. **Barra Superior (Cabecera):**
-   - Selector de modo: **«Emulación · 72»** (simulación de películas químicas) vs. **«Revelar negativo»** (inversión densitométrica de negativos C-41 y B&N).
+   - Selector de modo: **«Emulación · 80»** (simulación de películas químicas) vs. **«Revelar negativo»** (inversión densitométrica de negativos C-41 y B&N).
    - **Muestra:** Carga automática de una fotografía RAW o un negativo de prueba según el modo activo.
    - **Importar:** Selector de archivos (`⌘O` / `Ctrl+O`) para cargar fotografías o escaneos individuales o en rollo.
    - Utilidades rápidas: **Luz roja de cuarto oscuro (`L`)**, **Historial de versiones reveladas**, **Atajos de teclado (`?`)** y **Acerca de Haluro / Actualizaciones**.
@@ -87,7 +87,7 @@ La interfaz de Haluro está organizada en tres áreas principales diseñadas par
    - Tira perforada de 35 mm inferior con navegación por fotogramas (`←` / `→`), punto ámbar en tomas personalizadas, botón **+ Añadir** y **× Vaciar**.
 
 3. **Paneles Laterales:**
-   - **Panel Izquierdo:** Catálogo buscable de 72 películas con filtros en español (`Todas`, `★ Favoritas`, `Negativo C-41`, `Diapositiva E-6`, `Cine`, `Plata B&N`, `Cross-Pro`) en modo *Emulación*, o calibración de soporte base D-min, perfiles de escáner y virados B&N en modo *Revelar negativo*.
+   - **Panel Izquierdo:** Catálogo buscable de 80 películas con filtros en español (`Todas`, `★ Favoritas`, `Negativo C-41`, `Diapositiva E-6`, `Cine`, `Plata B&N`, `Cross-Pro`) en modo *Emulación*, o calibración de soporte base D-min, perfiles de escáner y virados B&N en modo *Revelar negativo*.
    - **Panel Derecho (Inspector):** **Densitómetro RGB** en vivo (lectura de sombras y luces recortadas), controles de **Química y óptica** / **Zonas tonales** (sombras, tonos medios y luces) / **Curva tonal** (editor de curva) / **Curva tonal y proceso**, **Ampliadora CMY y 3 vías**, **Filtros y nitidez óptica**, **Ficha técnica EXIF analógica** y selector de **Formato maestro** (`JPG 4:4:4`, `PNG`, `TIFF 16b`).
 
 ---
@@ -195,13 +195,13 @@ El deslizador **Latitud Pull ↔ Push** (y *Compensación de exposición* en mod
 
 ---
 
-## 4. Modo 2: Emulación · 72 Películas Químicas
+## 4. Modo 2: Emulación · 80 Películas Químicas
 
-El modo **«Emulación · 72»** aplica perfiles matemáticos y curvas características sensitométricas (pie, zona recta y hombro) sobre imágenes positivas (digitales o escaneos ya invertidos), recreando en español el catálogo de 72 emulsiones clásicas con filtros por familia (**Todas**, **★ Favoritas**, **Negativo C-41**, **Diapositiva E-6**, **Cine**, **Plata B&N**, **Cross-Pro**).
+El modo **«Emulación · 80»** aplica perfiles matemáticos y curvas características sensitométricas (pie, zona recta y hombro) sobre imágenes positivas (digitales o escaneos ya invertidos), recreando en español el catálogo de 80 emulsiones clásicas con filtros por familia (**Todas**, **★ Favoritas**, **Negativo C-41**, **Diapositiva E-6**, **Cine**, **Plata B&N**, **Cross-Pro**).
 
 ![Catálogo de Películas Haluro](docs/images/06_catalogo_peliculas_cinestill.png)
 
-### Las 72 Emulsiones Clásicas
+### Las 80 Emulsiones Clásicas
 
 El catálogo está clasificado en 5 familias químicas:
 
@@ -245,7 +245,7 @@ Haluro no superpone capas transparentes de textura artificial. Cada efecto model
 
 ### Zonas Tonales (Sombras, Tonos Medios y Luces)
 
-En el modo **«Emulación · 72»**, la sección **«Zonas tonales»** del inspector permite repartir la exposición entre las tres regiones del rango tonal, igual que se reparte la luz en un cuarto oscuro:
+En el modo **«Emulación · 80»**, la sección **«Zonas tonales»** del inspector permite repartir la exposición entre las tres regiones del rango tonal, igual que se reparte la luz en un cuarto oscuro:
 
 * **Sombras (`-2.0 EV` a `+2.0 EV`):** Levanta o hunde los negros profundos y las sombras medias, sin arrastrar a las luces.
 * **Tonos medios (`-2.0 EV` a `+2.0 EV`):** Actúa sobre el gris medio, donde vive la exposición general del encuadre.
@@ -271,30 +271,6 @@ La sección **«Curva tonal»** del inspector permite manipular la respuesta ton
 * **Interpolación monótona por tramos:** la curva nunca «se pasa de la curva», así que no aparecen bandas ni dientes en las sombras.
 
 La curva se guarda como **puntos de control**, no como una imagen: pesa unos pocos bytes, viaja con la receta por fotograma, se copia, se sincroniza con el rollo, se deshace con `Z` y se aplica **igual en la previsualización y en la exportación** (el motor construye la misma tabla que ves dibujada).
-
-
-### Máscaras de exposición local (Dodge & Burn digital)
-En la sección **«Máscaras de exposición»** del modo Emulación puedes pintar máscaras sobre la imagen developed para aclarar o oscurecer zonas específicas, de forma análoga al dodge & burn tradicional con cartulina y alambre, pero con control digital preciso.
-
-* **Herramientas disponibles:**
-  - **Pincel:** traza trazos libres con tamaño, durez y flujo ajustables.
-  - **Gradiente lineal:** arrastra para crear un gradiente en línea recta.
-  - **Gradiente radial:** haz clic y arrastra para crear un gradiente circular.
-
-* **Offset EV:** controla cuánto aclaras u oscureces. Positivo (+) = dodge (aclarar), negativo (-) = burn (oscurecer).
-* **Parámetros:**
-  - **Tamaño:** radio de la herramienta en píxeles.
-  - **Durez (hardness):** suavizado del borde (0 = suave/feathered, 100 = borde duro).
-  - **Flujo (flow):** intensidad acumulativa del trazo (0–100%).
-
-* **Cómo usarlo:**
-  1. Selecciona la herramienta deseada.
-  2. Ajusta el offset EV (ej. +1.0 para aclarar sombras, -1.0 para quemar un cielo).
-  3. Pinta sobre la imagen: los trazos se acumulan en la máscara.
-  4. Usa <kbd>Z</k> para deshacer y <kbd>Shift+Z</k> para rehacer.
-  5. Haz clic en «Invertir máscara» para reversar el efecto.
-* **Integración:** las máscaras se guardan por fotograma junto con la curva tonal y las zonas tonales. Viajan con <em>Copiar/Pegar receta</em> y <em>Sincronizar rollo</em>.
-* **Consejo:** combina máscaras de gradient radial con offset negativo para oscurecer cielos quemados, y pincel con offset positivo para recuperar sombras bloqueadas.
 
 ---
 

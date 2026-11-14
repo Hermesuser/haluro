@@ -126,6 +126,7 @@ def render_frame_thumbnail(
         max_dim=max_dim,
         rotate=int(_frame_val("rotate", common_params.get("rotate", 0))),
         flip_h=bool(_frame_val("flip_h", common_params.get("flip_h", False))),
+        dev_process=str(_frame_val("dev_process", common_params.get("dev_process", "standard")) or "standard"),
     )
 
 
@@ -137,6 +138,7 @@ def develop_one_full_res(
     out_ext: str,
     target_dir: Path,
     analog_meta: dict,
+    raw_common: dict | None = None,
 ) -> tuple[str, str, Image.Image] | None:
     """Desarrolla un frame a resolución completa y lo guarda en disco.
 
@@ -150,10 +152,12 @@ def develop_one_full_res(
     fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
 
     if mode == "negative":
+        from app import _parse_negative_params
         from engine.negative_inverter import process_negative_to_image
 
+        base_raw = raw_common if isinstance(raw_common, dict) else common_params
         frame_params = (
-            {**common_params, **fr} if isinstance(fr, dict) else common_params
+            _parse_negative_params({**base_raw, **fr}) if isinstance(fr, dict) else common_params
         )
         prof_key = _canonical_profile_key(frame_params.get("profile_key", "frontier"))
         pos_img, srgb_f = process_negative_to_image(
@@ -191,20 +195,27 @@ def develop_one_full_res(
             rotate=int(_frame_val("rotate", common_params.get("rotate", 0))),
             flip_h=bool(_frame_val("flip_h", common_params.get("flip_h", False))),
             return_float=True,
+            dev_process=str(_frame_val("dev_process", common_params.get("dev_process", "standard")) or "standard"),
         )
         pos_img = dev_img
         out_name = f"{fpath.stem}_{film_key}{out_ext}"
         srgb_f = srgb_f
         prof_key = film_key
 
+    src_raw = raw_common if isinstance(raw_common, dict) else common_params
+    easel_border = str(src_raw.get("easel_border", "none") or "none").strip().lower()
+    dry_down_comp = max(0.0, min(0.15, float(src_raw.get("dry_down_comp", 0.0) or 0.0)))
+
     target_path = target_dir / out_name
-    save_output_image(
+    pos_img = save_output_image(
         pos_img,
         target_path,
         source_path=fpath,
         quality=96,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
+        easel_border=easel_border,
+        dry_down_comp=dry_down_comp,
     )
     return (fpath.name, out_name, pos_img)
 
@@ -311,10 +322,12 @@ class RollBatchJob:
             is_neg = mode == "negative"
 
             if is_neg:
+                from app import _parse_negative_params
                 from engine.negative_inverter import process_negative_to_image  # noqa: F401
 
-                common_params = dict(data)
-                profile_key = _canonical_profile_key(common_params.get("profile", "frontier"))
+                raw_base = dict(data)
+                common_params = _parse_negative_params(raw_base)
+                profile_key = common_params["profile_key"]
                 profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
                 roll_folder = f"{roll_name}_neg_{profile_key}"
                 sheet_film_name = f"Negativo · {profile_info['name']}"
@@ -322,6 +335,7 @@ class RollBatchJob:
             else:
                 from engine.films import get_film as _get_film
 
+                raw_base = dict(data)
                 common_params = dict(data)
                 film_key = _canonical_film_key(common_params.get("film", "portra400"))
                 film_info = _get_film(film_key)
@@ -348,6 +362,7 @@ class RollBatchJob:
                     out_ext,
                     target_dir,
                     analog_meta,
+                    raw_common=raw_base,
                 )
                 if self.cancel_event.is_set():
                     return None

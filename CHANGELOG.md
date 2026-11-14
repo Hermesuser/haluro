@@ -9,7 +9,22 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.8.0] — 2026-11-14
 
+### Nuevo — Flujo completo de laboratorio (P1–P9)
+- **80 emulsiones químicas y procesos de revelado (`Stand / Rodinal`, `Push +1/+2`, `Pull −1`).** Ocho películas contemporáneas/experimentales (`phoenix200`, `harman_switch`, `santacolor100`, `lomochrome92`, `metropolis400`, `lomo_purple`, `doublex5222`, `fomapan400`) y selector químico en `Emulación · 80`.
+- **Sustratos atípicos sin máscara naranja + Visor de zona de cálculo / Sprockets.** Perfiles dedicados para Phoenix, Aerocolor IV, películas B&N transparentes y redscale/lomo, más guía superpuesta y conservación opcional de rebordes y perforaciones.
+- **Calibración *Flat-Field* LED.** Neutraliza el viñeteo y la falta de uniformidad de la mesa de luz mediante toma de referencia vacía o mapa de ganancia.
+- **Positivado B&N *Split Grade* y *Pre-flashing*.** Filtros grado `00` (luces) y grado `5` (sombras) más velo previo controlado.
+- **Curva tonal compartida y Tira de prueba *f-stop*.** Editor de curvas disponible en ambos modos y generación rápida de tiras de 5 bandas en pasos de `1/3 EV` o `1/2 EV`.
+- **Flujo rápido estilo Minilab + Vista Esencial.** Conmutador `Completa ↔ Esencial` (`V`) y atajos Fuji Frontier para exposición (`↑`/`↓`) y cabezal CMY (`C`, `G`, `B` + `⇧`).
+- **Limpieza puntual de polvo/motas sin IR + Reciprocidad EXIF.** Clonado anular suave para emulsiones B&N, presets químicos rápidos y calculadora de fallo de reciprocidad Schwarzschild.
+- **Marginador de cuarto oscuro (*Easel Borders*) y compensación *Dry-Down*.** Márgenes baritados, galería con filete o reborde negro de portanegativos y ajuste tonal de secado en exportación JPG, PNG y TIFF de 16 bits.
+
+### Depuración y limpieza
+- Eliminado por completo el código residual de «Máscaras de exposición» (`apply_local_exposure_offset` y comentarios CSS huérfanos).
+
+---
 
 ## [2.6.0] — 2026-11-12
 

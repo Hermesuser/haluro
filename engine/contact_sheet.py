@@ -38,7 +38,7 @@ def generate_contact_sheet(
     if not frame_images:
         empty = Image.new("RGB", (800, 600), (14, 14, 16))
         return (empty, []) if return_layout else empty
-        
+
     loaded_frames = []
     for item in frame_images:
         if isinstance(item, (str, Path)):
@@ -53,10 +53,10 @@ def generate_contact_sheet(
         if frame.width > thumb_width * 2 or frame.height > thumb_width * 2:
             frame.thumbnail((thumb_width * 2, thumb_width * 2), Image.Resampling.LANCZOS)
         loaded_frames.append(frame)
-            
+
     n_frames = len(loaded_frames)
     rows = math.ceil(n_frames / columns)
-    
+
     # Scale layout and typography proportionally with thumbnail resolution
     scale = max(0.5, float(thumb_width) / 480.0)
     margin_x = int(round(40 * scale))
@@ -64,24 +64,24 @@ def generate_contact_sheet(
     margin_bottom = int(round(60 * scale))
     spacing_x = int(round(24 * scale))
     spacing_y = int(round(48 * scale))
-    
+
     # Adaptive slot height: compact 3:2 when all frames are landscape,
     # taller balanced 0.88:1 when vertical/square frames exist
     has_portrait_or_square = any(im.height > im.width * 0.90 for im in loaded_frames)
     thumb_h = int(round(thumb_width * (0.88 if has_portrait_or_square else 2 / 3)))
-    
+
     total_w = margin_x * 2 + columns * thumb_width + (columns - 1) * spacing_x
     total_h = margin_top + margin_bottom + rows * thumb_h + (rows - 1) * spacing_y
-    
+
     # Darkroom photographic paper background (near black)
     sheet = Image.new("RGB", (total_w, total_h), (12, 12, 14))
     draw = ImageDraw.Draw(sheet)
-    
+
     # Header Fonts (cross-platform: macOS, Windows 11, Linux)
     title_font = load_ui_font("sans-bold", int(round(32 * scale)))
     meta_font = load_ui_font("mono", int(round(18 * scale)))
     frame_font = load_ui_font("mono-bold", int(round(14 * scale)))
-        
+
     # Draw Header & Amber Film Rule
     rule_h = max(2, int(round(4 * scale)))
     rule_y = int(round(30 * scale))
@@ -93,7 +93,7 @@ def generate_contact_sheet(
         font=meta_font,
         fill=(180, 180, 180),
     )
-    
+
     # Draw Film Canister Badge with accurately centered text
     badge_w, badge_h = int(round(160 * scale)), int(round(40 * scale))
     bx = total_w - margin_x - badge_w
@@ -111,17 +111,17 @@ def generate_contact_sheet(
     tx = bx + (badge_w - tw) / 2 - bbox[0]
     ty = by + (badge_h - th) / 2 - bbox[1]
     draw.text((tx, ty), badge_text, font=frame_font, fill=(229, 149, 40))
-    
+
     # Draw Frames
     border_pad = max(2, int(round(4 * scale)))
     layout_boxes = []
     for idx, frame in enumerate(loaded_frames):
         r = idx // columns
         c = idx % columns
-        
+
         x = margin_x + c * (thumb_width + spacing_x)
         y = margin_top + r * (thumb_h + spacing_y)
-        
+
         # Fit image maintaining aspect ratio inside slot
         too_wide = frame.width > thumb_width
         too_tall = frame.height > thumb_h
@@ -131,20 +131,20 @@ def generate_contact_sheet(
             thumb.thumbnail((thumb_width, thumb_h), Image.Resampling.BICUBIC)
         else:
             thumb = frame
-        
+
         # Center inside slot
         px = x + (thumb_width - thumb.width) // 2
         py = y + (thumb_h - thumb.height) // 2
-        
+
         # Film rebate border
         draw.rectangle(
             [px - border_pad, py - border_pad, px + thumb.width + border_pad, py + thumb.height + border_pad],
             outline=(45, 45, 50),
             width=max(1, int(round(1 * scale)))
         )
-        
+
         sheet.paste(thumb, (px, py))
-        
+
         # Frame Number Marker + optional custom filename stem
         lbl_suffix = ""
         if frame_labels and idx < len(frame_labels) and frame_labels[idx]:
@@ -162,5 +162,5 @@ def generate_contact_sheet(
             "w_pct": round(thumb.width / total_w, 5),
             "h_pct": round(thumb.height / total_h, 5),
         })
-        
+
     return (sheet, layout_boxes) if return_layout else sheet

@@ -1,6 +1,6 @@
 /**
  * Haluro — Laboratorio Analógico Digital (v2.5.0)
- * Precision frontend controller: 72-stock film simulation, C-41/B&W optical negative
+ * Precision frontend controller: 80-stock film simulation, C-41/B&W optical negative
  * inversion (RA-4, ECP 2383, Minilab, V-Log), B&W chemical toners & fine-art papers,
  * unified multi-frame Roll Analysis, 3-Way CMY split-toning, color-protected soft clip,
  * luminance optical sharpening, 16-bit TIFF export, and native Analog EXIF stamping.
@@ -114,7 +114,13 @@ const USER_PREFS_DEFAULTS = {
   finishAmount: 1.0,
   bwToner: "neutral",
   bwTonerStrength: 1.0,
+  bwGrade00: 0.0,
+  bwGrade5: 0.0,
+  bwPreflash: 0.0,
   profile: "frontier",
+  easelBorder: "none",
+  dryDownComp: 0.0,
+  uiEssential: false,
 };
 
 function loadUserPreferences() {
@@ -133,6 +139,7 @@ function saveUserPreferences() {
     const prefs = {
       appMode: state.appMode,
       selectedFilm: state.selectedFilm,
+      devProcess: state.devProcess,
       ev: state.ev,
       halation: state.halation,
       grain: state.grain,
@@ -159,7 +166,13 @@ function saveUserPreferences() {
       finishAmount: negativeState.finishAmount,
       bwToner: negativeState.bwToner,
       bwTonerStrength: negativeState.bwTonerStrength,
+      bwGrade00: negativeState.bwGrade00,
+      bwGrade5: negativeState.bwGrade5,
+      bwPreflash: negativeState.bwPreflash,
       profile: negativeState.profile,
+      easelBorder: state.easelBorder,
+      dryDownComp: state.dryDownComp,
+      uiEssential: state.uiEssential,
     };
     localStorage.setItem(USER_PREFS_KEY, JSON.stringify(prefs));
   } catch (_) {
@@ -236,6 +249,7 @@ const state = {
   activeFrameIndex: 0,
 
   // Mode 1: Film Simulation controls
+  devProcess: "standard",
   ev: 0.0,
   halation: 1.0,
   grain: 1.0,
@@ -253,10 +267,14 @@ const state = {
   rotate: 0, // 0 | 90 | 180 | 270
   flip_h: false,
   outputFormat: "jpg", // 'jpg' | 'png' | 'tiff'
+  easelBorder: "none",
+  dryDownComp: 0.0,
 
   // Viewport & Light Table
-  viewMode: "split", // 'split' | 'full' | 'original' | 'sheet'
+  viewMode: "split", // 'split' | 'full' | 'original' | 'sheet' | 'teststrip'
   prevViewMode: "split",
+  testStripStepEv: 0.5,
+  testStripSteps: [],
   holdingOriginal: false,
   splitPercent: 50,
   zoom: 1.0,
@@ -264,6 +282,7 @@ const state = {
   panY: 0,
   safelight: false,
   sidebarsCollapsed: false,
+  uiEssential: false,
   spacePressed: false,
   zebraMode: { shadows: false, highlights: false },
 
@@ -287,6 +306,7 @@ const state = {
 
 const negativeState = {
   filmType: "color", // 'color' | 'bw'
+  filmSubstrate: "c41_orange", // 'c41_orange' | 'clear_base' | 'phoenix' | 'warm_base' | 'creative_switch'
   scanSource: "camera_raw", // 'camera_raw' | 'scanner_raw' | 'flatbed_tiff'
   preSaturation: 1.0,
   lightSource: "standard", // 'standard' | 'cool' | 'warm'
@@ -298,6 +318,9 @@ const negativeState = {
   finishAmount: 1.0,
   bwToner: "neutral",
   bwTonerStrength: 1.0,
+  bwGrade00: 0.0,
+  bwGrade5: 0.0,
+  bwPreflash: 0.0,
   profile: "frontier",
   baseColor: null, // [r_lin, g_lin, b_lin] or null (auto)
   baseHex: "#E45F21",
@@ -306,6 +329,12 @@ const negativeState = {
 
   borderBuffer: 0.06,
   cropPct: 0.0,
+  keepSprockets: false,
+  flatFieldFile: null,
+  flatFieldLabel: "",
+  flatFieldStrength: 1.0,
+  showBorderGuide: false,
+  borderGuideTempActive: false,
 
   brightness: 0.0,
   midtoneNd: 0.0,
@@ -338,6 +367,9 @@ const negativeState = {
   sharpenAmount: 1.0,
   glow: 1.0,
   fade: 1.0,
+  dustRadius: 0.008,
+  dustSpots: [],
+  curve: null,
 };
 
 const PROFILE_LABELS = {
@@ -455,6 +487,72 @@ function toggleZenSidebars(forceState = null) {
   setTimeout(() => {
     applyZoomTransform();
   }, 180);
+}
+
+function toggleEssentialView(forceState = null, { silent = false } = {}) {
+  const next = forceState === null ? !state.uiEssential : Boolean(forceState);
+  state.uiEssential = next;
+  document.body.classList.toggle("ui-essential", next);
+  const btn = document.getElementById("uiComplexityBtn");
+  const lbl = document.getElementById("uiComplexityLabel");
+  if (btn) {
+    btn.classList.toggle("active", next);
+    btn.setAttribute("aria-pressed", next ? "true" : "false");
+  }
+  if (lbl) lbl.textContent = next ? "Esencial" : "Completa";
+  if (next && typeof selectCmyZone === "function" && negativeState.activeCmyZone !== "global") {
+    selectCmyZone("global");
+  }
+  if (!silent) {
+    saveUserPreferences();
+    showToast(
+      next ? "Vista Esencial (Minilab)" : "Vista Completa de laboratorio",
+      next
+        ? "Controles rápidos tipo Minilab activos (pulsa V para volver)."
+        : "Todos los cajones de calibración y EXIF visibles."
+    );
+  }
+}
+
+function nudgeExposure(delta) {
+  if (state.frames.length === 0) return;
+  pushUndoSnapshotForFrame();
+  if (state.appMode === "negative") {
+    const next = Math.max(-1.0, Math.min(1.0, Math.round((negativeState.brightness + delta) * 100) / 100));
+    negativeState.brightness = next;
+    const fmtS = `${next > 0 ? "+" : ""}${next.toFixed(2)}`;
+    setSliderSilent("negBrightnessSlider", "negBrightnessVal", next, fmtS);
+  } else {
+    const slider = document.getElementById("evSlider");
+    const minEv = slider ? parseFloat(slider.min) : -2.0;
+    const maxEv = slider ? parseFloat(slider.max) : 2.0;
+    const next = Math.max(minEv, Math.min(maxEv, Math.round((state.ev + delta) * 10) / 10));
+    state.ev = next;
+    setSliderSilent("evSlider", "evVal", next, `${next > 0 ? "+" : ""}${next.toFixed(1)} EV`);
+  }
+  saveActiveFrameRecipe();
+  saveUserPreferences();
+  requestPreview(false);
+}
+
+function nudgeCmyChannel(channelIdx, delta) {
+  if (state.appMode !== "negative" || negativeState.filmType !== "color" || state.frames.length === 0) return;
+  if (negativeState.activeCmyZone !== "global") selectCmyZone("global");
+  pushUndoSnapshotForFrame();
+  const cur = Number(negativeState.cmy[channelIdx]) || 0;
+  const next = Math.max(-1.0, Math.min(1.0, Math.round((cur + delta) * 100) / 100));
+  negativeState.cmy[channelIdx] = next;
+  const sliderMap = [
+    ["cmyRedSlider", "cmyRedVal"],
+    ["cmyGreenSlider", "cmyGreenVal"],
+    ["cmyBlueSlider", "cmyBlueVal"],
+  ];
+  const pair = sliderMap[channelIdx];
+  if (pair) {
+    setSliderSilent(pair[0], pair[1], next, `${next > 0 ? "+" : ""}${next.toFixed(2)}`);
+  }
+  saveActiveFrameRecipe();
+  requestPreview(false);
 }
 
 // =============================================================
@@ -655,17 +753,21 @@ async function applyStoredPreferences() {
   }
 
   // Restaurar controles de simulación
-  for (const key of ["ev", "halation", "grain", "vignette", "shadows", "mids", "highlights", "date", "rotate", "flip_h", "outputFormat", "viewMode", "splitPercent", "zoom", "panX", "panY"]) {
+  for (const key of ["devProcess", "ev", "halation", "grain", "vignette", "shadows", "mids", "highlights", "date", "rotate", "flip_h", "outputFormat", "easelBorder", "dryDownComp", "viewMode", "splitPercent", "zoom", "panX", "panY"]) {
     if (key in prefs) state[key] = prefs[key];
   }
+  if (state.viewMode === "teststrip") state.viewMode = "split";
 
   // Restaurar controles de negativo
-  for (const key of ["filmType", "scanSource", "preSaturation", "lightSource", "colorMethod", "toneVariant", "printFinish", "finishAmount", "bwToner", "bwTonerStrength", "profile"]) {
+  for (const key of ["filmType", "filmSubstrate", "scanSource", "preSaturation", "lightSource", "colorMethod", "toneVariant", "printFinish", "finishAmount", "bwToner", "bwTonerStrength", "bwGrade00", "bwGrade5", "bwPreflash", "profile", "keepSprockets"]) {
     if (key in prefs) negativeState[key] = prefs[key];
   }
 
   // Aplicar valores a sliders y UI
   applyPrefsToUI(prefs);
+  if ("uiEssential" in prefs) {
+    toggleEssentialView(Boolean(prefs.uiEssential), { silent: true });
+  }
 }
 
 function applyPrefsToUI(prefs) {
@@ -681,6 +783,10 @@ function applyPrefsToUI(prefs) {
     if (el && val !== undefined) el.checked = Boolean(val);
   };
 
+  if (prefs.devProcess !== undefined) {
+    const el = document.getElementById("simDevProcessSelect");
+    if (el) el.value = prefs.devProcess || "standard";
+  }
   if (prefs.ev !== undefined) setSlider("evSlider", prefs.ev);
   if (prefs.halation !== undefined) setSlider("halationSlider", prefs.halation);
   if (prefs.grain !== undefined) setSlider("grainSlider", prefs.grain);
@@ -698,11 +804,23 @@ function applyPrefsToUI(prefs) {
     const el = document.getElementById("outputFormatSelect");
     if (el) el.value = prefs.outputFormat;
   }
+  if (prefs.easelBorder !== undefined) {
+    const el = document.getElementById("easelBorderSelect");
+    if (el) el.value = prefs.easelBorder || "none";
+  }
+  if (prefs.dryDownComp !== undefined) {
+    const el = document.getElementById("dryDownSelect");
+    if (el) el.value = Number(prefs.dryDownComp || 0).toFixed(2).replace(/0$/, "");
+  }
 
   // Negativo UI
   if (prefs.filmType !== undefined) {
     const btn = document.getElementById(prefs.filmType === "color" ? "btnTypeColor" : "btnTypeBW");
     if (btn) btn.click();
+  }
+  if (prefs.filmSubstrate !== undefined) {
+    const el = document.getElementById("negSubstrateSelect");
+    if (el) el.value = prefs.filmSubstrate;
   }
   if (prefs.lightSource !== undefined) {
     const btn = document.querySelector(`#negLightSourceBar .seg-btn[data-light="${prefs.lightSource}"]`);
@@ -727,8 +845,12 @@ function applyPrefsToUI(prefs) {
   }
   if (prefs.finishAmount !== undefined) setSlider("negFinishAmountSlider", prefs.finishAmount * 100);
   if (prefs.bwTonerStrength !== undefined) setSlider("negBwTonerStrengthSlider", prefs.bwTonerStrength * 100);
+  if (prefs.bwGrade00 !== undefined) setSlider("negBwGrade00Slider", prefs.bwGrade00);
+  if (prefs.bwGrade5 !== undefined) setSlider("negBwGrade5Slider", prefs.bwGrade5);
+  if (prefs.bwPreflash !== undefined) setSlider("negBwPreflashSlider", prefs.bwPreflash * 100);
   if (prefs.borderBuffer !== undefined) setSlider("negBufferSlider", prefs.borderBuffer * 100);
   if (prefs.cropPct !== undefined) setSlider("negCropSlider", prefs.cropPct * 100);
+  if (prefs.keepSprockets !== undefined) setCheckbox("negKeepSprocketsToggle", prefs.keepSprockets);
   if (prefs.brightness !== undefined) setSlider("negBrightnessSlider", prefs.brightness);
   if (prefs.midtoneNd !== undefined) setSlider("negMidtoneNdSlider", prefs.midtoneNd);
   if (prefs.contrast !== undefined) setSlider("negContrastSlider", prefs.contrast);
@@ -766,7 +888,7 @@ async function fetchFilms() {
 }
 
 // =============================================================
-// LEFT SIDEBAR: 72 FILM STOCKS & FAVORITES
+// LEFT SIDEBAR: 80 FILM STOCKS & FAVORITES
 // =============================================================
 
 function applyFilters() {
@@ -902,6 +1024,8 @@ function selectFilm(key) {
   });
   saveActiveFrameRecipe();
   updateActiveRecipeBanner();
+  renderBorderGuideOverlay();
+  drawCurveEditor();
   requestPreview();
   saveUserPreferences();
 }
@@ -1768,6 +1892,8 @@ async function switchStudioMode(mode) {
   }
 
   updateActiveRecipeBanner();
+  renderBorderGuideOverlay();
+  drawCurveEditor();
 
   // Swap demo sample cleanly per mode when the roll only holds built-in demo frames
   const onlySamples = state.frames.length > 0 && state.frames.every((f) => f.is_sample);
@@ -1823,17 +1949,32 @@ function updateActiveRecipeBanner() {
   }
 }
 
+const SUBSTRATE_HINTS = {
+  c41_orange: "Emulsiones C-41 tradicionales con máscara naranja (Portra, Gold, Superia).",
+  clear_base: "Base transparente sin máscara naranja intensa (Aerocolor IV, SantaColor, cine sin remjet).",
+  phoenix: "Harman Phoenix I/II: atenúa el cruce magenta en sombras y suaviza contraste extremo.",
+  warm_base: "Lomo '92 / Redscale: protege la paleta cálida y evita neutralizarla a gris.",
+  creative_switch: "Harman Azure / Lomo Purple: preserva el intercambio intencional de tintes.",
+};
+
 function syncNegProcessPanels() {
   const isBw = negativeState.filmType === "bw" || negativeState.profile === "bw";
   const colorPanel = document.getElementById("negColorFinishPanel");
   const bwPanel = document.getElementById("negBwChemPanel");
+  const substrateGroup = document.getElementById("negSubstrateGroup");
   const preSatGroup = document.getElementById("negPreSatGroup");
   const finishAmtGroup = document.getElementById("negFinishAmountGroup");
   const sharpAmtGroup = document.getElementById("negSharpenAmountGroup");
 
   if (colorPanel) colorPanel.style.display = isBw ? "none" : "flex";
   if (bwPanel) bwPanel.style.display = isBw ? "flex" : "none";
+  if (substrateGroup) substrateGroup.style.display = isBw ? "none" : "flex";
   if (preSatGroup) preSatGroup.style.display = isBw ? "none" : "flex";
+
+  const subHintEl = document.getElementById("negSubstrateHint");
+  if (subHintEl) {
+    subHintEl.textContent = SUBSTRATE_HINTS[negativeState.filmSubstrate] || SUBSTRATE_HINTS.c41_orange;
+  }
   if (finishAmtGroup) {
     finishAmtGroup.style.display = negativeState.printFinish !== "none" ? "flex" : "none";
   }
@@ -1854,6 +1995,80 @@ function syncNegProcessPanels() {
       rollBadge.textContent = `Rollo · ${negativeState.rollFramesCount}`;
     }
   }
+
+  const cropSlider = document.getElementById("negCropSlider");
+  const cropVal = document.getElementById("negCropVal");
+  if (cropSlider) {
+    cropSlider.disabled = Boolean(negativeState.keepSprockets);
+    cropSlider.style.opacity = negativeState.keepSprockets ? "0.45" : "";
+  }
+  if (cropVal && negativeState.keepSprockets) {
+    cropVal.textContent = "0% (Reborde)";
+  }
+
+  const hasFF = Boolean(negativeState.flatFieldFile);
+  const ffClearBtn = document.getElementById("btnClearFlatField");
+  const ffStatus = document.getElementById("negFlatFieldStatus");
+  const ffStrengthGroup = document.getElementById("negFlatFieldStrengthGroup");
+  if (ffClearBtn) ffClearBtn.style.display = hasFF ? "inline-flex" : "none";
+  if (ffStrengthGroup) ffStrengthGroup.style.display = hasFF ? "flex" : "none";
+  if (ffStatus) {
+    ffStatus.textContent = hasFF
+      ? negativeState.flatFieldLabel || `Activo: ${negativeState.flatFieldFile}`
+      : "Sin calibración de campo plano.";
+  }
+
+  renderBorderGuideOverlay();
+}
+
+let borderGuideFlashTimer = null;
+
+function renderBorderGuideOverlay() {
+  const overlay = document.getElementById("borderGuideOverlay");
+  const box = document.getElementById("borderGuideAnalysisBox");
+  const tag = document.getElementById("borderGuideTag");
+  if (!overlay || !box) return;
+
+  const visible =
+    state.appMode === "negative" &&
+    state.viewMode !== "sheet" &&
+    state.frames.length > 0 &&
+    (negativeState.showBorderGuide || negativeState.borderGuideTempActive);
+
+  if (!visible) {
+    overlay.style.display = "none";
+    return;
+  }
+
+  const crop = negativeState.keepSprockets ? 0 : Math.min(0.45, Math.max(0, Number(negativeState.cropPct) || 0));
+  const rawBuf = Math.max(0, Number(negativeState.borderBuffer) || 0);
+  const effBuf = negativeState.keepSprockets ? Math.max(rawBuf, 0.12) : rawBuf;
+  const relInset = Math.max(0, (effBuf - crop) / Math.max(1 - 2 * crop, 0.10));
+  const insetPct = Math.min(44, relInset * 100);
+
+  box.style.inset = `${insetPct.toFixed(2)}%`;
+  if (tag) {
+    const bufLabel = `${Math.round(effBuf * 100)}%`;
+    if (negativeState.keepSprockets) {
+      tag.textContent = `Zona de cálculo (-${bufLabel} borde) · Sprockets conservados`;
+    } else if (crop > 0.001) {
+      const cropStr = `${(crop * 100).toFixed(1).replace(/\.0$/, "")}%`;
+      tag.textContent = `Zona de cálculo (-${bufLabel} borde · Recorte ${cropStr})`;
+    } else {
+      tag.textContent = `Zona de cálculo (-${bufLabel} borde)`;
+    }
+  }
+  overlay.style.display = "block";
+}
+
+function flashBorderGuideOverlay() {
+  negativeState.borderGuideTempActive = true;
+  renderBorderGuideOverlay();
+  if (borderGuideFlashTimer) clearTimeout(borderGuideFlashTimer);
+  borderGuideFlashTimer = setTimeout(() => {
+    negativeState.borderGuideTempActive = false;
+    renderBorderGuideOverlay();
+  }, 950);
 }
 
 function getZoneTripletRef(zone) {
@@ -1962,6 +2177,33 @@ async function requestPreview(forceOriginal = false) {
   setRenderBusy(true);
 
   try {
+    if (state.viewMode === "teststrip") {
+      const res = await fetch("/api/test_strip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify(
+          state.appMode === "negative"
+            ? {
+                mode: "negative",
+                filename: activeFrame.filename,
+                step_ev: state.testStripStepEv,
+                ...buildNegativePayload(),
+              }
+            : {
+                mode: "simulation",
+                filename: activeFrame.filename,
+                step_ev: state.testStripStepEv,
+                ...buildSimulationPayload(),
+              }
+        ),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error generando tira de prueba");
+      applyTestStripResult(data);
+      return;
+    }
+
     if (state.appMode === "negative") {
       const res = await fetch("/api/negative/preview", {
         method: "POST",
@@ -1979,6 +2221,8 @@ async function requestPreview(forceOriginal = false) {
 
       applyPreviewResult(data, origKey, needOriginal);
       updateActiveRecipeBanner();
+      renderBorderGuideOverlay();
+      drawCurveEditor();
     } else {
       const res = await fetch("/api/preview", {
         method: "POST",
@@ -1986,19 +2230,8 @@ async function requestPreview(forceOriginal = false) {
         signal: controller.signal,
         body: JSON.stringify({
           filename: activeFrame.filename,
-          film: state.selectedFilm,
-          ev: state.ev,
-          halation: state.halation,
-          grain: state.grain,
-          vignette: state.vignette,
-          shadows: state.shadows,
-          mids: state.mids,
-          highlights: state.highlights,
-          curve: curvePayload(state.curve),
-          date: state.date,
-          rotate: state.rotate,
-          flip_h: state.flip_h,
           include_original: needOriginal,
+          ...buildSimulationPayload(),
         }),
       });
       const data = await res.json();
@@ -2057,9 +2290,28 @@ function applyPreviewResult(data, origKey, requestedOriginal) {
   }
 }
 
+function buildSimulationPayload() {
+  return {
+    film: state.selectedFilm,
+    dev_process: state.devProcess || "standard",
+    ev: state.ev,
+    halation: state.halation,
+    grain: state.grain,
+    vignette: state.vignette,
+    shadows: state.shadows,
+    mids: state.mids,
+    highlights: state.highlights,
+    curve: curvePayload(state.curve),
+    date: state.date,
+    rotate: state.rotate,
+    flip_h: state.flip_h,
+  };
+}
+
 function buildNegativePayload() {
   return {
     film_type: negativeState.filmType,
+    film_substrate: negativeState.filmSubstrate,
     scan_source: negativeState.scanSource,
     pre_saturation: negativeState.preSaturation,
     light_source: negativeState.lightSource,
@@ -2075,10 +2327,16 @@ function buildNegativePayload() {
     finish_amount: negativeState.finishAmount,
     bw_toner: negativeState.bwToner,
     bw_toner_strength: negativeState.bwTonerStrength,
+    bw_grade00: negativeState.bwGrade00,
+    bw_grade5: negativeState.bwGrade5,
+    bw_preflash: negativeState.bwPreflash,
     profile: negativeState.profile,
     base_color: negativeState.baseColor ? [...negativeState.baseColor] : null,
     border_buffer: negativeState.borderBuffer,
     crop_pct: negativeState.cropPct,
+    keep_sprockets: negativeState.keepSprockets,
+    flat_field_file: negativeState.flatFieldFile || "",
+    flat_field_strength: negativeState.flatFieldStrength,
     brightness: negativeState.brightness,
     midtone_nd: negativeState.midtoneNd,
     contrast: negativeState.contrast,
@@ -2108,6 +2366,8 @@ function buildNegativePayload() {
     sharpen_amount: negativeState.sharpenAmount,
     glow: negativeState.glow,
     fade: negativeState.fade,
+    dust_spots: (negativeState.dustSpots || []).map((s) => ({ x: s.x, y: s.y, r: s.r })),
+    curve: curvePayload(negativeState.curve),
     rotate: state.rotate,
     flip_h: state.flip_h,
   };
@@ -2125,6 +2385,7 @@ function formatZoneEv(v) {
 function snapshotSimRecipe() {
   return {
     film: state.selectedFilm,
+    dev_process: state.devProcess || "standard",
     ev: state.ev,
     halation: state.halation,
     grain: state.grain,
@@ -2143,6 +2404,7 @@ function snapshotNegRecipe() {
   return {
     ...buildNegativePayload(),
     base_hex: negativeState.baseHex,
+    flat_field_label: negativeState.flatFieldLabel,
   };
 }
 
@@ -2244,6 +2506,9 @@ function applySimRecipeToUI(rec) {
   if (!rec) return;
   const rawFilm = rec.film === "cinestill400t" ? "cinestill400d" : rec.film;
   state.selectedFilm = rawFilm || state.selectedFilm;
+  state.devProcess = rec.dev_process || "standard";
+  const devProcSel = document.getElementById("simDevProcessSelect");
+  if (devProcSel) devProcSel.value = state.devProcess;
   state.ev = Number(rec.ev ?? 0);
   state.halation = Number(rec.halation ?? 1.0);
   state.grain = Number(rec.grain ?? 1.0);
@@ -2275,6 +2540,8 @@ function applySimRecipeToUI(rec) {
   const dt = document.getElementById("dateToggle");
   if (dt) dt.checked = state.date;
   updateActiveRecipeBanner();
+  renderBorderGuideOverlay();
+  drawCurveEditor();
 }
 
 function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
@@ -2287,6 +2554,7 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
       : [0.0, 0.0, 0.0];
 
   negativeState.filmType = rec.film_type || "color";
+  negativeState.filmSubstrate = rec.film_substrate || "c41_orange";
   negativeState.scanSource = rec.scan_source || "camera_raw";
   negativeState.preSaturation = Number(rec.pre_saturation ?? 1.0);
   negativeState.lightSource = rec.light_source || "standard";
@@ -2304,9 +2572,16 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
   negativeState.finishAmount = Number(rec.finish_amount ?? 1.0);
   negativeState.bwToner = rec.bw_toner || "neutral";
   negativeState.bwTonerStrength = Number(rec.bw_toner_strength ?? 1.0);
+  negativeState.bwGrade00 = Number(rec.bw_grade00 ?? 0.0);
+  negativeState.bwGrade5 = Number(rec.bw_grade5 ?? 0.0);
+  negativeState.bwPreflash = Number(rec.bw_preflash ?? 0.0);
   negativeState.profile = rec.profile || rec.profile_key || "frontier";
   negativeState.borderBuffer = Number(rec.border_buffer ?? 0.06);
   negativeState.cropPct = Number(rec.crop_pct ?? 0.0);
+  negativeState.keepSprockets = Boolean(rec.keep_sprockets ?? false);
+  negativeState.flatFieldFile = rec.flat_field_file || null;
+  negativeState.flatFieldLabel = rec.flat_field_label || (rec.flat_field_file ? `Activo: ${rec.flat_field_file}` : "");
+  negativeState.flatFieldStrength = Number(rec.flat_field_strength ?? 1.0);
   negativeState.brightness = Number(rec.brightness ?? 0.0);
   negativeState.midtoneNd = Number(rec.midtone_nd ?? 0.0);
   negativeState.contrast = Number(rec.contrast ?? 0.0);
@@ -2336,6 +2611,10 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
   negativeState.sharpenAmount = Number(rec.sharpen_amount ?? 1.0);
   negativeState.glow = Number(rec.glow ?? 1.0);
   negativeState.fade = Number(rec.fade ?? 1.0);
+  negativeState.dustSpots = Array.isArray(rec.dust_spots)
+    ? rec.dust_spots.map((s) => ({ x: Number(s.x), y: Number(s.y), r: Number(s.r || 0.008) }))
+    : [];
+  negativeState.curve = rec.curve ? cloneCurve(rec.curve) : null;
 
   if (typeof rec.rotate === "number") state.rotate = rec.rotate;
   if (typeof rec.flip_h === "boolean") state.flip_h = rec.flip_h;
@@ -2384,6 +2663,8 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
     c.setAttribute("aria-selected", sel ? "true" : "false");
   });
 
+  const subSel = document.getElementById("negSubstrateSelect");
+  if (subSel) subSel.value = negativeState.filmSubstrate;
   const pfSel = document.getElementById("negPrintFinishSelect");
   if (pfSel) pfSel.value = negativeState.printFinish;
   const bwSel = document.getElementById("negBwTonerSelect");
@@ -2394,11 +2675,17 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
   setSliderSilent("negFinishAmountSlider", "negFinishAmountVal", finPct, `${finPct}%`);
   const bwStrPct = Math.round(negativeState.bwTonerStrength * 100);
   setSliderSilent("negBwTonerStrengthSlider", "negBwTonerStrengthVal", bwStrPct, `${bwStrPct}%`);
+  setSliderSilent("negBwGrade00Slider", "negBwGrade00Val", negativeState.bwGrade00, fmtS(negativeState.bwGrade00));
+  setSliderSilent("negBwGrade5Slider", "negBwGrade5Val", negativeState.bwGrade5, fmtS(negativeState.bwGrade5));
+  const pfPct = Math.round(negativeState.bwPreflash * 100);
+  setSliderSilent("negBwPreflashSlider", "negBwPreflashVal", pfPct, `${pfPct}%`);
 
   const bufPct = Math.round(negativeState.borderBuffer * 100);
   const cropPctUi = Number((negativeState.cropPct * 100).toFixed(1));
   setSliderSilent("negBufferSlider", "negBufferVal", bufPct, `${bufPct}%`);
   setSliderSilent("negCropSlider", "negCropVal", cropPctUi, `${cropPctUi.toFixed(1).replace(/\.0$/, "")}%`);
+  const spToggle = document.getElementById("negKeepSprocketsToggle");
+  if (spToggle) spToggle.checked = negativeState.keepSprockets;
 
   setSliderSilent("negBrightnessSlider", "negBrightnessVal", negativeState.brightness, fmtS(negativeState.brightness));
   setSliderSilent("negMidtoneNdSlider", "negMidtoneNdVal", negativeState.midtoneNd, fmtS(negativeState.midtoneNd));
@@ -2429,6 +2716,8 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
 
   const sharpPct = Math.round(negativeState.sharpenAmount * 100);
   setSliderSilent("negSharpenAmountSlider", "negSharpenAmountVal", sharpPct, `${sharpPct}%`);
+  const ffPct = Math.round(negativeState.flatFieldStrength * 100);
+  setSliderSilent("negFlatFieldStrengthSlider", "negFlatFieldStrengthVal", ffPct, `${ffPct}%`);
   setSliderSilent("negWarming85Slider", "negWarming85Val", negativeState.warming85, fmtPct(negativeState.warming85));
   setSliderSilent("negSkylightSlider", "negSkylightVal", negativeState.skylightFilter, fmtPct(negativeState.skylightFilter));
   setSliderSilent("negShadeSlider", "negShadeVal", negativeState.shadeFilter, fmtPct(negativeState.shadeFilter));
@@ -2438,6 +2727,9 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
   selectCmyZone(negativeState.activeCmyZone);
   syncNegProcessPanels();
   updateActiveRecipeBanner();
+  renderBorderGuideOverlay();
+  updateDustSpotsUI();
+  drawCurveEditor();
 }
 
 function loadFrameRecipe(idx) {
@@ -2561,10 +2853,10 @@ function applySyncRecipeToRoll(options = {}) {
   }));
 
   const NEG_PROFILE_TONE_KEYS = [
-    "film_type", "scan_source", "pre_saturation", "light_source", "color_method", "roll_bounds",
+    "film_type", "film_substrate", "scan_source", "pre_saturation", "light_source", "color_method", "roll_bounds",
     "tone_variant", "profile", "brightness", "midtone_nd", "contrast", "push_pull",
     "lights", "darks", "whites", "blacks", "black_clip", "white_clip",
-    "clip_protect", "inky_blacks", "rp_tone", "saturation",
+    "clip_protect", "inky_blacks", "rp_tone", "saturation", "curve",
   ];
   const NEG_COLOR_KEYS = [
     "printer_cmy", "shadows_tint", "mids_tint", "highs_tint",
@@ -2572,11 +2864,12 @@ function applySyncRecipeToRoll(options = {}) {
   ];
   const NEG_OPTICS_KEYS = [
     "print_finish", "finish_amount", "bw_toner", "bw_toner_strength",
+    "bw_grade00", "bw_grade5", "bw_preflash",
     "warming_85", "skylight_filter", "shade_filter", "sharpen_mode", "sharpen_amount",
-    "glow", "fade",
+    "glow", "fade", "flat_field_file", "flat_field_label", "flat_field_strength",
   ];
   const NEG_BASE_CROP_KEYS = [
-    "base_color", "base_hex", "border_buffer", "crop_pct",
+    "base_color", "base_hex", "border_buffer", "crop_pct", "keep_sprockets",
   ];
 
   state.frames.forEach((f, idx) => {
@@ -2607,7 +2900,10 @@ function applySyncRecipeToRoll(options = {}) {
       f.negRecipe = target;
     } else {
       const target = prevRec ? clonePlain(prevRec) : clonePlain(srcSnap);
-      if (includeProfileTone) target.film = srcSnap.film;
+      if (includeProfileTone) {
+        target.film = srcSnap.film;
+        target.dev_process = srcSnap.dev_process || "standard";
+      }
       if (includeOptics) {
         target.ev = srcSnap.ev;
         target.halation = srcSnap.halation;
@@ -2700,6 +2996,9 @@ async function autoDetectBaseColor(triggerPreviewAfter = true) {
         filename: activeFrame.filename,
         rotate: state.rotate,
         flip_h: state.flip_h,
+        film_substrate: negativeState.filmSubstrate,
+        flat_field_file: negativeState.flatFieldFile || "",
+        flat_field_strength: negativeState.flatFieldStrength,
       }),
     });
     const data = await res.json();
@@ -2973,11 +3272,87 @@ function initAnalogExifControls() {
     applyAnalogMetaToUI({}, true);
     showToast("Ficha técnica limpia", "Se han vaciado los campos EXIF opcionales.");
   });
+
+  // P8: Presets químicos rápidos y Calculadora de reciprocidad (Schwarzschild)
+  const chemSel = document.getElementById("exifChemPresetSelect");
+  chemSel?.addEventListener("change", () => {
+    if (!chemSel.value) return;
+    const devInput = document.getElementById("exifDevProcess");
+    if (devInput) {
+      devInput.value = chemSel.value;
+      devInput.dispatchEvent(new Event("input", { bubbles: true }));
+      showToast("Preset químico aplicado", chemSel.value);
+    }
+  });
+
+  const recipFilm = document.getElementById("recipFilmSelect");
+  const recipMeasured = document.getElementById("recipMeasuredInput");
+  const recipOut = document.getElementById("recipCorrectedOut");
+  const recipDelta = document.getElementById("recipDeltaLabel");
+  const updateRecipReadout = () => {
+    const tMeas = Math.max(0.5, Number(recipMeasured?.value) || 1);
+    const val = recipFilm?.value || "1.30";
+    let tReal = tMeas;
+    if (val === "acros") {
+      tReal = tMeas <= 120 ? tMeas : tMeas * Math.pow(tMeas / 120, 0.28);
+    } else {
+      const p = Number(val) || 1.3;
+      tReal = tMeas >= 1.0 ? Math.pow(tMeas, p) : tMeas;
+    }
+    const evDiff = tMeas > 0 && tReal >= tMeas ? Math.log2(tReal / tMeas) : 0;
+    const fmtT = tReal >= 120 ? `${(tReal / 60).toFixed(1)} min (${Math.round(tReal)} s)` : `${tReal.toFixed(1)} s`;
+    if (recipOut) recipOut.textContent = fmtT;
+    if (recipDelta) recipDelta.textContent = evDiff < 0.05 ? "Sin compensación requerida" : `+${evDiff.toFixed(1)} EV compensación`;
+  };
+  recipFilm?.addEventListener("change", updateRecipReadout);
+  recipMeasured?.addEventListener("input", updateRecipReadout);
+  updateRecipReadout();
+
+  document.getElementById("btnInsertRecipToNotes")?.addEventListener("click", () => {
+    const notesEl = document.getElementById("exifNotes");
+    if (!notesEl) return;
+    const optLabel = recipFilm?.selectedOptions?.[0]?.dataset?.label || "Película";
+    const tMeas = Math.max(0.5, Number(recipMeasured?.value) || 1);
+    const realText = recipOut?.textContent || `${tMeas} s`;
+    const snippet = `Reciprocidad ${optLabel}: ${tMeas}s → ${realText}`;
+    notesEl.value = notesEl.value.trim() ? `${notesEl.value.trim()} · ${snippet}` : snippet;
+    notesEl.dispatchEvent(new Event("input", { bubbles: true }));
+    showToast("Reciprocidad anotada", snippet);
+  });
+}
+
+function updateDustSpotsUI() {
+  const count = Array.isArray(negativeState.dustSpots) ? negativeState.dustSpots.length : 0;
+  const badge = document.getElementById("dustSpotCountBadge");
+  const undoBtn = document.getElementById("btnDustUndo");
+  const clearBtn = document.getElementById("btnDustClear");
+  if (badge) badge.textContent = `${count} ${count === 1 ? "mota" : "motas"}`;
+  if (undoBtn) undoBtn.disabled = count === 0;
+  if (clearBtn) clearBtn.disabled = count === 0;
+}
+
+function undoLastDustSpot() {
+  if (!Array.isArray(negativeState.dustSpots) || negativeState.dustSpots.length === 0) return;
+  pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], "negative");
+  negativeState.dustSpots.pop();
+  updateDustSpotsUI();
+  saveActiveFrameRecipe();
+  requestPreview(false);
+}
+
+function clearAllDustSpots() {
+  if (!Array.isArray(negativeState.dustSpots) || negativeState.dustSpots.length === 0) return;
+  pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], "negative");
+  negativeState.dustSpots = [];
+  updateDustSpotsUI();
+  saveActiveFrameRecipe();
+  requestPreview(false);
+  showToast("Motas restauradas", "Se eliminaron todos los retoques puntuales del fotograma.");
 }
 
 function setEyedropperMode(mode) {
   const prevMode = negativeState.eyedropperMode;
-  const cleanMode = mode === "base" || mode === "scene_wb" ? mode : null;
+  const cleanMode = mode === "base" || mode === "scene_wb" || mode === "dust" ? mode : null;
   const wasActive = negativeState.eyedropperActive;
   negativeState.eyedropperMode = cleanMode;
   negativeState.eyedropperActive = Boolean(cleanMode);
@@ -2986,6 +3361,8 @@ function setEyedropperMode(mode) {
   const tipBase = document.getElementById("eyedropperTip");
   const btnScene = document.getElementById("btnSceneWbEyedropper");
   const tipScene = document.getElementById("sceneWbTip");
+  const btnDust = document.getElementById("btnDustHealTool");
+  const tipDust = document.getElementById("dustHealTip");
   const wrapper = document.getElementById("splitWrapper");
   const loupe = document.getElementById("eyedropperLoupe");
 
@@ -2996,6 +3373,10 @@ function setEyedropperMode(mode) {
   btnScene?.classList.toggle("active", cleanMode === "scene_wb");
   btnScene?.setAttribute("aria-pressed", cleanMode === "scene_wb" ? "true" : "false");
   if (tipScene) tipScene.style.display = cleanMode === "scene_wb" ? "block" : "none";
+
+  btnDust?.classList.toggle("active", cleanMode === "dust");
+  btnDust?.setAttribute("aria-pressed", cleanMode === "dust" ? "true" : "false");
+  if (tipDust) tipDust.style.display = cleanMode === "dust" ? "block" : "none";
 
   wrapper?.classList.toggle("eyedropper-active", negativeState.eyedropperActive);
   if (!negativeState.eyedropperActive) {
@@ -3015,7 +3396,7 @@ function setEyedropperMode(mode) {
     } else {
       prepareLoupeBuffer(document.getElementById("imgOriginal"), "orig");
     }
-  } else if (cleanMode === "scene_wb") {
+  } else if (cleanMode === "scene_wb" || cleanMode === "dust") {
     if (!wasActive) state.prevViewMode = state.viewMode;
     setViewMode("full");
     prepareLoupeBuffer(document.getElementById("imgDeveloped"), "dev");
@@ -3289,6 +3670,25 @@ function initEyedropperViewport() {
     const activeFrame = state.frames[state.activeFrameIndex];
     if (!activeFrame) return;
 
+    if (negativeState.eyedropperMode === "dust") {
+      if (!Array.isArray(negativeState.dustSpots)) negativeState.dustSpots = [];
+      if (negativeState.dustSpots.length >= 150) {
+        showToast("Límite alcanzado", "Máximo 150 puntos de limpieza por fotograma.");
+        setEyedropperMode(null);
+        return;
+      }
+      pushUndoSnapshotForFrame(activeFrame, "negative");
+      negativeState.dustSpots.push({
+        x: Number(xPct.toFixed(5)),
+        y: Number(yPct.toFixed(5)),
+        r: Number(negativeState.dustRadius || 0.008),
+      });
+      updateDustSpotsUI();
+      saveActiveFrameRecipe();
+      await requestPreview(false);
+      return;
+    }
+
     if (negativeState.eyedropperMode === "scene_wb") {
       try {
         const res = await fetch("/api/negative/sample_neutral_wb", {
@@ -3362,6 +3762,18 @@ function initEyedropperViewport() {
 
 const CURVE_CHANNELS = ["rgb", "l", "r", "g", "b"];
 const CURVE_CHANNEL_LABELS = { rgb: "RGB", l: "Luz", r: "R", g: "G", b: "B" };
+
+function getActiveCurve() {
+  return state.appMode === "negative" ? negativeState.curve : state.curve;
+}
+
+function setActiveCurve(nextCurve) {
+  if (state.appMode === "negative") {
+    negativeState.curve = nextCurve;
+  } else {
+    state.curve = nextCurve;
+  }
+}
 
 function emptyCurve() {
   return { rgb: null, l: null, r: null, g: null, b: null };
@@ -3502,7 +3914,8 @@ function drawCurveEditor() {
   ctx.setLineDash([]);
 
   // Curva
-  const pts = curveEffectivePoints(state.curve, channel);
+  const activeCurve = getActiveCurve();
+  const pts = curveEffectivePoints(activeCurve, channel);
   const toPx = (p) => [p[0] * cssW, (1 - p[1]) * cssH];
 
   if (pts.length) {
@@ -3520,7 +3933,7 @@ function drawCurveEditor() {
   }
 
   // Puntos de control
-  const user = curvePoints(state.curve, channel);
+  const user = curvePoints(activeCurve, channel);
   user.forEach((p, i) => {
     const [px, py] = toPx(p);
     ctx.beginPath();
@@ -3612,7 +4025,7 @@ function curvePointFromEvent(ev) {
 }
 
 function curveHitTest(pos) {
-  const pts = curvePoints(state.curve, state.curveChannel);
+  const pts = curvePoints(getActiveCurve(), state.curveChannel);
   const canvas = document.getElementById("curveCanvas");
   if (!canvas || !pts.length) return -1;
   const rect = canvas.getBoundingClientRect();
@@ -3627,8 +4040,12 @@ function curveHitTest(pos) {
 
 function curveAddPoint(pos) {
   const channel = state.curveChannel;
-  if (!state.curve) state.curve = emptyCurve();
-  const pts = curvePoints(state.curve, channel).map((p) => [p[0], p[1]]);
+  let curve = getActiveCurve();
+  if (!curve) {
+    curve = emptyCurve();
+    setActiveCurve(curve);
+  }
+  const pts = curvePoints(curve, channel).map((p) => [p[0], p[1]]);
   // Un punto por posición: si ya hay uno muy cerca, se sustituye.
   const near = pts.findIndex((p) => Math.abs(p[0] - pos[0]) < 0.012);
   if (near >= 0) {
@@ -3637,25 +4054,29 @@ function curveAddPoint(pos) {
     pts.push([pos[0], pos[1]]);
     pts.sort((a, b) => a[0] - b[0]);
   }
-  state.curve[channel] = pts;
+  curve[channel] = pts;
 }
 
 function curveRemovePoint(index) {
   const channel = state.curveChannel;
-  const pts = curvePoints(state.curve, channel).map((p) => [p[0], p[1]]);
+  const curve = getActiveCurve();
+  if (!curve) return;
+  const pts = curvePoints(curve, channel).map((p) => [p[0], p[1]]);
   if (index < 0 || index >= pts.length) return;
   pts.splice(index, 1);
-  state.curve[channel] = pts.length ? pts : null;
-  if (!state.curve[channel]) delete state.curve[channel];
+  curve[channel] = pts.length ? pts : null;
+  if (!curve[channel]) delete curve[channel];
 }
 
 function curveMovePoint(index, pos) {
   const channel = state.curveChannel;
-  const pts = curvePoints(state.curve, channel).map((p) => [p[0], p[1]]);
+  const curve = getActiveCurve();
+  if (!curve) return;
+  const pts = curvePoints(curve, channel).map((p) => [p[0], p[1]]);
   if (index < 0 || index >= pts.length) return;
   pts[index] = [pos[0], pos[1]];
   pts.sort((a, b) => a[0] - b[0]);
-  state.curve[channel] = pts;
+  curve[channel] = pts;
   curveDragIndex = pts.findIndex((p) => p[0] === pts[Math.min(index, pts.length - 1)][0]);
 }
 
@@ -3681,8 +4102,9 @@ function initCurveEditor() {
   document.getElementById("resetCurveBtn")?.addEventListener("click", () => {
     pushUndoSnapshotForFrame();
     const channel = state.curveChannel;
-    if (state.curve) {
-      delete state.curve[channel];
+    const curve = getActiveCurve();
+    if (curve) {
+      delete curve[channel];
     }
     saveActiveFrameRecipe();
     drawCurveEditor();
@@ -3700,7 +4122,7 @@ function initCurveEditor() {
       saveActiveFrameRecipe();
       drawCurveEditor();
       triggerDebouncedPreview("curve");
-      curveDragIndex = curvePoints(state.curve, state.curveChannel).length - 1;
+      curveDragIndex = curvePoints(getActiveCurve(), state.curveChannel).length - 1;
     } else {
       pushUndoSnapshotForFrame();
       curveDragIndex = hit;
@@ -3746,8 +4168,15 @@ function initCurveEditor() {
 }
 
 
-/** Inicializa el panel de máscaras de exposición local (dodge & burn digital). */
-function initLocalExposureMasks() {
+function computeHistBins(imgEl) {
+  if (!imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight) return null;
+  const maxSample = 256;
+  const scale = Math.min(1, maxSample / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+  const sampleW = Math.max(1, Math.round(imgEl.naturalWidth * scale));
+  const sampleH = Math.max(1, Math.round(imgEl.naturalHeight * scale));
+  if (!offscreenHistCanvas) offscreenHistCanvas = document.createElement("canvas");
+  offscreenHistCanvas.width = sampleW;
+  offscreenHistCanvas.height = sampleH;
 
   const sCtx = offscreenHistCanvas.getContext("2d", { willReadFrequently: true });
   sCtx.drawImage(imgEl, 0, 0, sampleW, sampleH);
@@ -3881,6 +4310,7 @@ function renderHistogramFromImage(imgEl) {
 
   ctx.restore();
   renderZebraOverlay();
+  renderBorderGuideOverlay();
 }
 
 function renderZebraOverlay() {
@@ -3991,6 +4421,7 @@ function toggleZebraChannel(channel = "both") {
   }
 
   renderZebraOverlay();
+  renderBorderGuideOverlay();
 }
 
 // =============================================================
@@ -4129,7 +4560,78 @@ function updateContextualExportBar() {
   }
 }
 
+function applyTestStripResult(data) {
+  const imgDev = document.getElementById("imgDeveloped");
+  if (data.strip && imgDev) {
+    devLoupeSourceReady = false;
+    imgDev.onload = () => {
+      prepareLoupeBuffer(imgDev, "dev");
+      renderHistogramFromImage(imgDev);
+    };
+    imgDev.src = data.strip;
+  }
+
+  const statRes = document.getElementById("statResolution");
+  const statTime = document.getElementById("statTime");
+  if (statRes && data.width && data.height) {
+    statRes.textContent = `${data.width}×${data.height}`;
+  }
+  if (statTime && data.render_time != null) {
+    statTime.textContent = `${Math.round(data.render_time * 1000)} ms`;
+  }
+
+  state.testStripSteps = Array.isArray(data.steps) ? data.steps : [];
+  renderTestStripCols(state.testStripSteps);
+}
+
+function renderTestStripCols(steps) {
+  const colsEl = document.getElementById("testStripCols");
+  if (!colsEl) return;
+  colsEl.innerHTML = "";
+  (steps || []).forEach((step) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    const isCenter = Math.abs(Number(step.delta_ev) || 0) < 1e-3;
+    btn.className = `test-strip-col${isCenter ? " is-center" : ""}`;
+    btn.title = `Aplicar exposición ${step.label}`;
+    btn.setAttribute("aria-label", `Aplicar banda ${step.label}`);
+    const badge = document.createElement("span");
+    badge.className = "test-strip-badge";
+    badge.textContent = isCenter ? "Actual" : step.label;
+    btn.appendChild(badge);
+    btn.addEventListener("click", () => selectTestStripStep(step));
+    colsEl.appendChild(btn);
+  });
+}
+
+function selectTestStripStep(step) {
+  if (!step || state.frames.length === 0) return;
+  pushUndoSnapshotForFrame();
+  if (state.appMode === "negative") {
+    const clamped = Math.max(-1.0, Math.min(1.0, Number(step.target_value) || 0));
+    negativeState.brightness = clamped;
+    const fmtS = `${clamped > 0 ? "+" : ""}${clamped.toFixed(2)}`;
+    setSliderSilent("negBrightnessSlider", "negBrightnessVal", clamped, fmtS);
+  } else {
+    const slider = document.getElementById("evSlider");
+    const minEv = slider ? parseFloat(slider.min) : -2.0;
+    const maxEv = slider ? parseFloat(slider.max) : 2.0;
+    const clamped = Math.max(minEv, Math.min(maxEv, Math.round(Number(step.target_value) * 10) / 10));
+    state.ev = clamped;
+    setSliderSilent("evSlider", "evVal", clamped, `${clamped > 0 ? "+" : ""}${clamped.toFixed(1)} EV`);
+  }
+  saveActiveFrameRecipe();
+  saveUserPreferences();
+  const returnMode = state.prevViewMode === "split" ? "split" : "full";
+  setViewMode(returnMode);
+  showToast("Tira f-stop aplicada", `Exposición ajustada (${step.label}).`);
+}
+
 function setViewMode(mode) {
+  const prevMode = state.viewMode;
+  if (mode === "teststrip" && prevMode !== "teststrip" && prevMode !== "sheet") {
+    state.prevViewMode = prevMode;
+  }
   state.viewMode = mode;
 
   const viewBtnMap = {
@@ -4137,6 +4639,7 @@ function setViewMode(mode) {
     full: "viewFullBtn",
     original: "viewOrigBtn",
     sheet: "viewSheetBtn",
+    teststrip: "viewTestStripBtn",
   };
   Object.entries(viewBtnMap).forEach(([k, id]) => {
     const el = document.getElementById(id);
@@ -4147,6 +4650,11 @@ function setViewMode(mode) {
   });
 
   updateContextualExportBar();
+
+  const stripOverlay = document.getElementById("testStripOverlay");
+  if (stripOverlay) {
+    stripOverlay.style.display = mode === "teststrip" && state.frames.length > 0 ? "flex" : "none";
+  }
 
   if (state.frames.length === 0) {
     syncEmptyRollButtons(true);
@@ -4184,10 +4692,10 @@ function setViewMode(mode) {
     if (origLabel) origLabel.style.display = "block";
     if (devLabel) devLabel.style.display = "block";
     applySplitPercent(state.splitPercent);
-  } else if (mode === "full") {
+  } else if (mode === "full" || mode === "teststrip") {
     if (divider) divider.style.display = "none";
     if (origLabel) origLabel.style.display = "none";
-    if (devLabel) devLabel.style.display = "block";
+    if (devLabel) devLabel.style.display = mode === "teststrip" ? "none" : "block";
     if (imgOrig) {
       imgOrig.style.clipPath = "polygon(0 0, 0 0, 0 100%, 0 100%)";
     }
@@ -4206,6 +4714,10 @@ function setViewMode(mode) {
     }
   }
   renderZebraOverlay();
+  renderBorderGuideOverlay();
+  if (mode === "teststrip" || prevMode === "teststrip") {
+    requestPreview(false);
+  }
 }
 
 let sheetDragMoved = 0;
@@ -4612,6 +5124,11 @@ function resetSimulationControls() {
       ["highlightsSlider", "0.0"],
     ],
     () => {
+      const devProcSel = document.getElementById("simDevProcessSelect");
+      if (devProcSel && devProcSel.value !== "standard") {
+        devProcSel.value = "standard";
+        devProcSel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       const dateToggle = document.getElementById("dateToggle");
       if (dateToggle && dateToggle.checked) {
         dateToggle.checked = false;
@@ -4740,6 +5257,10 @@ function initKeyboardShortcuts() {
         setEyedropperMode(null);
         return;
       }
+      if (state.viewMode === "teststrip") {
+        setViewMode(state.prevViewMode === "split" ? "split" : "full");
+        return;
+      }
       document
         .querySelectorAll(".modal-backdrop.active:not(#batchProgressModal)")
         .forEach((m) => setModalOpen(m, false));
@@ -4786,7 +5307,7 @@ function initKeyboardShortcuts() {
     if (inTextInput || activeModal) return;
 
     // NOTE: Tab is deliberately NOT hijacked here. Capturing it made every
-    // slider, the 72-stock catalogue and the toolbar buttons unreachable by
+    // slider, the 80-stock catalogue and the toolbar buttons unreachable by
     // keyboard (WCAG 2.1.1 / 2.4.3). The Zen sidebar toggle now lives on its
     // own button (zenToggleBtn) and on Cmd/Ctrl+Alt+Z.
 
@@ -4843,6 +5364,9 @@ function initKeyboardShortcuts() {
     if (e.key === "1") setViewMode("split");
     else if (e.key === "2") setViewMode("full");
     else if (e.key === "3") setViewMode("sheet");
+    else if ((e.key === "t" || e.key === "T") && state.frames.length > 0) {
+      setViewMode(state.viewMode === "teststrip" ? (state.prevViewMode === "split" ? "split" : "full") : "teststrip");
+    }
     else if (e.key === "0") resetZoom();
     else if (e.key === "+" || e.key === "=") {
       setZoom((state.viewMode === "sheet" ? state.sheetZoom : state.zoom) + 0.25);
@@ -4866,6 +5390,53 @@ function initKeyboardShortcuts() {
       setEyedropperMode(negativeState.eyedropperMode === "base" ? null : "base");
     } else if ((e.key === "w" || e.key === "W") && state.appMode === "negative") {
       setEyedropperMode(negativeState.eyedropperMode === "scene_wb" ? null : "scene_wb");
+    } else if ((e.key === "v" || e.key === "V") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      toggleEssentialView();
+    } else if (
+      (e.key === "ArrowUp" || e.key === "ArrowDown") &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      state.frames.length > 0 &&
+      tag !== "INPUT" &&
+      tag !== "SELECT" &&
+      tag !== "TEXTAREA" &&
+      e.target?.id !== "splitDivider"
+    ) {
+      e.preventDefault();
+      const dir = e.key === "ArrowUp" ? 1 : -1;
+      nudgeExposure(dir * (state.appMode === "negative" ? 0.05 : 0.1));
+    } else if (
+      (e.key === "c" || e.key === "C") &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      state.appMode === "negative" &&
+      negativeState.filmType === "color"
+    ) {
+      e.preventDefault();
+      nudgeCmyChannel(0, e.shiftKey ? -0.05 : 0.05);
+    } else if (
+      (e.key === "g" || e.key === "G") &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      state.appMode === "negative" &&
+      negativeState.filmType === "color"
+    ) {
+      e.preventDefault();
+      nudgeCmyChannel(1, e.shiftKey ? -0.05 : 0.05);
+    } else if (
+      (e.key === "b" || e.key === "B") &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      state.appMode === "negative" &&
+      negativeState.filmType === "color"
+    ) {
+      e.preventDefault();
+      nudgeCmyChannel(2, e.shiftKey ? -0.05 : 0.05);
     } else if (e.key === "l" || e.key === "L") {
       toggleSafelight();
     } else if (e.key === "?") {
@@ -4912,6 +5483,13 @@ function toggleSafelight() {
 // EXPORT, SAVE AS, CONTACT SHEET & RECIPE RESTORATION
 // =============================================================
 
+function buildExportPrintOptions() {
+  return {
+    easel_border: state.easelBorder || "none",
+    dry_down_comp: Number(state.dryDownComp) || 0.0,
+  };
+}
+
 async function saveDirectToDownloads() {
   if (state.frames.length === 0) return;
   if (state.viewMode === "sheet") {
@@ -4935,25 +5513,16 @@ async function saveDirectToDownloads() {
             format: state.outputFormat,
             reveal: true,
             analog_meta: analogMeta,
+            ...buildExportPrintOptions(),
             ...buildNegativePayload(),
           }
         : {
             filename: activeFrame.filename,
-            film: state.selectedFilm,
-            ev: state.ev,
-            halation: state.halation,
-            grain: state.grain,
-            vignette: state.vignette,
-            shadows: state.shadows,
-            mids: state.mids,
-            highlights: state.highlights,
-            curve: curvePayload(state.curve),
-            date: state.date,
-            rotate: state.rotate,
-            flip_h: state.flip_h,
             format: state.outputFormat,
             reveal: true,
             analog_meta: analogMeta,
+            ...buildExportPrintOptions(),
+            ...buildSimulationPayload(),
           };
 
     const res = await fetch(endpoint, {
@@ -5023,24 +5592,15 @@ async function saveAsWithDialog() {
             filename: activeFrame.filename,
             dest_path: chosenPath,
             analog_meta: analogMeta,
+            ...buildExportPrintOptions(),
             ...buildNegativePayload(),
           }
         : {
             filename: activeFrame.filename,
-            film: state.selectedFilm,
-            ev: state.ev,
-            halation: state.halation,
-            grain: state.grain,
-            vignette: state.vignette,
-            shadows: state.shadows,
-            mids: state.mids,
-            highlights: state.highlights,
-            curve: curvePayload(state.curve),
-            date: state.date,
-            rotate: state.rotate,
-            flip_h: state.flip_h,
             dest_path: chosenPath,
             analog_meta: analogMeta,
+            ...buildExportPrintOptions(),
+            ...buildSimulationPayload(),
           };
 
     const res = await fetch(endpoint, {
@@ -5088,25 +5648,20 @@ async function developFullRoll() {
         roll_name: rollName,
         per_frame_recipes: perFrameRecipes,
         analog_meta: analogMeta,
+        ...buildExportPrintOptions(),
         ...buildNegativePayload(),
       }
     : {
         app_mode: "simulation",
         filenames,
-        film: state.selectedFilm,
-        ev: state.ev,
-        halation: state.halation,
-        grain: state.grain,
-        vignette: state.vignette,
-        date: state.date,
-        rotate: state.rotate,
-        flip_h: state.flip_h,
         format: state.outputFormat,
         sheet: true,
         columns: state.sheetColumns,
         roll_name: rollName,
         per_frame_recipes: perFrameRecipes,
         analog_meta: analogMeta,
+        ...buildExportPrintOptions(),
+        ...buildSimulationPayload(),
       };
 
   const progressModal = document.getElementById("batchProgressModal");
@@ -5327,17 +5882,10 @@ async function generateContactSheetPreview() {
         }
       : {
           filenames,
-          film: state.selectedFilm,
-          ev: state.ev,
-          halation: state.halation,
-          grain: state.grain,
-          vignette: state.vignette,
-          date: state.date,
-          rotate: state.rotate,
-          flip_h: state.flip_h,
           roll_name: rollName,
           columns: state.sheetColumns,
           per_frame_recipes: perFrameRecipes,
+          ...buildSimulationPayload(),
         };
 
     const res = await fetch(endpoint, {
@@ -5409,19 +5957,12 @@ async function saveContactSheetOnly(withDialog = false) {
         }
       : {
           filenames,
-          film: state.selectedFilm,
-          ev: state.ev,
-          halation: state.halation,
-          grain: state.grain,
-          vignette: state.vignette,
-          date: state.date,
-          rotate: state.rotate,
-          flip_h: state.flip_h,
           roll_name: rollName,
           columns: state.sheetColumns,
           dest_path: chosenPath,
           reveal: true,
           per_frame_recipes: perFrameRecipes,
+          ...buildSimulationPayload(),
         };
 
     const res = await fetch(endpoint, {
@@ -5579,6 +6120,8 @@ async function restoreRecipeFromMeta(meta) {
   saveActiveFrameRecipe();
   state.lastOriginalKey = "";
   updateActiveRecipeBanner();
+  renderBorderGuideOverlay();
+  drawCurveEditor();
   await requestPreview(true);
   showToast("Receta restaurada", "Todos los parámetros ópticos se han aplicado.");
 }
@@ -5599,6 +6142,7 @@ function initUIListeners() {
   // Primary mode tabs & Zen layout toggle
   document.getElementById("tabDarkroomsMode")?.addEventListener("click", () => switchStudioMode("simulation"));
   document.getElementById("tabNegativeMode")?.addEventListener("click", () => switchStudioMode("negative"));
+  document.getElementById("uiComplexityBtn")?.addEventListener("click", () => toggleEssentialView());
   document.getElementById("zenToggleBtn")?.addEventListener("click", () => toggleZenSidebars());
 
   // Undo / Redo toolbar buttons
@@ -5778,6 +6322,25 @@ function initUIListeners() {
   document.getElementById("viewFullBtn")?.addEventListener("click", () => setViewMode("full"));
   document.getElementById("viewOrigBtn")?.addEventListener("click", () => setViewMode("original"));
   document.getElementById("viewSheetBtn")?.addEventListener("click", () => setViewMode("sheet"));
+  document.getElementById("viewTestStripBtn")?.addEventListener("click", () => {
+    setViewMode(state.viewMode === "teststrip" ? (state.prevViewMode === "split" ? "split" : "full") : "teststrip");
+  });
+  document.getElementById("exitTestStripBtn")?.addEventListener("click", () => {
+    setViewMode(state.prevViewMode === "split" ? "split" : "full");
+  });
+  document.querySelectorAll(".test-strip-step-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const step = parseFloat(btn.dataset.step || "0.5");
+      if (!Number.isFinite(step)) return;
+      state.testStripStepEv = step;
+      document.querySelectorAll(".test-strip-step-btn").forEach((b) => {
+        const active = b === btn;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      if (state.viewMode === "teststrip") requestPreview(false);
+    });
+  });
 
   document.getElementById("rotateLeftBtn")?.addEventListener("click", () => rotateCurrentFrame(-90));
   document.getElementById("rotateRightBtn")?.addEventListener("click", () => rotateCurrentFrame(90));
@@ -5800,6 +6363,13 @@ function initUIListeners() {
 
   // Simulation controls
   document.getElementById("resetSimBtn")?.addEventListener("click", resetSimulationControls);
+  document.getElementById("simDevProcessSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.devProcess = e.target.value || "standard";
+    saveActiveFrameRecipe();
+    saveUserPreferences();
+    requestPreview(false);
+  });
 
   const bindRange = (sliderId, labelId, formatter, onValue) => {
     const el = document.getElementById(sliderId);
@@ -5897,6 +6467,8 @@ function initUIListeners() {
     document.getElementById("btnTypeBW")?.setAttribute("aria-pressed", "false");
     syncNegProcessPanels();
     updateActiveRecipeBanner();
+    renderBorderGuideOverlay();
+    drawCurveEditor();
     if (negativeState.profile === "bw") {
       selectNegativeProfile("frontier", true);
     } else {
@@ -5917,6 +6489,16 @@ function initUIListeners() {
     selectNegativeProfile("bw", true);
   });
 
+  document.getElementById("negSubstrateSelect")?.addEventListener("change", (e) => {
+    const nextSub = e.target.value || "c41_orange";
+    if (nextSub === negativeState.filmSubstrate) return;
+    pushUndoSnapshotForFrame();
+    negativeState.filmSubstrate = nextSub;
+    syncNegProcessPanels();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+
   document.querySelectorAll("#negScanSourceBar .seg-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const nextSrc = btn.dataset.source || "camera_raw";
@@ -5931,6 +6513,51 @@ function initUIListeners() {
 
   bindRange("negPreSatSlider", "negPreSatVal", (v) => `${v.toFixed(2)}x`, (v) => {
     negativeState.preSaturation = v;
+  });
+
+  document.getElementById("btnUploadFlatField")?.addEventListener("click", () => {
+    document.getElementById("negFlatFieldInput")?.click();
+  });
+  document.getElementById("negFlatFieldInput")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    showLoading(true, "Analizando toma de campo plano (mesa LED)…");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/negative/flat_field/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok || !data.flat_field_file) {
+        throw new Error(data.error || "No se pudo calibrar el campo plano");
+      }
+      pushUndoSnapshotForFrame();
+      negativeState.flatFieldFile = data.flat_field_file;
+      negativeState.flatFieldLabel = `${data.name || file.name} (caída esquinas -${data.corner_falloff_pct ?? 0}%)`;
+      syncNegProcessPanels();
+      saveActiveFrameRecipe();
+      await requestPreview(false);
+      showToast(
+        "Campo plano calibrado",
+        `Uniformidad ${data.uniformity_pct ?? 100}% · Compensación activa sobre viñeteo y mesa LED.`
+      );
+    } catch (err) {
+      showToast("Error en campo plano", err.message || "Verifica la imagen en blanco.");
+    } finally {
+      showLoading(false);
+    }
+  });
+  document.getElementById("btnClearFlatField")?.addEventListener("click", () => {
+    if (!negativeState.flatFieldFile) return;
+    pushUndoSnapshotForFrame();
+    negativeState.flatFieldFile = null;
+    negativeState.flatFieldLabel = "";
+    syncNegProcessPanels();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  bindRange("negFlatFieldStrengthSlider", "negFlatFieldStrengthVal", (v) => `${Math.round(v)}%`, (v) => {
+    negativeState.flatFieldStrength = v / 100;
   });
 
   document.querySelectorAll("#negLightSourceBar .seg-btn").forEach((btn) => {
@@ -5993,12 +6620,30 @@ function initUIListeners() {
     negativeState.bwToner = e.target.value || "neutral";
     syncNegProcessPanels();
     updateActiveRecipeBanner();
+    renderBorderGuideOverlay();
+    drawCurveEditor();
     saveActiveFrameRecipe();
     requestPreview(false);
   });
 
   bindRange("negBwTonerStrengthSlider", "negBwTonerStrengthVal", (v) => `${Math.round(v)}%`, (v) => {
     negativeState.bwTonerStrength = v / 100;
+  });
+  bindRange("negBwGrade00Slider", "negBwGrade00Val", fmtSigned, (v) => {
+    negativeState.bwGrade00 = v;
+  });
+  bindRange("negBwGrade5Slider", "negBwGrade5Val", fmtSigned, (v) => {
+    negativeState.bwGrade5 = v;
+  });
+  bindRange("negBwPreflashSlider", "negBwPreflashVal", (v) => `${Math.round(v)}%`, (v) => {
+    negativeState.bwPreflash = v / 100;
+  });
+  document.getElementById("resetBwSplitBtn")?.addEventListener("click", () => {
+    resetSlidersWithUndo([
+      ["negBwGrade00Slider", "0.00"],
+      ["negBwGrade5Slider", "0.00"],
+      ["negBwPreflashSlider", "0"],
+    ]);
   });
 
   document.getElementById("btnAutoBase")?.addEventListener("click", () => autoDetectBaseColor(true));
@@ -6013,9 +6658,22 @@ function initUIListeners() {
 
   bindRange("negBufferSlider", "negBufferVal", (v) => `${Math.round(v)}%`, (v) => {
     negativeState.borderBuffer = v / 100;
+    flashBorderGuideOverlay();
   });
   bindRange("negCropSlider", "negCropVal", (v) => `${v.toFixed(1).replace(/\.0$/, "")}%`, (v) => {
     negativeState.cropPct = v / 100;
+    flashBorderGuideOverlay();
+  });
+  document.getElementById("negKeepSprocketsToggle")?.addEventListener("change", (e) => {
+    if (!suppressAutoSliderUndo) pushUndoSnapshotForFrame();
+    negativeState.keepSprockets = Boolean(e.target.checked);
+    syncNegProcessPanels();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("negShowBorderGuideToggle")?.addEventListener("change", (e) => {
+    negativeState.showBorderGuide = Boolean(e.target.checked);
+    renderBorderGuideOverlay();
   });
 
   document.querySelectorAll("#negProfileList .profile-card").forEach((card) => {
@@ -6154,6 +6812,29 @@ function initUIListeners() {
     negativeState.fade = v;
   });
 
+  document.getElementById("btnDustHealTool")?.addEventListener("click", () => {
+    setEyedropperMode(negativeState.eyedropperMode === "dust" ? null : "dust");
+  });
+  document.getElementById("btnDustUndo")?.addEventListener("click", undoLastDustSpot);
+  document.getElementById("btnDustClear")?.addEventListener("click", clearAllDustSpots);
+  document.getElementById("negDustRadiusSlider")?.addEventListener("input", (e) => {
+    const val = Math.max(0.4, Math.min(2.4, parseFloat(e.target.value) || 0.8));
+    negativeState.dustRadius = val / 100;
+    const lbl = document.getElementById("negDustRadiusVal");
+    if (lbl) lbl.textContent = `${val.toFixed(1)}%`;
+  });
+  updateDustSpotsUI();
+
+  // P9: Easel Border & Paper Dry-Down export controls
+  document.getElementById("easelBorderSelect")?.addEventListener("change", (e) => {
+    state.easelBorder = e.target.value || "none";
+    saveUserPreferences();
+  });
+  document.getElementById("dryDownSelect")?.addEventListener("change", (e) => {
+    state.dryDownComp = parseFloat(e.target.value) || 0.0;
+    saveUserPreferences();
+  });
+
   // Output master format selector
   document.querySelectorAll("#outputFormatPills .fmt-pill").forEach((pill) => {
     pill.addEventListener("click", () => {
@@ -6190,11 +6871,12 @@ function initUIListeners() {
     setModalOpen("aboutModal", false);
   });
   document.getElementById("btnCopyAboutInfo")?.addEventListener("click", async () => {
+    const verBadge = document.querySelector(".about-version-badge")?.textContent?.trim() || "Versión 2.8.0";
     const text =
-      "Haluro — Laboratorio Analógico Digital (v2.5.0)\n" +
+      `Haluro — Laboratorio Analógico Digital (${verBadge})\n` +
       "Desarrollador: Fotógrafo César Fernández Ardiles (Oregano, Chile)\n" +
       "Licencia: MIT (Software libre y gratuito)\n" +
-      "Emulación: 72 películas químicas + Inversión óptica C-41 / B&N\n" +
+      "Emulación: 80 películas químicas + Inversión óptica C-41 / B&N\n" +
       "100% No destructivo · 100% Local y privado\n" +
       "Exportación: TIFF 16-bit real (48-bit RGB) + EXIF analógico";
     // navigator.clipboard requires a secure context: it rejects on plain
@@ -6296,6 +6978,8 @@ function selectNegativeProfile(profileKey, skipUndo = false) {
   syncNegProcessPanels();
   saveActiveFrameRecipe();
   updateActiveRecipeBanner();
+  renderBorderGuideOverlay();
+  drawCurveEditor();
   requestPreview(false);
 }
 

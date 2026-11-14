@@ -20,6 +20,7 @@ Implements:
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +30,7 @@ from PIL import Image
 from .pipeline import (
     apply_geometry,
     apply_optical_sharpen,
+    apply_user_curves,
     linear_to_srgb,
     load_image_linear,
     shift_hues,
@@ -86,6 +88,85 @@ SCAN_SOURCES: dict[str, dict[str, float | str]] = {
         "pre_sat_bias": 1.15,
     },
 }
+
+# Film substrate presets for standard orange-mask C-41 vs clear-base / atypical emulsions
+FILM_SUBSTRATES: dict[str, dict[str, float | str | bool]] = {
+    "c41_orange": {
+        "name": "C-41 máscara naranja (Estándar)",
+        "description": "Emulsiones C-41 tradicionales (Portra, Gold, UltraMax, ColorPlus, Superia, ECN-2 con máscara).",
+        "base_percentile": 98.5,
+        "white_clip_limit": 0.94,
+        "channel_coupling": 0.0,
+        "contrast_scale": 1.00,
+        "pre_sat_bias": 1.00,
+        "crossover_fix": False,
+        "preserve_creative_cast": False,
+    },
+    "clear_base": {
+        "name": "Base transparente (Aerocolor / SantaColor / Cine)",
+        "description": (
+            "Soporte claro sin máscara naranja intensa; acopla canales para evitar recortes en altas luces."
+        ),
+        "base_percentile": 98.5,
+        "white_clip_limit": 0.97,
+        "channel_coupling": 0.35,
+        "contrast_scale": 0.96,
+        "pre_sat_bias": 1.08,
+        "crossover_fix": False,
+        "preserve_creative_cast": False,
+    },
+    "phoenix": {
+        "name": "Harman Phoenix I / II (Sin máscara + cruce cromático)",
+        "description": (
+            "Base clara azulada y curva muy contrastada; atenúa el cruce magenta en sombras y suaviza luces."
+        ),
+        "base_percentile": 98.5,
+        "white_clip_limit": 0.97,
+        "channel_coupling": 0.48,
+        "contrast_scale": 0.86,
+        "pre_sat_bias": 0.94,
+        "crossover_fix": True,
+        "preserve_creative_cast": False,
+    },
+    "warm_base": {
+        "name": "Base marfil / ámbar (Lomo '92 / Redscale)",
+        "description": (
+            "Soporte cálido o exposición invertida; protege la paleta dorada y rojiza frente a neutralización."
+        ),
+        "base_percentile": 98.5,
+        "white_clip_limit": 0.95,
+        "channel_coupling": 0.30,
+        "contrast_scale": 0.98,
+        "pre_sat_bias": 1.00,
+        "crossover_fix": False,
+        "preserve_creative_cast": True,
+    },
+    "creative_switch": {
+        "name": "Couplers experimentales (Azure / Lomo Purple / Metropolis)",
+        "description": (
+            "Emulsiones con capas intercambiadas; preserva los desplazamientos de color sin forzar gris neutro."
+        ),
+        "base_percentile": 98.5,
+        "white_clip_limit": 0.96,
+        "channel_coupling": 0.65,
+        "contrast_scale": 0.95,
+        "pre_sat_bias": 1.04,
+        "crossover_fix": False,
+        "preserve_creative_cast": True,
+    },
+}
+
+
+def list_film_substrates() -> list[dict[str, str]]:
+    """Return selectable film substrate profiles for the UI."""
+    return [
+        {
+            "key": k,
+            "name": str(v["name"]),
+            "description": str(v["description"]),
+        }
+        for k, v in FILM_SUBSTRATES.items()
+    ]
 
 COLOR_METHODS: set[str] = {"dynamic", "shadow_weighted", "roll_locked"}
 SHARPEN_MODES: set[str] = {"off", "lab", "scanner"}
@@ -483,16 +564,133 @@ def list_bw_toners() -> list[dict[str, str]]:
     ]
 
 
-def auto_detect_film_base(lin_img, buffer_pct: float = 0.02) -> list[float]:
-    """Auto-detect the unexposed film base mask (D-min) in linear RGB [0..1]."""
+def compute_flat_field_gain_map(
+    flat_lin: np.ndarray,
+    grid_size: int = 64,
+) -> tuple[np.ndarray, dict[str, float]]:
+    """Compute a smooth low-frequency inverse gain grid from a blank backlight reference image."""
+    arr = np.asarray(flat_lin, dtype=np.float32)
+    h, w = arr.shape[:2]
+    sigma_y = max(2.0, h * 0.025)
+    sigma_x = max(2.0, w * 0.025)
+    smooth = scipy.ndimage.gaussian_filter(arr, sigma=(sigma_y, sigma_x, 0.0)).astype(np.float32)
+
+    gs = int(np.clip(grid_size, 16, 128))
+    ys = np.linspace(0, max(0, h - 1), gs).round().astype(int)
+    xs = np.linspace(0, max(0, w - 1), gs).round().astype(int)
+    grid = smooth[np.ix_(ys, xs)]
+
+    c0 = max(0, int(gs * 0.35))
+    c1 = min(gs, max(c0 + 1, int(gs * 0.65)))
+    center_rgb = np.median(grid[c0:c1, c0:c1], axis=(0, 1))
+    center_rgb = np.maximum(center_rgb, 0.02)
+
+    gain_grid = np.clip(center_rgb / np.maximum(grid, 0.02), 0.65, 2.25).astype(np.float32)
+
+    grid_luma = np.sum(grid * LUMA, axis=-1)
+    center_luma = float(np.sum(center_rgb * LUMA))
+    corners = [grid_luma[0, 0], grid_luma[0, -1], grid_luma[-1, 0], grid_luma[-1, -1]]
+    corner_luma = float(np.mean(corners))
+    falloff_pct = max(0.0, (1.0 - corner_luma / max(center_luma, 1e-5)) * 100.0)
+    uniformity_pct = min(
+        100.0,
+        max(0.0, 100.0 - (float(np.std(grid_luma)) / max(center_luma, 1e-5)) * 100.0),
+    )
+
+    metrics = {
+        "corner_falloff_pct": round(falloff_pct, 1),
+        "uniformity_pct": round(uniformity_pct, 1),
+    }
+    return gain_grid, metrics
+
+
+def _upsample_gain_grid(gain_grid: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
+    """Bilinearly upsample a (gh, gw, 3) float32 gain grid to (out_h, out_w, 3)."""
+    gh, gw = gain_grid.shape[:2]
+    y_coords = np.linspace(0.0, max(0.0, gh - 1.0), out_h, dtype=np.float32)
+    x_coords = np.linspace(0.0, max(0.0, gw - 1.0), out_w, dtype=np.float32)
+    y0 = np.floor(y_coords).astype(int)
+    x0 = np.floor(x_coords).astype(int)
+    y1 = np.minimum(y0 + 1, gh - 1)
+    x1 = np.minimum(x0 + 1, gw - 1)
+    wy = (y_coords - y0)[:, None, None]
+    wx = (x_coords - x0)[None, :, None]
+
+    top = gain_grid[y0][:, x0] * (1.0 - wx) + gain_grid[y0][:, x1] * wx
+    bot = gain_grid[y1][:, x0] * (1.0 - wx) + gain_grid[y1][:, x1] * wx
+    return (top * (1.0 - wy) + bot * wy).astype(np.float32)
+
+
+def apply_flat_field_correction(
+    lin_img: np.ndarray,
+    flat_field_gain: np.ndarray | None,
+    strength: float = 1.0,
+) -> np.ndarray:
+    """Apply linear optical flat-field calibration to remove LED/lens vignetting and color shading."""
+    if flat_field_gain is None or float(strength) <= 0.01:
+        return lin_img
     arr = np.asarray(lin_img, dtype=np.float32)
+    h, w = arr.shape[:2]
+    gain_full = _upsample_gain_grid(np.asarray(flat_field_gain, dtype=np.float32), h, w)
+    amt = float(np.clip(strength, 0.0, 1.5))
+    eff_gain = 1.0 + (gain_full - 1.0) * amt
+    return np.clip(arr * eff_gain, 0.0, 1.5).astype(np.float32)
+
+
+@lru_cache(maxsize=8)
+def _load_cached_flat_field_gain(
+    fpath_str: str,
+    mtime_ns: int,
+    rotate: int,
+    flip_h: bool,
+) -> np.ndarray:
+    del mtime_ns
+    flat_lin = load_image_linear(fpath_str, max_dim=512, rotate=rotate, flip_h=flip_h)
+    gain_grid, _metrics = compute_flat_field_gain_map(flat_lin, grid_size=64)
+    return gain_grid
+
+
+def resolve_flat_field_gain(
+    flat_field_gain=None,
+    flat_field_path=None,
+    rotate: int = 0,
+    flip_h: bool = False,
+):
+    if flat_field_gain is not None:
+        return flat_field_gain
+    if flat_field_path:
+        p = Path(flat_field_path)
+        if p.is_file():
+            return _load_cached_flat_field_gain(
+                str(p), p.stat().st_mtime_ns, int(rotate), bool(flip_h)
+            )
+    return None
+
+
+def auto_detect_film_base(
+    lin_img,
+    buffer_pct: float = 0.02,
+    film_substrate: str = "c41_orange",
+    flat_field_gain=None,
+    flat_field_strength: float = 1.0,
+) -> list[float]:
+    """Auto-detect the unexposed film base mask (D-min) in linear RGB [0..1]."""
+    sub_cfg = FILM_SUBSTRATES.get(film_substrate, FILM_SUBSTRATES["c41_orange"])
+    base_pct = float(sub_cfg["base_percentile"])
+    white_lim = float(sub_cfg["white_clip_limit"])
+
+    arr = apply_flat_field_correction(
+        np.asarray(lin_img, dtype=np.float32),
+        flat_field_gain,
+        strength=flat_field_strength,
+    )
     h, w = arr.shape[:2]
     by = max(1, int(h * buffer_pct))
     bx = max(1, int(w * buffer_pct))
 
     region = arr[by : h - by, bx : w - bx] if (h > 2 * by + 8 and w > 2 * bx + 8) else arr
 
-    not_clipped_white = np.min(region, axis=-1) < 0.94
+    not_clipped_white = np.min(region, axis=-1) < white_lim
     not_holder_black = np.max(region, axis=-1) > 0.012
     valid_mask = not_clipped_white & not_holder_black
     valid = region[valid_mask] if np.any(valid_mask) else region.reshape(-1, 3)
@@ -504,12 +702,12 @@ def auto_detect_film_base(lin_img, buffer_pct: float = 0.02) -> list[float]:
     mean_trans = (r + g + b) * (1.0 / 3.0)
     transmittance_score = 0.55 * geom_trans + 0.45 * mean_trans
 
-    threshold = np.percentile(transmittance_score, 98.5)
+    threshold = np.percentile(transmittance_score, base_pct)
     top_pixels = valid[transmittance_score >= threshold]
     if len(top_pixels) > 0:
         base_color = np.median(top_pixels, axis=0)
     else:
-        base_color = np.percentile(valid, 98.5, axis=0)
+        base_color = np.percentile(valid, base_pct, axis=0)
 
     return np.clip(base_color, 0.015, 1.0).tolist()
 
@@ -559,22 +757,33 @@ def analyze_roll_calibration(
     scan_source: str = "camera_raw",
     pre_saturation: float = 1.0,
     border_buffer: float = 0.06,
+    film_substrate: str = "c41_orange",
+    keep_sprockets: bool = False,
+    flat_field_gain=None,
+    flat_field_strength: float = 1.0,
 ) -> dict:
     """Compute unified roll-wide D-min base color and optical density envelope across multiple frames."""
     if not linear_frames:
         raise ValueError("No se proporcionaron fotogramas para analizar el rollo.")
 
     is_bw = film_type == "bw"
-    per_frame_bases = [auto_detect_film_base(f) for f in linear_frames]
+    corrected_frames = [
+        apply_flat_field_correction(f, flat_field_gain, strength=flat_field_strength)
+        for f in linear_frames
+    ]
+    per_frame_bases = [
+        auto_detect_film_base(f, film_substrate=film_substrate) for f in corrected_frames
+    ]
     # Use the highest-transmittance (75th percentile across roll) D-min so dark night frames don't skew base
     bases_arr = np.array(per_frame_bases, dtype=np.float32)
     unified_base = np.percentile(bases_arr, 75.0, axis=0).tolist()
 
     sampled_densities: list[np.ndarray] = []
-    buf_p = float(np.clip(border_buffer, 0.0, 0.30))
+    eff_buf = max(float(border_buffer), 0.12) if keep_sprockets else float(border_buffer)
+    buf_p = float(np.clip(eff_buf, 0.0, 0.30))
     rng = np.random.default_rng(1972)
 
-    for frame in linear_frames:
+    for frame in corrected_frames:
         d = _raw_optical_density(
             frame,
             base_color=unified_base,
@@ -692,13 +901,22 @@ def _compute_normalized_log_exposure(
     roll_bounds: dict | None = None,
     border_buffer: float = 0.06,
     crop_pct: float = 0.0,
+    film_substrate: str = "c41_orange",
+    keep_sprockets: bool = False,
+    flat_field_gain=None,
+    flat_field_strength: float = 1.0,
 ) -> np.ndarray:
     """Convert negative linear RGB into cropped normalized H&D log-exposure `u` in [0..1]."""
-    arr = np.asarray(lin_img, dtype=np.float32)
+    arr = apply_flat_field_correction(
+        np.asarray(lin_img, dtype=np.float32),
+        flat_field_gain,
+        strength=flat_field_strength,
+    )
     h, w = arr.shape[:2]
+    sub_cfg = FILM_SUBSTRATES.get(film_substrate, FILM_SUBSTRATES["c41_orange"])
 
     if base_color is None:
-        base_color = auto_detect_film_base(arr)
+        base_color = auto_detect_film_base(arr, film_substrate=film_substrate)
 
     is_bw = film_type == "bw" or profile_key == "bw"
     density = _raw_optical_density(
@@ -710,7 +928,8 @@ def _compute_normalized_log_exposure(
         pre_saturation=pre_saturation,
     )
 
-    buf_p = float(np.clip(border_buffer, 0.0, 0.30))
+    eff_buf = max(float(border_buffer), 0.12) if keep_sprockets else float(border_buffer)
+    buf_p = float(np.clip(eff_buf, 0.0, 0.30))
     by = int(h * buf_p)
     bx = int(w * buf_p)
     if h - 2 * by > 16 and w - 2 * bx > 16:
@@ -719,6 +938,7 @@ def _compute_normalized_log_exposure(
         analysis_region = density
 
     # Densitometric White/Black Point Method
+    coupling = 0.0 if is_bw else float(sub_cfg.get("channel_coupling", 0.0))
     if (
         color_method == "roll_locked"
         and isinstance(roll_bounds, dict)
@@ -735,23 +955,50 @@ def _compute_normalized_log_exposure(
         d_max_raw = np.percentile(analysis_region, 99.4, axis=(0, 1))
         raw_span = np.maximum(d_max_raw - d_min, 0.08)
         median_span = float(np.median(raw_span))
-        d_range = raw_span * 0.38 + median_span * 0.62
+        w_couple = max(0.62, coupling)
+        d_range = raw_span * (1.0 - w_couple) + median_span * w_couple
     else:
-        d_min = np.percentile(analysis_region, 0.8, axis=(0, 1))
-        d_max = np.percentile(analysis_region, 99.4, axis=(0, 1))
-        d_range = np.maximum(d_max - d_min, 0.08)
+        d_min_raw = np.percentile(analysis_region, 0.8, axis=(0, 1))
+        d_max_raw = np.percentile(analysis_region, 99.4, axis=(0, 1))
+        raw_span = np.maximum(d_max_raw - d_min_raw, 0.08)
+        if coupling > 0.01:
+            # Couple channel bounds for clear/creative substrates so atypical bases or
+            # swapped couplers are not aggressively erased by independent channel normalization.
+            med_min = float(np.median(d_min_raw))
+            d_min = d_min_raw * (1.0 - coupling * 0.45) + med_min * (coupling * 0.45)
+            median_span = float(np.median(raw_span))
+            d_range = raw_span * (1.0 - coupling) + median_span * coupling
+        else:
+            d_min = d_min_raw
+            d_range = raw_span
 
     u = np.clip((density - d_min) / d_range, 0.0, 1.0)
+
+    # Crossover compensation for non-masked films like Harman Phoenix I/II (magenta shadows / warm highlight step)
+    if not is_bw and bool(sub_cfg.get("crossover_fix", False)):
+        u_lum_x = np.sum(u * LUMA, axis=-1)
+        sh_x = np.clip((0.40 - u_lum_x) / 0.40, 0.0, 1.0) ** 1.4
+        hi_x = np.clip((u_lum_x - 0.62) / 0.38, 0.0, 1.0) ** 1.3
+        u[..., 1] += sh_x * 0.032
+        u[..., 2] -= sh_x * 0.018
+        u[..., 0] -= hi_x * 0.025
+        u[..., 2] += hi_x * 0.018
+        u = np.clip(u, 0.0, 1.0)
 
     # Optical Pre-Saturation in normalized H&D log-exposure space (preserves neutral gray axis
     # and cannot be cancelled out by per-channel dynamic endpoint normalization)
     src_cfg = SCAN_SOURCES.get(scan_source, SCAN_SOURCES["camera_raw"])
-    total_pre_sat = float(np.clip(pre_saturation, 0.4, 1.8)) * float(src_cfg["pre_sat_bias"])
+    sub_pre_sat = 1.0 if is_bw else float(sub_cfg.get("pre_sat_bias", 1.0))
+    total_pre_sat = (
+        float(np.clip(pre_saturation, 0.4, 1.8))
+        * float(src_cfg["pre_sat_bias"])
+        * sub_pre_sat
+    )
     if not is_bw and abs(total_pre_sat - 1.0) > 0.008:
         u_mean = np.sum(u * LUMA, axis=-1, keepdims=True)
         u = np.clip(u_mean + (u - u_mean) * total_pre_sat, 0.0, 1.0)
 
-    c_p = float(np.clip(crop_pct, 0.0, 0.20))
+    c_p = 0.0 if keep_sprockets else float(np.clip(crop_pct, 0.0, 0.20))
     if c_p > 0.002:
         cy = int(h * c_p)
         cx = int(w * c_p)
@@ -789,6 +1036,10 @@ def compute_neutral_wb_from_point(
     crop_pct: float = 0.0,
     temp: float = 0.0,
     tint: float = 0.0,
+    film_substrate: str = "c41_orange",
+    keep_sprockets: bool = False,
+    flat_field_gain=None,
+    flat_field_strength: float = 1.0,
 ) -> list[float]:
     """Solve closed-form CMY printer lights to neutralize a sampled gray/shadow point in positive space."""
     if film_type == "bw" or profile_key == "bw":
@@ -806,6 +1057,10 @@ def compute_neutral_wb_from_point(
         roll_bounds=roll_bounds,
         border_buffer=border_buffer,
         crop_pct=crop_pct,
+        film_substrate=film_substrate,
+        keep_sprockets=keep_sprockets,
+        flat_field_gain=flat_field_gain,
+        flat_field_strength=flat_field_strength,
     )
     uh, uw = u.shape[:2]
     px = int(np.clip(round(float(x_pct) * (uw - 1)), 0, uw - 1))
@@ -842,11 +1097,16 @@ def auto_balance_scene_wb(
     roll_bounds: dict | None = None,
     border_buffer: float = 0.06,
     crop_pct: float = 0.0,
+    film_substrate: str = "c41_orange",
+    keep_sprockets: bool = False,
+    flat_field_gain=None,
+    flat_field_strength: float = 1.0,
 ) -> list[float]:
     """Automatically estimate CMY printer lights for borderless scans using midtone Gray-World."""
     if film_type == "bw" or profile_key == "bw":
         return [0.0, 0.0, 0.0]
 
+    sub_cfg = FILM_SUBSTRATES.get(film_substrate, FILM_SUBSTRATES["c41_orange"])
     u, _log_span = _compute_normalized_log_exposure(
         lin_img,
         base_color=base_color,
@@ -859,9 +1119,15 @@ def auto_balance_scene_wb(
         roll_bounds=roll_bounds,
         border_buffer=border_buffer,
         crop_pct=crop_pct,
+        film_substrate=film_substrate,
+        keep_sprockets=keep_sprockets,
+        flat_field_gain=flat_field_gain,
+        flat_field_strength=flat_field_strength,
     )
     uh, uw = u.shape[:2]
-    my, mx = int(uh * 0.08), int(uw * 0.08)
+    wb_inset = max(0.14, float(border_buffer)) if keep_sprockets else max(0.08, float(border_buffer))
+    wb_inset = float(np.clip(wb_inset, 0.08, 0.30))
+    my, mx = int(uh * wb_inset), int(uw * wb_inset)
     core = u[my : uh - my, mx : uw - mx] if (uh > 2 * my + 8 and uw > 2 * mx + 8) else u
 
     u_luma = np.sum(core * LUMA, axis=-1)
@@ -870,7 +1136,9 @@ def auto_balance_scene_wb(
 
     ch_means = np.clip(np.mean(sample_pixels, axis=0), 0.08, 0.92)
     target = float(np.mean(ch_means))
-    blended = ch_means + (target - ch_means) * 0.65
+    # Preserve intentional color shifts on swapped-coupler / warm creative stocks
+    wb_strength = 0.22 if bool(sub_cfg.get("preserve_creative_cast", False)) else 0.65
+    blended = ch_means + (target - ch_means) * wb_strength
 
     profile = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
     b_cr, b_mg, b_yb = profile.get("cmy_bias", (0.0, 0.0, 0.0))
@@ -1012,6 +1280,122 @@ def _apply_bw_darkroom_toning(
     return srgb_to_linear(np.clip(rgb_s, 0.0, 1.0))
 
 
+def _apply_bw_split_grade_and_preflash(
+    y_lin: np.ndarray,
+    grade00: float = 0.0,
+    grade5: float = 0.0,
+    preflash: float = 0.0,
+) -> np.ndarray:
+    """Apply darkroom Split-Grade filtering (Grade 00 highlights + Grade 5 blacks) and paper pre-flashing."""
+    g00 = float(np.clip(grade00, -1.0, 1.0))
+    g5 = float(np.clip(grade5, -1.0, 1.0))
+    pf = float(np.clip(preflash, 0.0, 1.0))
+    if abs(g00) < 0.005 and abs(g5) < 0.005 and pf < 0.005:
+        return y_lin
+
+    # Work in perceptual gamma (~sRGB) so darkroom paper zones feel smooth and musical
+    y_s = linear_to_srgb(np.clip(y_lin, 0.0, 1.0))
+
+    # 1. Digital Pre-Flashing: overcomes paper threshold inertia so chalky highlights gain silver texture
+    if pf >= 0.005:
+        hi_pf = np.clip((y_s - 0.52) / 0.48, 0.0, 1.0) ** 1.25
+        y_s = np.clip(y_s - pf * 0.095 * hi_pf - pf * 0.014 * np.clip(y_s, 0.0, 1.0), 0.0, 1.0)
+
+    # 2. Grade 00 (Soft yellow exposure): controls highlight shoulder & airy mid-high separation
+    if abs(g00) >= 0.005:
+        w_hi = np.clip((y_s - 0.30) / 0.70, 0.0, 1.0) ** 1.25
+        if g00 > 0.0:
+            y_s = np.clip(y_s - g00 * 0.16 * w_hi, 0.0, 1.0)
+        else:
+            y_s = np.clip(y_s + (-g00) * 0.14 * w_hi * (1.0 - y_s * 0.20), 0.0, 1.0)
+
+    # 3. Grade 5 (Hard magenta exposure): anchors deep silver blacks and lower-mid bite
+    if abs(g5) >= 0.005:
+        w_sh = np.clip((0.55 - y_s) / 0.55, 0.0, 1.0) ** 1.35
+        if g5 > 0.0:
+            y_s = np.clip(y_s - g5 * 0.15 * w_sh, 0.0, 1.0)
+            # Subtle hard-grade toe crunch between zone II and zone IV
+            toe_bite = np.clip((0.46 - y_s) / 0.46, 0.0, 1.0) * np.clip(y_s / 0.18, 0.0, 1.0)
+            y_s = np.clip(y_s - g5 * 0.055 * toe_bite, 0.0, 1.0)
+        else:
+            y_s = np.clip(y_s + (-g5) * 0.15 * w_sh, 0.0, 1.0)
+
+    return srgb_to_linear(np.clip(y_s, 0.0, 1.0))
+
+
+def apply_dust_spot_healing(pos: np.ndarray, dust_spots=None) -> np.ndarray:
+    """Gentle annular surround healing for pinpoint dust/hairs without IR channels (ideal for B&W)."""
+    if not dust_spots:
+        return pos
+    out = np.asarray(pos, dtype=np.float32).copy()
+    h, w = out.shape[:2]
+    max_dim = max(h, w)
+    if max_dim < 8:
+        return out
+
+    for spot in dust_spots:
+        if isinstance(spot, dict):
+            nx = float(spot.get("x", -1.0))
+            ny = float(spot.get("y", -1.0))
+            nr = float(spot.get("r", 0.008))
+        elif isinstance(spot, (list, tuple)) and len(spot) >= 2:
+            nx = float(spot[0])
+            ny = float(spot[1])
+            nr = float(spot[2]) if len(spot) >= 3 else 0.008
+        else:
+            continue
+
+        if not (0.0 <= nx <= 1.0 and 0.0 <= ny <= 1.0):
+            continue
+        rad = max(2, min(int(round(max(0.002, min(0.045, nr)) * max_dim)), max_dim // 6))
+        cx = int(round(nx * (w - 1)))
+        cy = int(round(ny * (h - 1)))
+        patch_r = rad * 2 + 4
+
+        y0, y1 = max(0, cy - patch_r), min(h, cy + patch_r + 1)
+        x0, x1 = max(0, cx - patch_r), min(w, cx + patch_r + 1)
+        patch = out[y0:y1, x0:x1]
+        if patch.size == 0:
+            continue
+
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2, dtype=np.float32)
+        ring_mask = (dist >= rad * 1.15) & (dist <= rad * 2.25)
+        inner_mask = dist <= rad
+        if not np.any(ring_mask) or not np.any(inner_mask):
+            continue
+
+        # Local plane + median surround color preserves smooth sky gradients while removing specks
+        ring_vals = patch[ring_mask]
+        ring_med = np.median(ring_vals, axis=0)
+        ry, rx = np.nonzero(ring_mask)
+        design = np.column_stack(
+            [
+                np.ones_like(rx, dtype=np.float32),
+                (rx - (cx - x0)).astype(np.float32),
+                (ry - (cy - y0)).astype(np.float32),
+            ]
+        )
+        try:
+            coeffs, _, _, _ = np.linalg.lstsq(design, ring_vals, rcond=None)
+            gy, gx = np.meshgrid(
+                np.arange(y0, y1, dtype=np.float32) - cy,
+                np.arange(x0, x1, dtype=np.float32) - cx,
+                indexing="ij",
+            )
+            fill = coeffs[0] + gy[..., None] * coeffs[1] + gx[..., None] * coeffs[2]
+            fill = 0.65 * fill + 0.35 * ring_med
+        except np.linalg.LinAlgError:
+            fill = np.broadcast_to(ring_med, patch.shape)
+
+        fill = np.clip(fill, 0.0, 1.0)
+        alpha = np.where(inner_mask, 0.5 * (1.0 + np.cos(np.pi * np.clip(dist / max(rad, 1e-4), 0.0, 1.0))), 0.0)
+        alpha = alpha[..., None].astype(np.float32)
+        out[y0:y1, x0:x1] = patch * (1.0 - alpha) + fill * alpha
+
+    return np.clip(out, 0.0, 1.0)
+
+
 def invert_negative(
     lin_img,
     base_color=None,
@@ -1027,6 +1411,9 @@ def invert_negative(
     finish_amount=1.0,
     bw_toner="neutral",
     bw_toner_strength=1.0,
+    bw_grade00=0.0,
+    bw_grade5=0.0,
+    bw_preflash=0.0,
     brightness=0.0,
     midtone_nd=0.0,
     contrast=0.0,
@@ -1058,9 +1445,20 @@ def invert_negative(
     shadows_tint=(0.0, 0.0, 0.0),
     shadows_range=0.5,
     highs_range=0.5,
+    film_substrate="c41_orange",
+    keep_sprockets=False,
+    curve=None,
+    flat_field_gain=None,
+    flat_field_path=None,
+    flat_field_file=None,
+    flat_field_strength=1.0,
+    dust_spots=None,
 ):
     """Sensitometric H&D inversion of a digitized negative into scene-linear positive RGB [0..1]."""
+    del flat_field_file
+    resolved_ff_gain = resolve_flat_field_gain(flat_field_gain, flat_field_path)
     profile = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
+    sub_cfg = FILM_SUBSTRATES.get(film_substrate, FILM_SUBSTRATES["c41_orange"])
     is_bw = film_type == "bw" or profile_key == "bw"
 
     # 1 & 2. Base subtraction, source pre-conditioning, backlight decoupling, D-min/D-max & border crop
@@ -1076,6 +1474,10 @@ def invert_negative(
         roll_bounds=roll_bounds,
         border_buffer=border_buffer,
         crop_pct=crop_pct,
+        film_substrate=film_substrate,
+        keep_sprockets=bool(keep_sprockets),
+        flat_field_gain=resolved_ff_gain,
+        flat_field_strength=float(flat_field_strength),
     )
     h, w = u.shape[:2]
 
@@ -1129,9 +1531,14 @@ def invert_negative(
     pp = float(np.clip(push_pull, -1.0, 1.0))
     pp_contrast_mult = 1.0 + pp * 0.24
 
+    sub_contrast_scale = 1.0 if is_bw else float(sub_cfg.get("contrast_scale", 1.0))
     total_contrast = max(
         0.35,
-        profile["contrast"] * variant_c_mult * pp_contrast_mult * (1.0 + contrast * 0.45),
+        profile["contrast"]
+        * variant_c_mult
+        * pp_contrast_mult
+        * sub_contrast_scale
+        * (1.0 + contrast * 0.45),
     )
     u = _normalized_scurve(u, total_contrast)
 
@@ -1220,7 +1627,13 @@ def invert_negative(
     # 10. B&W Silver-Gelatin Chemical Toning & Fine-Art Paper Branch
     if is_bw:
         y = np.sum(np.clip(pos, 0.0, 1.0) * LUMA, axis=-1, keepdims=True)
-        return _apply_bw_darkroom_toning(
+        y = _apply_bw_split_grade_and_preflash(
+            y,
+            grade00=float(bw_grade00),
+            grade5=float(bw_grade5),
+            preflash=float(bw_preflash),
+        )
+        pos = _apply_bw_darkroom_toning(
             y,
             toner_key=str(bw_toner or "neutral"),
             strength=float(bw_toner_strength),
@@ -1230,59 +1643,69 @@ def invert_negative(
             shadows_range=float(shadows_range),
             highs_range=float(highs_range),
         )
+    else:
+        # 11. 3-Way CMY Split-Toning (`Shadows` · `Midtones` · `Highlights`) + Profile Bias
+        prof_sb = profile.get("shadows_bias", (0.0, 0.0, 0.0))
+        if any(abs(v) > 0.002 for v in prof_sb):
+            luma_sb = np.sum(np.clip(pos, 0.0, 1.0) * LUMA, axis=-1, keepdims=True)
+            sb_w = np.clip(1.0 - luma_sb, 0.0, 1.0) ** 2.0
+            pos[..., 0] += sb_w[..., 0] * (prof_sb[0] * 0.10)
+            pos[..., 1] += sb_w[..., 0] * (prof_sb[1] * 0.10)
+            pos[..., 2] += sb_w[..., 0] * (prof_sb[2] * 0.10)
+            pos = np.clip(pos, 0.0, 1.0)
 
-    # 11. 3-Way CMY Split-Toning (`Shadows` · `Midtones` · `Highlights`) + Profile Bias
-    prof_sb = profile.get("shadows_bias", (0.0, 0.0, 0.0))
-    if any(abs(v) > 0.002 for v in prof_sb):
-        luma_sb = np.sum(np.clip(pos, 0.0, 1.0) * LUMA, axis=-1, keepdims=True)
-        sb_w = np.clip(1.0 - luma_sb, 0.0, 1.0) ** 2.0
-        pos[..., 0] += sb_w[..., 0] * (prof_sb[0] * 0.10)
-        pos[..., 1] += sb_w[..., 0] * (prof_sb[1] * 0.10)
-        pos[..., 2] += sb_w[..., 0] * (prof_sb[2] * 0.10)
-        pos = np.clip(pos, 0.0, 1.0)
-
-    has_3way = any(
-        abs(float(v)) > 0.004
-        for trip in (shadows_tint, mids_tint, highs_tint)
-        for v in (trip or (0.0, 0.0, 0.0))
-    )
-    if has_3way:
-        s_pos = linear_to_srgb(np.clip(pos, 0.0, 1.0))
-        y_s = np.sum(s_pos * LUMA, axis=-1, keepdims=True)
-        sh_pivot = 0.25 + float(np.clip(shadows_range, 0.0, 1.0)) * 0.42
-        hi_pivot = 0.75 - float(np.clip(highs_range, 0.0, 1.0)) * 0.40
-
-        sh_w = (np.clip((sh_pivot - y_s) / max(sh_pivot, 0.10), 0.0, 1.0) ** 1.4) * (
-            0.25 + 0.75 * np.clip(y_s / 0.12, 0.0, 1.0)
+        has_3way = any(
+            abs(float(v)) > 0.004
+            for trip in (shadows_tint, mids_tint, highs_tint)
+            for v in (trip or (0.0, 0.0, 0.0))
         )
-        hi_w = (np.clip((y_s - hi_pivot) / max(1.0 - hi_pivot, 0.10), 0.0, 1.0) ** 1.4) * (
-            0.35 + 0.65 * np.clip((1.0 - y_s) / 0.08, 0.0, 1.0)
-        )
-        mid_w = np.clip(1.0 - np.abs(y_s - 0.50) * 2.0, 0.0, 1.0)
+        if has_3way:
+            s_pos = linear_to_srgb(np.clip(pos, 0.0, 1.0))
+            y_s = np.sum(s_pos * LUMA, axis=-1, keepdims=True)
+            sh_pivot = 0.25 + float(np.clip(shadows_range, 0.0, 1.0)) * 0.42
+            hi_pivot = 0.75 - float(np.clip(highs_range, 0.0, 1.0)) * 0.40
 
-        s_pos = _apply_cmy_zone_offset(s_pos, sh_w, shadows_tint, 0.12)
-        s_pos = _apply_cmy_zone_offset(s_pos, mid_w, mids_tint, 0.11)
-        s_pos = _apply_cmy_zone_offset(s_pos, hi_w, highs_tint, 0.12)
+            sh_w = (np.clip((sh_pivot - y_s) / max(sh_pivot, 0.10), 0.0, 1.0) ** 1.4) * (
+                0.25 + 0.75 * np.clip(y_s / 0.12, 0.0, 1.0)
+            )
+            hi_w = (np.clip((y_s - hi_pivot) / max(1.0 - hi_pivot, 0.10), 0.0, 1.0) ** 1.4) * (
+                0.35 + 0.65 * np.clip((1.0 - y_s) / 0.08, 0.0, 1.0)
+            )
+            mid_w = np.clip(1.0 - np.abs(y_s - 0.50) * 2.0, 0.0, 1.0)
+
+            s_pos = _apply_cmy_zone_offset(s_pos, sh_w, shadows_tint, 0.12)
+            s_pos = _apply_cmy_zone_offset(s_pos, mid_w, mids_tint, 0.11)
+            s_pos = _apply_cmy_zone_offset(s_pos, hi_w, highs_tint, 0.12)
+            pos = srgb_to_linear(np.clip(s_pos, 0.0, 1.0))
+
+        # 12. Optional Post-Inversion Print / Emulsion Finishing Grade (`0% - 200%`)
+        if print_finish and print_finish != "none" and float(finish_amount) > 0.01:
+            pos = _apply_print_finish(pos, str(print_finish), float(finish_amount), w)
+
+        # 13. RP Tone (Neutral-Protected Analog Vibrance) & Chromatic Saturation Calibration
+        rp = float(np.clip(rp_tone, 0.0, 1.0))
+        sat_factor = profile["sat"] * variant_s_mult * float(sat_mult)
+
+        if rp > 0.005 or abs(sat_factor - 1.0) > 0.005:
+            y = np.sum(pos * LUMA, axis=-1, keepdims=True)
+            diff = pos - y
+            if rp > 0.005:
+                chroma = np.max(pos, axis=-1, keepdims=True) - np.min(pos, axis=-1, keepdims=True)
+                neutral_gate = np.clip((chroma - 0.018) / 0.075, 0.0, 1.0)
+                headroom = 1.0 - np.clip(chroma, 0.0, 1.0) * 0.65
+                rp_gain = 1.0 + rp * 0.68 * neutral_gate * headroom
+                diff = diff * rp_gain
+            pos = np.clip(y + diff * sat_factor, 0.0, 1.0)
+
+    # 14. User Tone Curve (shared display-referred curve across Color & B&W positives)
+    if curve:
+        s_pos = linear_to_srgb(np.clip(pos, 0.0, 1.0)).copy()
+        s_pos = apply_user_curves(s_pos, curve)
         pos = srgb_to_linear(np.clip(s_pos, 0.0, 1.0))
 
-    # 12. Optional Post-Inversion Print / Emulsion Finishing Grade (`0% - 200%`)
-    if print_finish and print_finish != "none" and float(finish_amount) > 0.01:
-        pos = _apply_print_finish(pos, str(print_finish), float(finish_amount), w)
-
-    # 13. RP Tone (Neutral-Protected Analog Vibrance) & Chromatic Saturation Calibration
-    rp = float(np.clip(rp_tone, 0.0, 1.0))
-    sat_factor = profile["sat"] * variant_s_mult * float(sat_mult)
-
-    if rp > 0.005 or abs(sat_factor - 1.0) > 0.005:
-        y = np.sum(pos * LUMA, axis=-1, keepdims=True)
-        diff = pos - y
-        if rp > 0.005:
-            chroma = np.max(pos, axis=-1, keepdims=True) - np.min(pos, axis=-1, keepdims=True)
-            neutral_gate = np.clip((chroma - 0.018) / 0.075, 0.0, 1.0)
-            headroom = 1.0 - np.clip(chroma, 0.0, 1.0) * 0.65
-            rp_gain = 1.0 + rp * 0.68 * neutral_gate * headroom
-            diff = diff * rp_gain
-        pos = np.clip(y + diff * sat_factor, 0.0, 1.0)
+    # 15. Pinpoint Dust & Hair Spot Healing (ideal for B&W negatives without IR)
+    if dust_spots:
+        pos = apply_dust_spot_healing(pos, dust_spots)
 
     return np.clip(pos, 0.0, 1.0)
 
@@ -1295,9 +1718,20 @@ def process_negative_to_image(
     sharpen_mode="off",
     sharpen_amount=1.0,
     return_float=False,
+    flat_field_gain=None,
+    flat_field_path=None,
+    flat_field_file=None,
+    flat_field_strength=1.0,
     **kwargs,
 ):
     """Process a digitized negative into a positive display-sRGB PIL Image (and optional float32 sRGB)."""
+    del flat_field_file
+    resolved_ff_gain = resolve_flat_field_gain(
+        flat_field_gain=flat_field_gain,
+        flat_field_path=flat_field_path,
+        rotate=rotate,
+        flip_h=flip_h,
+    )
     if isinstance(image_input, (str, Path)):
         lin = load_image_linear(image_input, max_dim=max_dim, rotate=rotate, flip_h=flip_h)
     elif isinstance(image_input, Image.Image):
@@ -1313,7 +1747,12 @@ def process_negative_to_image(
         if rotate or flip_h:
             lin = apply_geometry(lin, rotate=rotate, flip_h=flip_h)
 
-    pos = invert_negative(lin, **kwargs)
+    pos = invert_negative(
+        lin,
+        flat_field_gain=resolved_ff_gain,
+        flat_field_strength=float(flat_field_strength),
+        **kwargs,
+    )
     srgb = linear_to_srgb(pos)
     if sharpen_mode and sharpen_mode != "off" and float(sharpen_amount) > 0.01:
         srgb = apply_optical_sharpen(srgb, mode=str(sharpen_mode), amount=float(sharpen_amount))

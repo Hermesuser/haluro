@@ -45,6 +45,7 @@ hidden_imports = [
     "engine.lut",
     "engine.pipeline",
     "engine.negative_inverter",
+    "engine.roll_processor",
     "engine.contact_sheet",
     "engine.platform_io",
     "scipy.ndimage",

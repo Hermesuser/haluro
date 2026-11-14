@@ -1,4 +1,4 @@
-"""Catalog of all 72 film stocks supported by Haluro.
+"""Catalog of all 80 film stocks supported by Haluro.
 Includes color parameters, grain, halation, contrast, LUT mappings and UI metadata.
 """
 
@@ -8,7 +8,7 @@ from .platform_io import get_resource_root
 # Base directory for bundled 3D LUT files (supports both source & frozen .app/.exe)
 LUT_DIR = get_resource_root() / "luts"
 
-# Descriptions for all 72 films (natural Spanish)
+# Descriptions for all 80 films (natural Spanish)
 DESCRIPTIONS = {
     # Built-in films
     "portra400": "Piel cálida y suave, luces altas delicadas",
@@ -84,6 +84,15 @@ DESCRIPTIONS = {
     "kodak2393": "Copia de cine con negros más densos",
     "fuji3510": "Película de proyección Fuji de color suave",
     "fuji3513": "Copia Fuji diseñada para máster digital",
+    # Emulsiones contemporáneas y experimentales (P6)
+    "phoenix200": "Emulsión moderna de alto contraste con halación ámbar marcada",
+    "harman_switch": "Película creativa azul-cían que desplaza verdes hacia cobalto",
+    "santacolor100": "Base clara de reconocimiento aéreo, rojos intensos y grano fino",
+    "lomochrome92": "Color noventero de negros azulados y piel cálida con grano",
+    "metropolis400": "Paleta urbana desaturada con sombras verdosas frías y contraste",
+    "lomo_purple": "Falso color experimental: vira follaje verde a púrpura y violeta",
+    "doublex5222": "Blanco y negro cinematográfico clásico con medios ricos y grano fílmico",
+    "fomapan400": "Emulsión checa de plata tradicional, negros profundos y grano vivo",
 }
 
 CATEGORY_NAMES = {
@@ -292,6 +301,80 @@ FILMS = {
         hues=[("cyan", "blue", 0.1, 1.0), ("red", "orange", 0.08, 1.05)],
         halation=3.0, hal_thr=0.65, hal_tint=(1.0, 0.22, 0.05), grain=0.022, grain_size=1.3, soft=0.75,
         desc=DESCRIPTIONS.get("cinestill400d", "")
+    ),
+    "phoenix200": dict(
+        key="phoenix200", brand="Harman", name="Harman Phoenix 200", iso=200, kind="neg",
+        balance=5500, ev=0.1, sat=1.18,
+        contrast=(0.215, 0.208, 0.222), pivot=(-0.06, -0.02, 0.08),
+        black=(0.028, 0.024, 0.018), white=(0.98, 0.95, 0.89),
+        hues=[("yellow", "orange", 0.12, 1.08), ("green", "yellow", 0.14, 0.96),
+              ("blue", "cyan", 0.10, 1.05)],
+        halation=2.8, hal_thr=0.68, hal_tint=(1.0, 0.30, 0.06), grain=0.028, grain_size=1.35, soft=0.75,
+        desc=DESCRIPTIONS.get("phoenix200", "")
+    ),
+    "harman_switch": dict(
+        key="harman_switch", brand="Harman", name="Harman Switch Azure 125", iso=125, kind="xpro",
+        balance=5500, ev=0.0, sat=1.14,
+        contrast=(0.20, 0.195, 0.205), pivot=(0.0, -0.05, 0.06),
+        black=(0.02, 0.028, 0.042), white=(0.96, 0.97, 0.98),
+        hues=[("green", "cyan", 0.45, 1.12), ("blue", "orange", 0.34, 1.05),
+              ("yellow", "red", 0.22, 1.04)],
+        halation=1.4, hal_thr=0.72, hal_tint=(0.45, 0.72, 1.0), grain=0.021, grain_size=1.15, soft=0.7,
+        desc=DESCRIPTIONS.get("harman_switch", "")
+    ),
+    "santacolor100": dict(
+        key="santacolor100", brand="Santa", name="SantaColor 100 (Aerocolor IV)", iso=100, kind="neg",
+        balance=5500, ev=0.15, sat=1.16,
+        contrast=(0.185, 0.185, 0.182), pivot=(-0.08, 0.0, 0.04),
+        black=(0.022, 0.022, 0.026), white=(0.985, 0.975, 0.95),
+        hues=[("red", "red", 0.04, 1.15), ("yellow", "orange", 0.08, 1.05),
+              ("cyan", "blue", 0.06, 1.0)],
+        halation=1.35, hal_thr=0.74, hal_tint=(1.0, 0.26, 0.06), grain=0.011, grain_size=0.85, soft=0.55,
+        desc=DESCRIPTIONS.get("santacolor100", "")
+    ),
+    "lomochrome92": dict(
+        key="lomochrome92", brand="Lomography", name="LomoChrome Color '92", iso=400, kind="neg",
+        balance=5500, ev=0.1, sat=1.06,
+        contrast=(0.19, 0.188, 0.178), pivot=(0.06, 0.0, -0.08),
+        black=(0.02, 0.025, 0.042), white=(0.975, 0.955, 0.91),
+        hues=[("blue", "cyan", 0.12, 1.12), ("yellow", "orange", 0.10, 1.04)],
+        halation=1.1, hal_thr=0.74, hal_tint=(1.0, 0.34, 0.10), grain=0.025, grain_size=1.25, soft=0.8,
+        desc=DESCRIPTIONS.get("lomochrome92", "")
+    ),
+    "metropolis400": dict(
+        key="metropolis400", brand="Lomography", name="LomoChrome Metropolis 400", iso=400, kind="neg",
+        balance=5500, ev=0.0, sat=0.68,
+        contrast=(0.205, 0.205, 0.198), pivot=(-0.05, 0.0, 0.05),
+        black=(0.02, 0.032, 0.034), white=(0.965, 0.955, 0.92),
+        hues=[("green", "cyan", 0.16, 0.88), ("red", "orange", 0.08, 0.85)],
+        halation=0.7, hal_thr=0.76, hal_tint=(1.0, 0.28, 0.08), grain=0.026, grain_size=1.3, soft=0.7,
+        desc=DESCRIPTIONS.get("metropolis400", "")
+    ),
+    "lomo_purple": dict(
+        key="lomo_purple", brand="Lomography", name="LomoChrome Purple XR", iso=400, kind="xpro",
+        balance=5500, ev=0.0, sat=1.16,
+        contrast=(0.198, 0.195, 0.202), pivot=(-0.04, 0.06, -0.04),
+        black=(0.028, 0.018, 0.036), white=(0.97, 0.94, 0.98),
+        hues=[("green", "magenta", 0.52, 1.18), ("yellow", "red", 0.16, 1.06),
+              ("blue", "blue", 0.04, 1.05)],
+        halation=0.9, hal_thr=0.74, hal_tint=(0.85, 0.25, 0.95), grain=0.024, grain_size=1.2, soft=0.7,
+        desc=DESCRIPTIONS.get("lomo_purple", "")
+    ),
+    "doublex5222": dict(
+        key="doublex5222", brand="Kodak", name="Kodak Double-X 5222", iso=250, kind="bw",
+        balance=5500, ev=0.1,
+        mono=(0.35, 0.55, 0.10),
+        contrast=(0.195,), pivot=(0.05,), black=(0.022,), white=(0.965,),
+        halation=0.8, hal_thr=0.74, hal_tint=(1.0, 1.0, 1.0), grain=0.026, grain_size=1.2, soft=0.65,
+        desc=DESCRIPTIONS.get("doublex5222", "")
+    ),
+    "fomapan400": dict(
+        key="fomapan400", brand="Foma", name="Fomapan 400 Action", iso=400, kind="bw",
+        balance=5500, ev=0.0,
+        mono=(0.32, 0.56, 0.12),
+        contrast=(0.198,), pivot=(0.02,), black=(0.018,), white=(0.965,),
+        halation=0.6, hal_thr=0.76, hal_tint=(1.0, 1.0, 1.0), grain=0.034, grain_size=1.35, soft=0.7,
+        desc=DESCRIPTIONS.get("fomapan400", "")
     ),
 }
 

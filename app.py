@@ -1,5 +1,5 @@
 """Flask backend application for Haluro — Laboratorio Analógico Digital.
-Provides REST API for 72-stock film emulation, optical negative density inversion,
+Provides REST API for 80-stock film emulation, optical negative density inversion,
 real-time cached previews, lossless multi-format export, and contact sheets.
 """
 
@@ -31,6 +31,7 @@ from engine.films import LUT_DIR, get_film, list_films
 from engine.negative_inverter import (
     BW_TONING_PROFILES,
     COLOR_METHODS,
+    FILM_SUBSTRATES,
     LIGHT_SOURCE_MATRICES,
     MINILAB_PROFILES,
     PRINT_FINISHES,
@@ -40,16 +41,20 @@ from engine.negative_inverter import (
     analyze_roll_calibration,
     auto_balance_scene_wb,
     auto_detect_film_base,
+    compute_flat_field_gain_map,
     compute_neutral_wb_from_point,
     linear_rgb_to_hex,
     list_bw_toners,
+    list_film_substrates,
     list_print_finishes,
     process_negative_to_image,
+    resolve_flat_field_gain,
 )
 from engine.negative_inverter import (
     list_profiles as list_negative_profiles,
 )
 from engine.pipeline import (
+    DEV_PROCESSES,
     HEIF_EXTENSIONS,
     RAW_EXTENSIONS,
     develop_frame,
@@ -674,6 +679,42 @@ def _parse_analog_meta(data) -> dict:
     return clean
 
 
+def _parse_print_options(data):
+    """Validate optional darkroom easel border & paper dry-down compensation."""
+    allowed = {"none", "white_thin", "white_gallery", "black_rebate"}
+    border = str((data or {}).get("easel_border", "none") or "none").strip().lower()
+    if border not in allowed:
+        border = "none"
+    dry_down = _num(data or {}, "dry_down_comp", 0.0, 0.0, 0.15)
+    return border, dry_down
+
+
+def _parse_dust_spots(raw):
+    """Validate normalized pinpoint dust spots: [{x, y, r}, ...] or [[x, y, r], ...]."""
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    for item in raw[:150]:
+        if isinstance(item, dict):
+            x_raw, y_raw, r_raw = item.get("x"), item.get("y"), item.get("r", 0.008)
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            x_raw, y_raw = item[0], item[1]
+            r_raw = item[2] if len(item) >= 3 else 0.008
+        else:
+            continue
+        try:
+            x = float(x_raw)
+            y = float(y_raw)
+            r = float(r_raw)
+        except (TypeError, ValueError):
+            continue
+        if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
+            continue
+        r = max(0.002, min(0.045, r))
+        cleaned.append({"x": round(x, 5), "y": round(y, 5), "r": round(r, 5)})
+    return cleaned
+
+
 def _parse_negative_params(data):
     """Extract and validate negative lab inversion parameters from JSON body."""
     printer_cmy = _parse_triplet(data.get("printer_cmy"))
@@ -686,6 +727,9 @@ def _parse_negative_params(data):
     scan_src = str(data.get("scan_source", "camera_raw") or "camera_raw")
     if scan_src not in SCAN_SOURCES:
         scan_src = "camera_raw"
+    film_sub = str(data.get("film_substrate", "c41_orange") or "c41_orange")
+    if film_sub not in FILM_SUBSTRATES:
+        film_sub = "c41_orange"
     color_meth = str(data.get("color_method", "dynamic") or "dynamic")
     if color_meth not in COLOR_METHODS:
         color_meth = "dynamic"
@@ -707,9 +751,16 @@ def _parse_negative_params(data):
             "d_max": _parse_triplet(raw_rb["d_max"], default=(1.0, 1.0, 1.0)),
         }
 
+    raw_ff = str(data.get("flat_field_file", "") or "").strip()
+    ff_path = _resolve_source_file(raw_ff) if raw_ff else None
+
     return {
         "base_color": data.get("base_color"),
+        "flat_field_file": ff_path.name if ff_path else None,
+        "flat_field_path": ff_path,
+        "flat_field_strength": _num(data, "flat_field_strength", 1.0, 0.0, 1.5),
         "film_type": data.get("film_type", "color"),
+        "film_substrate": film_sub,
         "profile_key": _canonical_profile_key(data.get("profile", "frontier")),
         "light_source": light_src,
         "scan_source": scan_src,
@@ -721,6 +772,9 @@ def _parse_negative_params(data):
         "finish_amount": _num(data, "finish_amount", 1.0, 0.0, 2.0),
         "bw_toner": bw_toner,
         "bw_toner_strength": _num(data, "bw_toner_strength", 1.0, 0.0, 2.0),
+        "bw_grade00": _num(data, "bw_grade00", 0.0, -1.0, 1.0),
+        "bw_grade5": _num(data, "bw_grade5", 0.0, -1.0, 1.0),
+        "bw_preflash": _num(data, "bw_preflash", 0.0, 0.0, 1.0),
         "brightness": _num(data, "brightness", 0.0, -50.0, 50.0),
         "midtone_nd": _num(data, "midtone_nd", 0.0, -1.0, 1.0),
         "contrast": _num(data, "contrast", 0.0, -50.0, 50.0),
@@ -737,6 +791,7 @@ def _parse_negative_params(data):
         "rp_tone": _num(data, "rp_tone", 0.0, -0.5, 0.5),
         "border_buffer": _num(data, "border_buffer", 0.06, 0.0, 0.45),
         "crop_pct": _num(data, "crop_pct", 0.0, 0.0, 0.49),
+        "keep_sprockets": bool(data.get("keep_sprockets", False)),
         "glow_mult": _num(data, "glow", 1.0, 0.0, 3.0),
         "fade_mult": _num(data, "fade", 1.0, 0.0, 3.0),
         "printer_cyan_red": float(printer_cmy[0]),
@@ -756,6 +811,8 @@ def _parse_negative_params(data):
         "sharpen_amount": _num(data, "sharpen_amount", 1.0, 0.0, 3.0),
         "rotate": _int(data, "rotate", 0, 0, 360),
         "flip_h": bool(data.get("flip_h", False)),
+        "curve": _parse_curve(data.get("curve")),
+        "dust_spots": _parse_dust_spots(data.get("dust_spots")),
     }
 
 
@@ -900,7 +957,10 @@ def api_health():
 
 @app.route("/api/films")
 def api_films():
-    return jsonify({"films": list_films()})
+    return jsonify({
+        "films": list_films(),
+        "dev_processes": [{"key": k, "name": v["name"]} for k, v in DEV_PROCESSES.items()],
+    })
 
 
 @app.route("/api/load_sample", methods=["POST"])
@@ -1027,6 +1087,11 @@ def _parse_curve(value):
     return out or None
 
 
+def _parse_dev_process(value) -> str:
+    s = str(value or "standard").strip()
+    return s if s in DEV_PROCESSES else "standard"
+
+
 @app.route("/api/preview", methods=["POST"])
 def api_preview():
     data = request.json or {}
@@ -1040,6 +1105,7 @@ def api_preview():
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
+    dev_process = _parse_dev_process(data.get("dev_process"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1065,6 +1131,7 @@ def api_preview():
         max_dim=1280,
         rotate=rotate,
         flip_h=flip_h,
+        dev_process=dev_process,
     )
     render_time = round(time.time() - t0, 3)
 
@@ -1086,6 +1153,134 @@ def api_preview():
     return jsonify(resp)
 
 
+def _format_ev_strip_label(delta_ev: float, is_third_step: bool) -> str:
+    if abs(delta_ev) < 1e-3:
+        return "0 EV"
+    sign = "+" if delta_ev > 0 else "-"
+    if is_third_step:
+        thirds = int(round(abs(delta_ev) * 3))
+        whole = thirds // 3
+        rem = thirds % 3
+        if rem == 0:
+            return f"{sign}{whole} EV"
+        if whole == 0:
+            return f"{sign}{rem}/3 EV"
+        return f"{sign}{whole} {rem}/3 EV"
+    return f"{sign}{abs(delta_ev):.1f} EV"
+
+
+@app.route("/api/test_strip", methods=["POST"])
+def api_test_strip():
+    """Genera una tira de prueba en 5 pasos f-stop (estilo ampliadora de cuarto oscuro)."""
+    data = request.json or {}
+    mode = "negative" if data.get("mode") == "negative" else "simulation"
+    default_sample = "SAMPLE_NEGATIVE.jpg" if mode == "negative" else "SAMPLE.CR2"
+    filename = data.get("filename", default_sample)
+    file_path = _resolve_source_file(filename, fallback_name=default_sample)
+    if not file_path:
+        return jsonify({"error": "Archivo de origen no encontrado"}), 404
+
+    step_ev = _num(data, "step_ev", 0.5, 0.15, 1.0)
+    is_third = abs(step_ev - (1.0 / 3.0)) < 0.04 or abs(step_ev - 0.333) < 0.02
+    if is_third:
+        step_ev = 1.0 / 3.0
+
+    t0 = time.time()
+    offsets = [-2.0 * step_ev, -step_ev, 0.0, step_ev, 2.0 * step_ev]
+
+    if mode == "negative":
+        params = _parse_negative_params(data)
+        lin_base = load_image_linear(
+            file_path,
+            max_dim=840,
+            rotate=params["rotate"],
+            flip_h=params["flip_h"],
+        )
+        base_bright = float(params["brightness"])
+        # Pre-resolve flat field gain at target orientation once
+        resolved_ff = resolve_flat_field_gain(
+            flat_field_path=params.get("flat_field_path"),
+            rotate=params["rotate"],
+            flip_h=params["flip_h"],
+        )
+        strip_params = dict(params)
+        strip_params["rotate"] = 0
+        strip_params["flip_h"] = False
+        strip_params["flat_field_path"] = None
+        strip_params["flat_field_gain"] = resolved_ff
+    else:
+        film_key = _canonical_film_key(data.get("film", "portra400"))
+        ev_base = _num(data, "ev", 0.0, -10.0, 10.0)
+        halation = _num(data, "halation", 1.0, 0.0, 5.0)
+        grain = _num(data, "grain", 1.0, 0.0, 5.0)
+        vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
+        shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
+        mids = _num(data, "mids", 0.0, -4.0, 4.0)
+        highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
+        curve = _parse_curve(data.get("curve"))
+        dev_process = _parse_dev_process(data.get("dev_process"))
+        add_date = bool(data.get("date", False))
+        rotate = _int(data, "rotate", 0, 0, 360)
+        flip_h = bool(data.get("flip_h", False))
+        lin_base = load_image_linear(file_path, max_dim=840, rotate=rotate, flip_h=flip_h)
+
+    h, w = lin_base.shape[:2]
+    composite = np.zeros((h, w, 3), dtype=np.uint8)
+    steps_meta = []
+    n_cols = len(offsets)
+
+    for idx, delta_ev in enumerate(offsets):
+        x0 = int(round(idx * w / n_cols))
+        x1 = int(round((idx + 1) * w / n_cols)) if idx < n_cols - 1 else w
+        if mode == "negative":
+            target_val = float(np.clip(base_bright + delta_ev * 0.28, -1.0, 1.0))
+            step_params = dict(strip_params, brightness=target_val)
+            col_img = process_negative_to_image(lin_base.copy(), max_dim=None, **step_params)
+        else:
+            target_val = float(np.clip(ev_base + delta_ev, -10.0, 10.0))
+            col_img = develop_frame(
+                lin_base.copy(),
+                film_key=film_key,
+                ev_adjust=target_val,
+                halation_mult=halation,
+                grain_mult=grain,
+                vignette_mult=vignette,
+                shadows=shadows,
+                mids=mids,
+                highlights=highlights,
+                curve=curve,
+                add_date=add_date,
+                max_dim=None,
+                rotate=0,
+                flip_h=False,
+                dev_process=dev_process,
+            )
+        col_arr = np.asarray(col_img.convert("RGB"), dtype=np.uint8)
+        composite[:, x0:x1, :] = col_arr[:, x0:x1, :]
+        if idx > 0 and x0 < w:
+            composite[:, max(0, x0 - 1) : x0 + 1, :] = 18
+        steps_meta.append({
+            "index": idx,
+            "delta_ev": round(delta_ev, 4),
+            "label": _format_ev_strip_label(delta_ev, is_third),
+            "target_value": round(target_val, 3),
+        })
+
+    strip_pil = Image.fromarray(composite)
+    buf = io.BytesIO()
+    strip_pil.save(buf, format="JPEG", quality=89)
+    strip_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    return jsonify({
+        "strip": strip_b64,
+        "width": w,
+        "height": h,
+        "step_ev": round(step_ev, 4),
+        "steps": steps_meta,
+        "render_time": round(time.time() - t0, 3),
+    })
+
+
 @app.route("/api/develop_full", methods=["POST"])
 def api_develop_full():
     data = request.json or {}
@@ -1099,6 +1294,7 @@ def api_develop_full():
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
+    dev_process = _parse_dev_process(data.get("dev_process"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1113,6 +1309,7 @@ def api_develop_full():
     out_roll_dir.mkdir(parents=True, exist_ok=True)
 
     analog_meta = _parse_analog_meta(data)
+    easel_border, dry_down_comp = _parse_print_options(data)
     per_frame_recipes = data.get("per_frame_recipes") or {}
     t_start = time.time()
 
@@ -1131,6 +1328,7 @@ def api_develop_full():
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
         f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
         f_curve = _parse_curve(fr.get("curve")) if isinstance(fr, dict) else curve
+        f_dev_proc = _parse_dev_process(fr.get("dev_process", dev_process)) if isinstance(fr, dict) else dev_process
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1151,6 +1349,7 @@ def api_develop_full():
             rotate=f_rot,
             flip_h=f_flip,
             return_float=True,
+            dev_process=f_dev_proc,
         )
         out_name = f"{fpath.stem}_{f_film}{out_ext}"
         target_path = out_roll_dir / out_name
@@ -1161,6 +1360,8 @@ def api_develop_full():
             quality=96,
             float_srgb=srgb_f,
             analog_meta=analog_meta,
+            easel_border=easel_border,
+            dry_down_comp=dry_down_comp,
         )
         return (fname, out_name, dev_img)
 
@@ -1224,6 +1425,7 @@ def api_contact_sheet_preview():
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
+    dev_process = _parse_dev_process(data.get("dev_process"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1248,6 +1450,7 @@ def api_contact_sheet_preview():
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
         f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
         f_curve = _parse_curve(fr.get("curve")) if isinstance(fr, dict) else curve
+        f_dev_proc = _parse_dev_process(fr.get("dev_process", dev_process)) if isinstance(fr, dict) else dev_process
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1267,6 +1470,7 @@ def api_contact_sheet_preview():
             max_dim=720,
             rotate=f_rot,
             flip_h=f_flip,
+            dev_process=f_dev_proc,
         )
 
     valid_filenames, rendered_images = _collect_sheet_frames(filenames, _render_thumb)
@@ -1321,6 +1525,7 @@ def api_save_contact_sheet():
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
+    dev_process = _parse_dev_process(data.get("dev_process"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1361,6 +1566,7 @@ def api_save_contact_sheet():
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
         f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
         f_curve = _parse_curve(fr.get("curve")) if isinstance(fr, dict) else curve
+        f_dev_proc = _parse_dev_process(fr.get("dev_process", dev_process)) if isinstance(fr, dict) else dev_process
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_rot = _int(fr, "rotate", rotate, 0, 360) if isinstance(fr, dict) else rotate
         f_flip = bool(fr.get("flip_h", flip_h)) if isinstance(fr, dict) else flip_h
@@ -1380,6 +1586,7 @@ def api_save_contact_sheet():
             max_dim=1400,
             rotate=f_rot,
             flip_h=f_flip,
+            dev_process=f_dev_proc,
         )
 
     valid_filenames, rendered_images = _collect_sheet_frames(filenames, _render_thumb)
@@ -1436,6 +1643,7 @@ def api_export_single():
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
+    dev_process = _parse_dev_process(data.get("dev_process"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1450,6 +1658,7 @@ def api_export_single():
     target_path = DEVELOPED_DIR / out_filename
 
     analog_meta = _parse_analog_meta(data)
+    easel_border, dry_down_comp = _parse_print_options(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
         fpath,
@@ -1467,14 +1676,17 @@ def api_export_single():
         rotate=rotate,
         flip_h=flip_h,
         return_float=True,
+        dev_process=dev_process,
     )
-    save_output_image(
+    dev_img = save_output_image(
         dev_img,
         target_path,
         source_path=fpath,
         quality=96,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
+        easel_border=easel_border,
+        dry_down_comp=dry_down_comp,
     )
     render_time = round(time.time() - t0, 2)
 
@@ -1491,6 +1703,7 @@ def api_export_single():
         "date_stamp": add_date,
         "rotate": rotate,
         "flip_h": flip_h,
+        "dev_process": dev_process,
         "analog_meta": analog_meta,
     })
 
@@ -1523,6 +1736,7 @@ def api_export_and_download():
     except (TypeError, ValueError):
         _curve_arg = None
     curve = _parse_curve(_curve_arg)
+    dev_process = _parse_dev_process(request.args.get("dev_process"))
     add_date = request.args.get("date", "false").lower() == "true"
 
     fpath = _resolve_source_file(filename)
@@ -1542,6 +1756,7 @@ def api_export_and_download():
         curve=curve,
         add_date=add_date,
         max_dim=None,
+        dev_process=dev_process,
     )
 
     buf = io.BytesIO()
@@ -1566,6 +1781,7 @@ def api_save_direct_to_downloads():
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
+    dev_process = _parse_dev_process(data.get("dev_process"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1587,6 +1803,7 @@ def api_save_direct_to_downloads():
         counter += 1
 
     analog_meta = _parse_analog_meta(data)
+    easel_border, dry_down_comp = _parse_print_options(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
         fpath,
@@ -1604,14 +1821,17 @@ def api_save_direct_to_downloads():
         rotate=rotate,
         flip_h=flip_h,
         return_float=True,
+        dev_process=dev_process,
     )
-    save_output_image(
+    dev_img = save_output_image(
         dev_img,
         target_path,
         source_path=fpath,
         quality=96,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
+        easel_border=easel_border,
+        dry_down_comp=dry_down_comp,
     )
 
     _record_history_entry(dev_img, target_path, {
@@ -1627,6 +1847,7 @@ def api_save_direct_to_downloads():
         "date_stamp": add_date,
         "rotate": rotate,
         "flip_h": flip_h,
+        "dev_process": dev_process,
         "analog_meta": analog_meta,
     })
 
@@ -1697,6 +1918,7 @@ def _save_simulation_to_dest(data, reveal=False):
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
+    dev_process = _parse_dev_process(data.get("dev_process"))
     add_date = bool(data.get("date", False))
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
@@ -1707,6 +1929,7 @@ def _save_simulation_to_dest(data, reveal=False):
 
     film_info = get_film(film_key)
     analog_meta = _parse_analog_meta(data)
+    easel_border, dry_down_comp = _parse_print_options(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
         fpath,
@@ -1724,17 +1947,20 @@ def _save_simulation_to_dest(data, reveal=False):
         rotate=rotate,
         flip_h=flip_h,
         return_float=True,
+        dev_process=dev_process,
     )
     # Use the *validated* destination. Re-deriving it from the raw payload
     # discarded the expanduser()/resolve() normalisation and wrote to a literal
     # "~" directory inside the working folder.
-    save_output_image(
+    dev_img = save_output_image(
         dev_img,
         dest,
         source_path=fpath,
         quality=96,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
+        easel_border=easel_border,
+        dry_down_comp=dry_down_comp,
     )
 
     _record_history_entry(dev_img, dest, {
@@ -1750,6 +1976,7 @@ def _save_simulation_to_dest(data, reveal=False):
         "date_stamp": add_date,
         "rotate": rotate,
         "flip_h": flip_h,
+        "dev_process": dev_process,
         "analog_meta": analog_meta,
     })
 
@@ -1846,6 +2073,7 @@ def api_negative_profiles():
         "print_finishes": list_print_finishes(),
         "bw_toners": list_bw_toners(),
         "scan_sources": [{"key": k, "name": str(v["name"])} for k, v in SCAN_SOURCES.items()],
+        "film_substrates": list_film_substrates(),
     })
 
 
@@ -1876,6 +2104,11 @@ def api_negative_analyze_roll():
     if not linear_frames:
         return jsonify({"error": "No se encontraron fotogramas válidos para analizar el rollo"}), 404
 
+    ff_gain = resolve_flat_field_gain(
+        flat_field_path=params["flat_field_path"],
+        rotate=params["rotate"],
+        flip_h=params["flip_h"],
+    )
     cal = analyze_roll_calibration(
         linear_frames,
         film_type=params["film_type"],
@@ -1883,6 +2116,10 @@ def api_negative_analyze_roll():
         scan_source=params["scan_source"],
         pre_saturation=params["pre_saturation"],
         border_buffer=params["border_buffer"],
+        film_substrate=params["film_substrate"],
+        keep_sprockets=params["keep_sprockets"],
+        flat_field_gain=ff_gain,
+        flat_field_strength=params["flat_field_strength"],
     )
     return jsonify({
         **cal,
@@ -1919,19 +2156,65 @@ def api_negative_load_sample():
     })
 
 
+@app.route("/api/negative/flat_field/upload", methods=["POST"])
+def api_negative_flat_field_upload():
+    """Upload a blank light-table frame to calibrate radial vignetting and LED shading."""
+    if "file" not in request.files:
+        return jsonify({"error": "No se recibió archivo de campo plano"}), 400
+
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Nombre de archivo vacío"}), 400
+
+    raw_ext = Path(f.filename).suffix.lower()
+    if raw_ext not in ALLOWED_INPUT_EXTS:
+        return jsonify({"error": f"Formato no compatible ({raw_ext})."}), 400
+
+    filename = _sanitize_filename(f.filename)
+    save_path = _unique_upload_path(f"__haluro_flatfield_{filename}")
+    f.save(save_path)
+
+    suffix_lower = save_path.suffix.lower()
+    is_raw = suffix_lower in RAW_EXTENSIONS
+    is_heif = suffix_lower in HEIF_EXTENSIONS
+    if not _is_readable_media(save_path, is_raw, is_heif):
+        save_path.unlink(missing_ok=True)
+        return jsonify({"error": "El archivo de campo plano no contiene una imagen válida."}), 400
+
+    flat_lin = load_image_linear(save_path, max_dim=512)
+    _gain_grid, metrics = compute_flat_field_gain_map(flat_lin, grid_size=64)
+    return jsonify({
+        "flat_field_file": save_path.name,
+        "name": Path(f.filename).name,
+        **metrics,
+    })
+
+
 @app.route("/api/negative/auto_detect_base", methods=["POST"])
 def api_negative_auto_detect_base():
     data = request.json or {}
     filename = data.get("filename", "SAMPLE_NEGATIVE.jpg")
     rotate = _int(data, "rotate", 0, 0, 360)
     flip_h = bool(data.get("flip_h", False))
+    film_sub = str(data.get("film_substrate", "c41_orange") or "c41_orange")
+    if film_sub not in FILM_SUBSTRATES:
+        film_sub = "c41_orange"
+    raw_ff = str(data.get("flat_field_file", "") or "").strip()
+    ff_path = _resolve_source_file(raw_ff) if raw_ff else None
+    ff_strength = _num(data, "flat_field_strength", 1.0, 0.0, 1.5)
+    ff_gain = resolve_flat_field_gain(flat_field_path=ff_path, rotate=rotate, flip_h=flip_h)
 
     fpath = _resolve_source_file(filename, fallback_name="SAMPLE_NEGATIVE.jpg")
     if not fpath:
         return jsonify({"error": "Archivo no encontrado"}), 404
 
     lin = load_image_linear(fpath, max_dim=800, rotate=rotate, flip_h=flip_h)
-    base_color = auto_detect_film_base(lin)
+    base_color = auto_detect_film_base(
+        lin,
+        film_substrate=film_sub,
+        flat_field_gain=ff_gain,
+        flat_field_strength=ff_strength,
+    )
     hex_str = linear_rgb_to_hex(base_color)
     return jsonify({
         "base_color": base_color,
@@ -1987,6 +2270,11 @@ def api_negative_sample_neutral_wb():
         return jsonify({"error": "Archivo no encontrado"}), 404
 
     params = _parse_negative_params(data)
+    ff_gain = resolve_flat_field_gain(
+        flat_field_path=params["flat_field_path"],
+        rotate=params["rotate"],
+        flip_h=params["flip_h"],
+    )
     lin = load_image_linear(fpath, max_dim=1280, rotate=params["rotate"], flip_h=params["flip_h"])
     cmy = compute_neutral_wb_from_point(
         lin,
@@ -2004,6 +2292,10 @@ def api_negative_sample_neutral_wb():
         crop_pct=params["crop_pct"],
         temp=params["temp"],
         tint=params["tint"],
+        film_substrate=params["film_substrate"],
+        keep_sprockets=params["keep_sprockets"],
+        flat_field_gain=ff_gain,
+        flat_field_strength=params["flat_field_strength"],
     )
     return jsonify({
         "printer_cmy": cmy,
@@ -2022,6 +2314,11 @@ def api_negative_auto_scene_wb():
         return jsonify({"error": "Archivo no encontrado"}), 404
 
     params = _parse_negative_params(data)
+    ff_gain = resolve_flat_field_gain(
+        flat_field_path=params["flat_field_path"],
+        rotate=params["rotate"],
+        flip_h=params["flip_h"],
+    )
     lin = load_image_linear(fpath, max_dim=960, rotate=params["rotate"], flip_h=params["flip_h"])
     cmy = auto_balance_scene_wb(
         lin,
@@ -2035,6 +2332,10 @@ def api_negative_auto_scene_wb():
         roll_bounds=params["roll_bounds"],
         border_buffer=params["border_buffer"],
         crop_pct=params["crop_pct"],
+        film_substrate=params["film_substrate"],
+        keep_sprockets=params["keep_sprockets"],
+        flat_field_gain=ff_gain,
+        flat_field_strength=params["flat_field_strength"],
     )
     return jsonify({"printer_cmy": cmy})
 
@@ -2069,7 +2370,8 @@ def api_negative_preview():
         "profile": profile_info,
     }
     if include_original:
-        crop_milli = 0 if bool(data.get("original_uncropped", False)) else int(round(params["crop_pct"] * 1000))
+        skip_crop = bool(data.get("original_uncropped", False)) or params["keep_sprockets"]
+        crop_milli = 0 if skip_crop else int(round(params["crop_pct"] * 1000))
         resp["original"] = _cached_original_b64(
             str(fpath), fpath.stat().st_mtime_ns, 1280, params["rotate"], params["flip_h"], crop_milli
         )
@@ -2084,18 +2386,21 @@ def _export_negative_common(data, target_path: Path, reveal: bool = False):
 
     params = _parse_negative_params(data)
     analog_meta = _parse_analog_meta(data)
+    easel_border, dry_down_comp = _parse_print_options(data)
     profile_key = params["profile_key"]
     profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
 
     t0 = time.time()
     pos_img, srgb_f = process_negative_to_image(fpath, max_dim=None, return_float=True, **params)
-    save_output_image(
+    pos_img = save_output_image(
         pos_img,
         target_path,
         source_path=fpath,
         quality=96,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
+        easel_border=easel_border,
+        dry_down_comp=dry_down_comp,
     )
 
     _record_history_entry(pos_img, target_path, {
@@ -2105,6 +2410,7 @@ def _export_negative_common(data, target_path: Path, reveal: bool = False):
         "profile_key": profile_key,
         "profile_name": profile_info["name"],
         "film_type": params["film_type"],
+        "film_substrate": params["film_substrate"],
         "light_source": params["light_source"],
         "scan_source": params["scan_source"],
         "pre_saturation": params["pre_saturation"],
@@ -2115,6 +2421,9 @@ def _export_negative_common(data, target_path: Path, reveal: bool = False):
         "finish_amount": params["finish_amount"],
         "bw_toner": params["bw_toner"],
         "bw_toner_strength": params["bw_toner_strength"],
+        "bw_grade00": params["bw_grade00"],
+        "bw_grade5": params["bw_grade5"],
+        "bw_preflash": params["bw_preflash"],
         "base_color": params["base_color"],
         "brightness": params["brightness"],
         "midtone_nd": params["midtone_nd"],
@@ -2130,8 +2439,12 @@ def _export_negative_common(data, target_path: Path, reveal: bool = False):
         "inky_blacks": params["inky_blacks"],
         "saturation": params["sat_mult"],
         "rp_tone": params["rp_tone"],
+        "dust_spots": params.get("dust_spots", []),
         "border_buffer": params["border_buffer"],
         "crop_pct": params["crop_pct"],
+        "keep_sprockets": params["keep_sprockets"],
+        "flat_field_file": params["flat_field_file"],
+        "flat_field_strength": params["flat_field_strength"],
         "glow": params["glow_mult"],
         "fade": params["fade_mult"],
         "printer_cmy": [
@@ -2153,6 +2466,7 @@ def _export_negative_common(data, target_path: Path, reveal: bool = False):
         "sharpen_amount": params["sharpen_amount"],
         "rotate": params["rotate"],
         "flip_h": params["flip_h"],
+        "curve": params["curve"],
         "analog_meta": analog_meta,
     })
 
@@ -2220,6 +2534,7 @@ def api_negative_develop_full():
 
     params = _parse_negative_params(data)
     analog_meta = _parse_analog_meta(data)
+    easel_border, dry_down_comp = _parse_print_options(data)
     profile_key = params["profile_key"]
     profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
 
@@ -2251,6 +2566,8 @@ def api_negative_develop_full():
             quality=96,
             float_srgb=srgb_f,
             analog_meta=analog_meta,
+            easel_border=easel_border,
+            dry_down_comp=dry_down_comp,
         )
         return (fname, out_name, pos_img)
 

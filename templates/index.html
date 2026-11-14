@@ -42,12 +42,12 @@
 
     <!-- Primary Studio Mode Switcher -->
     <nav class="mode-switch-group" role="tablist" aria-label="Modo de trabajo">
-      <button class="mode-switch-btn active" id="tabDarkroomsMode" role="tab" aria-selected="true" title="Emulación analógica · 72 películas químicas">
+      <button class="mode-switch-btn active" id="tabDarkroomsMode" role="tab" aria-selected="true" title="Emulación analógica · 80 películas químicas">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
           <rect x="2" y="4" width="20" height="16" rx="2"/>
           <path d="M7 4v16M17 4v16M2 8h5M2 12h5M2 16h5M17 8h5M17 12h5M17 16h5"/>
         </svg>
-        <span>Emulación · 72</span>
+        <span>Emulación · 80</span>
       </button>
       <button class="mode-switch-btn" id="tabNegativeMode" role="tab" aria-selected="false" title="Laboratorio óptico de inversión de negativos">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
@@ -76,6 +76,15 @@
       </label>
 
       <div class="header-divider" aria-hidden="true"></div>
+
+      <button class="btn btn-ghost btn-sm btn-complexity-pill" id="uiComplexityBtn" aria-pressed="false" aria-label="Alternar Vista Esencial Minilab y Vista Completa (V)" title="Cambiar entre Vista Completa y Vista Esencial estilo Minilab (Tecla V)">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <rect x="3" y="4" width="18" height="7" rx="1.5"/>
+          <rect x="3" y="13" width="8" height="7" rx="1.5"/>
+          <rect x="13" y="13" width="8" height="7" rx="1.5"/>
+        </svg>
+        <span id="uiComplexityLabel">Completa</span>
+      </button>
 
       <button class="btn btn-icon-only" id="zenToggleBtn" aria-pressed="false" aria-label="Alternar paneles laterales (Cmd/Ctrl+Alt+Z)" title="Modo mesa limpia: ocultar o mostrar paneles (Cmd/Ctrl+Alt+Z)">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
@@ -156,13 +165,13 @@
     <!-- LEFT SIDEBAR: Stocks Catalog (Mode 1) OR Negative Calibration & Scanner Profiles (Mode 2) -->
     <aside class="sidebar sidebar-left" aria-label="Selección de emulsión y calibración">
 
-      <!-- MODE 1 LEFT: 72 Film Stocks Shelf -->
+      <!-- MODE 1 LEFT: 80 Film Stocks Shelf -->
       <div id="shelfContainer" class="sidebar-pane">
         <div class="pane-header">
           <h2>Catálogo de películas</h2>
           <div class="pane-header-tools">
             <button type="button" class="sort-toggle-btn" id="filmSortBtn" aria-pressed="false" title="Alternar orden por catálogo o sensibilidad ISO">Catálogo</button>
-            <span class="mono-badge" id="filmCountBadge">72</span>
+            <span class="mono-badge" id="filmCountBadge">80</span>
           </div>
         </div>
 
@@ -209,7 +218,21 @@
               <button class="seg-btn" id="btnTypeBW" data-type="bw" title="Emulsión en gelatina de plata blanco y negro">Plata B&amp;N</button>
             </div>
 
-            <details class="sub-drawer" id="negCaptureDrawer">
+            <div class="control-group compact-top" id="negSubstrateGroup">
+              <div class="control-label">
+                <span id="lblNegSubstrate" title="Adapta la detección de soporte y equilibrio de color según el sustrato de la película">Sustrato base</span>
+              </div>
+              <select id="negSubstrateSelect" class="dark-select" aria-labelledby="lblNegSubstrate">
+                <option value="c41_orange">C-41 máscara naranja (Estándar)</option>
+                <option value="clear_base">Base transparente (Aerocolor / SantaColor / Cine)</option>
+                <option value="phoenix">Harman Phoenix I / II (Sin máscara + cruce)</option>
+                <option value="warm_base">Base marfil / ámbar (Lomo '92 / Redscale)</option>
+                <option value="creative_switch">Couplers experimentales (Azure / Purple)</option>
+              </select>
+              <p class="helper-copy" id="negSubstrateHint">Emulsiones C-41 tradicionales con máscara naranja.</p>
+            </div>
+
+            <details class="sub-drawer ui-adv-only" id="negCaptureDrawer">
               <summary class="sub-drawer-summary">Digitalización y luz de escaneo</summary>
               <div class="sub-drawer-body">
                 <div class="sub-label-row">
@@ -236,6 +259,27 @@
                     <span class="control-val" id="negPreSatVal">1.00x</span>
                   </div>
                   <input type="range" id="negPreSatSlider" min="0.50" max="1.60" step="0.05" value="1.00" data-default="1.00" aria-labelledby="lblNegPreSat">
+                </div>
+
+                <div class="sub-label-row compact-top">
+                  <span title="Corrige viñeteo del objetivo macro o desigualdad cromática de la mesa LED usando una foto en blanco sin película">Campo plano (Flat-Field LED)</span>
+                </div>
+                <input type="file" id="negFlatFieldInput" accept=".cr2,.cr3,.nef,.arw,.raf,.dng,.orf,.rw2,.pef,.srw,.tif,.tiff,.jpg,.jpeg,.png,.heic,.heif" hidden>
+                <div class="base-actions" style="display:flex; gap:6px; align-items:center;">
+                  <button class="btn btn-outline btn-xs" id="btnUploadFlatField" type="button" style="flex:1;" title="Carga una foto vacía de la mesa LED encendida sin película">
+                    Cargar toma en blanco
+                  </button>
+                  <button class="btn btn-secondary btn-xs" id="btnClearFlatField" type="button" style="display:none;" title="Desactivar calibración de campo plano">
+                    Quitar
+                  </button>
+                </div>
+                <p class="helper-copy" id="negFlatFieldStatus">Sin calibración de campo plano.</p>
+                <div class="control-group" id="negFlatFieldStrengthGroup" style="display:none;">
+                  <div class="control-label">
+                    <span id="lblNegFlatFieldStrength">Compensación Flat-Field</span>
+                    <span class="control-val" id="negFlatFieldStrengthVal">100%</span>
+                  </div>
+                  <input type="range" id="negFlatFieldStrengthSlider" min="0" max="150" step="5" value="100" data-default="100" aria-labelledby="lblNegFlatFieldStrength">
                 </div>
               </div>
             </details>
@@ -285,7 +329,7 @@
               <button class="seg-btn" data-method="roll_locked" title="Usa la envolvente D-min / D-max común del rollo sin bombeo de exposición">Rollo fijo</button>
             </div>
 
-            <details class="sub-drawer" id="negRollAnalysisDrawer">
+            <details class="sub-drawer ui-adv-only" id="negRollAnalysisDrawer">
               <summary class="sub-drawer-summary">Análisis de rollo y márgenes</summary>
               <div class="sub-drawer-body">
                 <button class="btn btn-outline btn-xs btn-block" id="btnAnalyzeRoll" title="Analiza todos los fotogramas importados para fijar el soporte D-min y rango dinámico real del rollo">
@@ -306,6 +350,22 @@
                     <span class="control-val" id="negCropVal">0%</span>
                   </div>
                   <input type="range" id="negCropSlider" min="0" max="15" step="0.5" value="0" data-default="0" aria-labelledby="lblNegCrop">
+                </div>
+
+                <div class="control-toggle compact-top">
+                  <label class="switch" for="negKeepSprocketsToggle">
+                    <input type="checkbox" id="negKeepSprocketsToggle">
+                    <span class="slider"></span>
+                  </label>
+                  <label for="negKeepSprocketsToggle" class="toggle-text" title="Mantiene rebordes y perforaciones (recorte 0%) excluyendo ≥12% del borde al medir exposición">Conservar reborde (Sprockets)</label>
+                </div>
+
+                <div class="control-toggle">
+                  <label class="switch" for="negShowBorderGuideToggle">
+                    <input type="checkbox" id="negShowBorderGuideToggle">
+                    <span class="slider"></span>
+                  </label>
+                  <label for="negShowBorderGuideToggle" class="toggle-text" title="Muestra sobre el visor la zona interna exacta usada para medir blanco y negro">Guía visual de zona de cálculo</label>
                 </div>
               </div>
             </details>
@@ -377,6 +437,32 @@
                   <span class="control-val" id="negBwTonerStrengthVal">100%</span>
                 </div>
                 <input type="range" id="negBwTonerStrengthSlider" min="0" max="150" step="5" value="100" data-default="100" aria-labelledby="lblNegBwTonerStrength">
+              </div>
+
+              <div class="sub-label-row compact-top">
+                <span title="Técnica clásica de positivado variable: expone luces suaves con Filtro 00 y negros con Filtro 5">Positivado Split Grade</span>
+                <button class="text-btn" id="resetBwSplitBtn" type="button" title="Restaurar Split Grade y Pre-flashing">Reset</button>
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblNegBwGrade00" title="Filtro amarillo 00: controla luces altas y detalle suave sin afectar negros">Filtro 00 · Luces suaves</span>
+                  <span class="control-val" id="negBwGrade00Val">0.00</span>
+                </div>
+                <input type="range" class="bipolar-range" id="negBwGrade00Slider" min="-1.00" max="1.00" step="0.05" value="0.00" data-default="0.00" aria-labelledby="lblNegBwGrade00">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblNegBwGrade5" title="Filtro magenta 5: ancla negros profundos de plata sin empastar luces altas">Filtro 5 · Negros duros</span>
+                  <span class="control-val" id="negBwGrade5Val">0.00</span>
+                </div>
+                <input type="range" class="bipolar-range" id="negBwGrade5Slider" min="-1.00" max="1.00" step="0.05" value="0.00" data-default="0.00" aria-labelledby="lblNegBwGrade5">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblNegBwPreflash" title="Velo controlado previo para vencer la inercia del papel y rescatar textura en altas luces duras">Pre-flashing papel</span>
+                  <span class="control-val" id="negBwPreflashVal">0%</span>
+                </div>
+                <input type="range" id="negBwPreflashSlider" min="0" max="100" step="5" value="0" data-default="0" aria-labelledby="lblNegBwPreflash">
               </div>
             </div>
 
@@ -452,6 +538,7 @@
           <button class="mode-btn" id="viewFullBtn" aria-pressed="false" title="Ver solo fotografía revelada (Tecla 2)">Revelada</button>
           <button class="mode-btn" id="viewOrigBtn" aria-pressed="false" title="Mantén pulsado '\' o haz clic para ver el original sin procesar">Original</button>
           <button class="mode-btn" id="viewSheetBtn" aria-pressed="false" title="Generar hoja de contactos del rollo (Tecla 3)">Contactos</button>
+          <button class="mode-btn" id="viewTestStripBtn" aria-pressed="false" title="Tira de prueba de cuarto oscuro en fracciones de paso (Tecla T)">Tira f-stop</button>
         </div>
 
         <!-- Geometry, Undo/Redo, Zoom & Recipe Sync Instruments -->
@@ -521,6 +608,22 @@
             <img id="imgOriginal" class="split-image original" alt="Fotografía original sin procesar" draggable="false">
             <img id="imgDeveloped" class="split-image developed" alt="Fotografía revelada en Haluro" crossorigin="anonymous" draggable="false">
             <canvas id="zebraCanvas" class="zebra-overlay" aria-hidden="true"></canvas>
+            <div id="borderGuideOverlay" class="border-guide-overlay" style="display: none;" aria-hidden="true">
+              <div class="border-guide-analysis" id="borderGuideAnalysisBox">
+                <span class="border-guide-tag" id="borderGuideTag">Zona de análisis</span>
+              </div>
+            </div>
+            <div id="testStripOverlay" class="test-strip-overlay" style="display: none;">
+              <div class="test-strip-cols" id="testStripCols" role="group" aria-label="Bandas de exposición f-stop"></div>
+              <div class="test-strip-hud" id="testStripHud">
+                <span class="test-strip-title">Tira f-stop · clic en una banda</span>
+                <div class="test-strip-steps" role="group" aria-label="Fracción de paso">
+                  <button type="button" class="test-strip-step-btn" data-step="0.3333" aria-pressed="false">1/3 EV</button>
+                  <button type="button" class="test-strip-step-btn active" data-step="0.5" aria-pressed="true">1/2 EV</button>
+                </div>
+                <button type="button" class="test-strip-exit-btn" id="exitTestStripBtn" title="Salir de Tira f-stop (Esc o T)">Cerrar</button>
+              </div>
+            </div>
           </div>
 
           <div class="split-divider" id="splitDivider" role="slider" tabindex="0" aria-label="Divisor de comparativa antes y después" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
@@ -659,6 +762,19 @@
             </div>
             <p class="helper-copy">Doble clic en el deslizador para neutro · Clic en el número para editar.</p>
 
+            <div class="control-group compact-top">
+              <div class="control-label">
+                <span id="lblSimDevProcess">Proceso de revelado</span>
+              </div>
+              <select id="simDevProcessSelect" class="select-input" aria-labelledby="lblSimDevProcess" title="Simula baño químico compensador o forzado">
+                <option value="standard" selected>Estándar (C-41 / D-76)</option>
+                <option value="stand_rodinal">Stand / Rodinal 1+100 (alta acutancia)</option>
+                <option value="push_1">Push +1 EV (forzado 1 paso)</option>
+                <option value="push_2">Push +2 EV (forzado 2 pasos)</option>
+                <option value="pull_1">Pull -1 EV (subrevelado suave)</option>
+              </select>
+            </div>
+
             <div class="control-group">
               <div class="control-label">
                 <span id="lblEv">Compensación de exposición</span>
@@ -732,33 +848,7 @@
               <input type="range" class="bipolar-range" id="highlightsSlider" min="-2.0" max="2.0" step="0.1" value="0.0" data-default="0.0" aria-labelledby="lblHighlights">
             </div>
           </section>
-
-          <!-- TONE CURVE: control points travel as data inside the recipe -->
-          <section class="panel-card">
-            <div class="section-head">
-              <h3>Curva tonal</h3>
-              <button class="reset-link" id="resetCurveBtn" title="Restablecer la curva del canal activo">Restablecer</button>
-            </div>
-
-            <div class="curve-tabs" id="curveTabs" role="tablist" aria-label="Canal de la curva tonal">
-              <button type="button" class="curve-tab active" data-channel="rgb" role="tab" aria-selected="true" title="Curva maestra sobre los tres canales">RGB</button>
-              <button type="button" class="curve-tab" data-channel="l" role="tab" aria-selected="false" title="Curva de luminancia (conserva el matiz)">Luz</button>
-              <button type="button" class="curve-tab" data-channel="r" role="tab" aria-selected="false" title="Canal rojo">R</button>
-              <button type="button" class="curve-tab" data-channel="g" role="tab" aria-selected="false" title="Canal verde">G</button>
-              <button type="button" class="curve-tab" data-channel="b" role="tab" aria-selected="false" title="Canal azul">B</button>
-            </div>
-
-            <div class="curve-canvas-wrap">
-              <canvas id="curveCanvas" class="curve-canvas" height="248"
-                      role="application"
-                      aria-label="Editor de curva tonal. Clic para añadir un punto, arrastrar para moverlo, doble clic para quitarlo."></canvas>
-            </div>
-            <p class="helper-copy">Clic para añadir un punto · Arrastra para moverlo · Doble clic para quitarlo.</p>
-          </section>
         </div>
-
-        <!-- LOCAL EXPOSURE MASKS (Dodge & Burn digital) -->
-        </section>
 
         <!-- CONTROLS FOR MODE 2: NEGATIVE LAB -->
         <div id="negInspectorControls" style="display: none;">
@@ -816,7 +906,7 @@
               <input type="range" id="negSatSlider" min="0.0" max="2.0" step="0.05" value="1.0" data-default="1.0" aria-labelledby="lblNegSat">
             </div>
 
-            <details class="sub-drawer" id="negFineToneDrawer">
+            <details class="sub-drawer ui-adv-only" id="negFineToneDrawer">
               <summary class="sub-drawer-summary">Ajuste fino de curva y protección</summary>
               <div class="sub-drawer-body">
                 <div class="control-group">
@@ -909,7 +999,7 @@
             </div>
 
             <!-- 4-Zone CMY Selector: Global Enlarger Lights vs 3-Way Split Toning -->
-            <div class="segmented-bar segmented-4" id="cmyZoneBar" role="tablist" aria-label="Zona tonal CMY">
+            <div class="segmented-bar segmented-4 ui-adv-only" id="cmyZoneBar" role="tablist" aria-label="Zona tonal CMY">
               <button class="seg-btn active" data-zone="global" role="tab" aria-selected="true" title="Luces globales del cabezal dicroico CMY">Global</button>
               <button class="seg-btn" data-zone="shadows" role="tab" aria-selected="false" title="Tinte CMY selectivo en sombras conservando luminancia">Sombras</button>
               <button class="seg-btn" data-zone="mids" role="tab" aria-selected="false" title="Tinte CMY selectivo en medios tonos y pieles">Medios</button>
@@ -959,7 +1049,7 @@
               </div>
             </div>
 
-            <div id="cmyZonePane" class="zone-stack" style="display: none;">
+            <div id="cmyZonePane" class="zone-stack ui-adv-only" style="display: none;">
               <p class="helper-copy" id="cmyZoneHelper">Etalonaje selectivo de zona con preservación de luminancia.</p>
               <div class="control-group cmy-nudge-group">
                 <div class="control-label">
@@ -1003,7 +1093,7 @@
             </div>
           </section>
 
-          <details class="panel-card collapsible-panel" id="negOpticalPanel">
+          <details class="panel-card collapsible-panel ui-adv-only" id="negOpticalPanel">
             <summary class="collapsible-summary">
               <span>Filtros y nitidez óptica</span>
             </summary>
@@ -1065,12 +1155,60 @@
                 </div>
                 <input type="range" id="negFadeSlider" min="0.0" max="3.0" step="0.1" value="1.0" data-default="1.0" aria-labelledby="lblNegFade">
               </div>
+
+              <div class="dust-heal-section">
+                <div class="dust-heal-head">
+                  <span>Limpieza puntual de motas (sin IR)</span>
+                  <span class="mono-badge" id="dustSpotCountBadge">0 motas</span>
+                </div>
+                <p class="helper-copy">Ideal para emulsiones B&amp;N donde el canal infrarrojo no funciona.</p>
+                <div class="dust-heal-actions">
+                  <button type="button" class="btn btn-outline btn-xs" id="btnDustHealTool" aria-pressed="false" title="Haz clic sobre polvo o pelusas blancas en el fotograma revelado">
+                    Quitar motas
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-xs" id="btnDustUndo" disabled>Deshacer</button>
+                  <button type="button" class="btn btn-ghost btn-xs" id="btnDustClear" disabled>Limpiar</button>
+                </div>
+                <div class="eyedropper-tip" id="dustHealTip" style="display: none;" role="status">
+                  Haz clic sobre cada mota en el positivo para limpiarla suavemente. Pulsa <kbd>Esc</kbd> para salir.
+                </div>
+                <div class="control-group compact-top">
+                  <div class="control-label">
+                    <span id="lblNegDustRadius">Radio del pincel</span>
+                    <span class="control-val" id="negDustRadiusVal">0.8%</span>
+                  </div>
+                  <input type="range" id="negDustRadiusSlider" min="0.4" max="2.4" step="0.2" value="0.8" data-default="0.8" aria-labelledby="lblNegDustRadius">
+                </div>
+              </div>
             </div>
           </details>
         </div>
 
+        <!-- SHARED TONE CURVE: control points travel as data inside either simulation or negative recipe -->
+        <section class="panel-card" id="curveSectionCard">
+          <div class="section-head">
+            <h3>Curva tonal</h3>
+            <button class="reset-link" id="resetCurveBtn" title="Restablecer la curva del canal activo">Restablecer</button>
+          </div>
+
+          <div class="curve-tabs" id="curveTabs" role="tablist" aria-label="Canal de la curva tonal">
+            <button type="button" class="curve-tab active" data-channel="rgb" role="tab" aria-selected="true" title="Curva maestra sobre los tres canales">RGB</button>
+            <button type="button" class="curve-tab" data-channel="l" role="tab" aria-selected="false" title="Curva de luminancia (conserva el matiz)">Luz</button>
+            <button type="button" class="curve-tab" data-channel="r" role="tab" aria-selected="false" title="Canal rojo">R</button>
+            <button type="button" class="curve-tab" data-channel="g" role="tab" aria-selected="false" title="Canal verde">G</button>
+            <button type="button" class="curve-tab" data-channel="b" role="tab" aria-selected="false" title="Canal azul">B</button>
+          </div>
+
+          <div class="curve-canvas-wrap">
+            <canvas id="curveCanvas" class="curve-canvas" height="248"
+                    role="application"
+                    aria-label="Editor de curva tonal. Clic para añadir un punto, arrastrar para moverlo, doble clic para quitarlo."></canvas>
+          </div>
+          <p class="helper-copy">Clic para añadir un punto · Arrastra para moverlo · Doble clic para quitarlo.</p>
+        </section>
+
         <!-- SHARED ANALOG EXIF TECHNICAL SHEET (Stamps Camera/Lens/Film/ISO into JPG, PNG & 16-bit TIFF) -->
-        <details class="panel-card analog-exif-card" id="analogExifDetails">
+        <details class="panel-card analog-exif-card ui-adv-only" id="analogExifDetails">
           <summary class="analog-exif-summary">
             <span>Ficha técnica EXIF analógica</span>
             <span class="mono-badge" id="exifStatusBadge">Opcional</span>
@@ -1129,9 +1267,46 @@
               </label>
             </div>
             <label class="exif-field">
+              <span>Preset químico rápido</span>
+              <select id="exifChemPresetSelect" class="dark-select">
+                <option value="">— Elegir revelador / química —</option>
+                <option value="Kodak D-76 (1+1) · 20°C">Kodak D-76 (1+1) · B&amp;N Clásico</option>
+                <option value="Rodinal / Adonal (1+50) Stand">Rodinal / Adonal (1+50) · Alta acutancia</option>
+                <option value="Ilford ID-11 (1+1) · 20°C">Ilford ID-11 (1+1) · Grano fino</option>
+                <option value="Ilford Microphen (Stock)">Ilford Microphen · Push B&amp;N</option>
+                <option value="Tetenal Colortec C-41 · 38°C">Tetenal Colortec C-41 · Color</option>
+                <option value="CineStill Cs41 · 39°C">CineStill Cs41 · Color doméstico</option>
+                <option value="Bellini ECN-2 · Cine 41°C">Bellini ECN-2 · Cine color</option>
+                <option value="Bellini E-6 · Diapositiva">Bellini E-6 · Diapositiva</option>
+              </select>
+            </label>
+            <label class="exif-field">
               <span>Notas de cuarto oscuro</span>
               <input type="text" id="exifNotes" placeholder="Push +1, filtro amarillo…">
             </label>
+
+            <div class="reciprocity-calc-box">
+              <div class="reciprocity-head">
+                <span>Calculadora de reciprocidad</span>
+                <span class="mono-badge" id="recipCorrectedOut">14.9 s</span>
+              </div>
+              <div class="reciprocity-grid">
+                <select id="recipFilmSelect" class="dark-select" aria-label="Emulsión para fallo de reciprocidad">
+                  <option value="1.30" data-label="Kodak Portra 400 / Ektar">Portra 400 / Ektar (p=1.30)</option>
+                  <option value="1.34" data-label="Kodak Tri-X 400">Kodak Tri-X 400 (p=1.34)</option>
+                  <option value="1.31" data-label="Ilford HP5 Plus">Ilford HP5 Plus (p=1.31)</option>
+                  <option value="1.26" data-label="Ilford FP4 Plus">Ilford FP4 Plus (p=1.26)</option>
+                  <option value="acros" data-label="Fuji Acros 100 II">Fuji Acros 100 II (≤120s neutro)</option>
+                  <option value="1.42" data-label="Fomapan 400">Fomapan 400 (p=1.42)</option>
+                  <option value="1.28" data-label="Fuji Velvia 50">Fuji Velvia 50 (p=1.28)</option>
+                </select>
+                <input type="number" id="recipMeasuredInput" min="0.5" max="1200" step="0.5" value="8" aria-label="Tiempo medido en segundos" title="Tiempo medido por el fotómetro (segundos)">
+              </div>
+              <div class="reciprocity-result-row">
+                <span class="helper-copy" id="recipDeltaLabel">+0.9 EV compensación</span>
+                <button type="button" class="btn btn-outline btn-xs" id="btnInsertRecipToNotes">Anotar en ficha</button>
+              </div>
+            </div>
             <div class="exif-actions-row">
               <button type="button" class="btn btn-secondary btn-xs" id="btnAutoFillExifFromRecipe" title="Completar Película, ISO, Proceso y Escáner con la receta activa">
                 Desde receta
@@ -1212,6 +1387,26 @@
 
       <!-- Output Format & Archive Footer -->
       <div class="inspector-footer">
+        <div class="print-finish-footer" aria-label="Acabado de copia en cuarto oscuro">
+          <label class="print-finish-field">
+            <span>Marginador (Easel)</span>
+            <select id="easelBorderSelect" class="dark-select">
+              <option value="none">Sin margen</option>
+              <option value="white_thin">Blanco fino (Baritado)</option>
+              <option value="white_gallery">Blanco galería + filete</option>
+              <option value="black_rebate">Reborde negro portanegativos</option>
+            </select>
+          </label>
+          <label class="print-finish-field" title="Compensa el oscurecimiento al secar del papel de cuarto oscuro">
+            <span>Dry-Down</span>
+            <select id="dryDownSelect" class="dark-select">
+              <option value="0.0">0% (Sin compens.)</option>
+              <option value="0.05">+5% RC Satin</option>
+              <option value="0.08">+8% Baritado</option>
+              <option value="0.12">+12% Alto contraste</option>
+            </select>
+          </label>
+        </div>
         <div class="format-row">
           <span class="format-label">Formato maestro</span>
           <div class="format-pills" id="outputFormatPills" role="radiogroup" aria-label="Formato de archivo de exportación">
@@ -1313,6 +1508,10 @@
           <div class="shortcut-row"><span>Elegir / Descartar / Neutro</span><kbd>P</kbd> <kbd>X</kbd> <kbd>U</kbd></div>
           <div class="shortcut-row"><span>Comparar original (mantener)</span><kbd>\</kbd></div>
           <div class="shortcut-row"><span>Vista Dividida / Revelada / Contactos</span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></div>
+          <div class="shortcut-row"><span>Tira de prueba f-stop (5 bandas)</span><kbd>T</kbd></div>
+          <div class="shortcut-row"><span>Vista Esencial (Minilab) / Completa</span><kbd>V</kbd></div>
+          <div class="shortcut-row"><span>Subir / bajar exposición o densidad</span><kbd>↑</kbd> <kbd>↓</kbd></div>
+          <div class="shortcut-row"><span>Balance Minilab CMY (+ / con ⇧ −)</span><kbd>C</kbd> <kbd>G</kbd> <kbd>B</kbd></div>
           <div class="shortcut-row"><span>Aviso de luces/sombras (Cebra)</span><kbd>J</kbd></div>
           <div class="shortcut-row"><span>Rotar fotograma 90°</span><kbd>R</kbd></div>
           <div class="shortcut-row"><span>Espejo horizontal de emulsión</span><kbd>F</kbd></div>
@@ -1406,7 +1605,7 @@
             </div>
             <div>
               <strong>Calidad de Laboratorio</strong>
-              <p>72 películas químicas, curva Hurter-Driffield, virados B&N, análisis de rollo unificado y exportación TIFF de 16 bits.</p>
+              <p>80 películas químicas, curva Hurter-Driffield, virados B&N, análisis de rollo unificado y exportación TIFF de 16 bits.</p>
             </div>
           </div>
           <div class="about-pillar-item">

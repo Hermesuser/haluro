@@ -2052,6 +2052,143 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: none;
 }
 
+.border-guide-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  display: none;
+}
+
+.border-guide-analysis {
+  position: absolute;
+  inset: 6%;
+  border: 1.5px dashed rgba(56, 189, 248, 0.92);
+  box-shadow: 0 0 0 9999px rgba(8, 12, 18, 0.28);
+  border-radius: 2px;
+  transition: inset 80ms ease-out;
+}
+
+.border-guide-tag {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(12, 18, 28, 0.84);
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  color: #bae6fd;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.test-strip-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.test-strip-cols {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  width: 100%;
+  height: 100%;
+}
+
+.test-strip-col {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.test-strip-col:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.test-strip-col.is-center {
+  box-shadow: inset 0 0 0 1px rgba(229, 149, 40, 0.5);
+}
+
+.test-strip-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(12, 14, 18, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #f3f4f6;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.test-strip-col.is-center .test-strip-badge {
+  border-color: rgba(229, 149, 40, 0.8);
+  color: #fbbf24;
+}
+
+.test-strip-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(14, 16, 20, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.test-strip-title {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.test-strip-steps {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.test-strip-step-btn,
+.test-strip-exit-btn {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.test-strip-step-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #111317;
+  font-weight: 600;
+}
+
+.test-strip-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
 .split-divider {
   position: absolute;
   top: 0;
@@ -3521,7 +3658,6 @@ body.roll-empty .inspector-scroll {
   .viewport { order: -1; }
   /* La telemetría vive ahora en el densitómetro: se muestra también en móvil */
   .render-stats { white-space: normal; }
-  /* LOCAL EXPOSURE MASKS (digital dodge & burn) */
   .canvas-container { min-height: 50vh; }
 
   /* Áreas táctiles de 44px en controles primarios */
@@ -3545,4 +3681,104 @@ body.roll-empty .inspector-scroll {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============================================================
+   P7: VISTA ESENCIAL (MINILAB) VS COMPLETA
+   ============================================================ */
+body.ui-essential .ui-adv-only {
+  display: none !important;
+}
+
+.btn-complexity-pill {
+  gap: 5px;
+  padding: 0 9px;
+  font-size: 11px;
+  border: 1px solid var(--hairline-rule);
+}
+
+.btn-complexity-pill.active {
+  background: var(--amber-subtle);
+  border-color: var(--amber-glow);
+  color: var(--amber-glow);
+}
+
+/* ============================================================
+   P8: LIMPIEZA PUNTUAL DE MOTAS + RECIPROCIDAD EXIF
+   ============================================================ */
+.dust-heal-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--hairline-rule);
+}
+
+.dust-heal-head,
+.reciprocity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.dust-heal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.reciprocity-calc-box {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--hairline-rule);
+}
+
+.reciprocity-grid {
+  display: grid;
+  grid-template-columns: 1fr 72px;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.reciprocity-grid input {
+  width: 100%;
+  background: var(--void-bg);
+  border: 1px solid var(--hairline-rule);
+  border-radius: 5px;
+  color: var(--text-primary);
+  padding: 5px 7px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+
+.reciprocity-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* ============================================================
+   P9: MARGINADOR (EASEL BORDERS) + DRY-DOWN EN EXPORTACIÓN
+   ============================================================ */
+.print-finish-footer {
+  display: grid;
+  grid-template-columns: 1fr 124px;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.print-finish-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
 }

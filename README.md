@@ -65,7 +65,7 @@ cambios que más se notan en el uso diario son:
 
 **Haluro** es una estación de trabajo fotográfica de escritorio nativa para **macOS** y **Windows 11** concebida desde la experiencia directa en cuarto oscuro químico. Combina la sensitometría clásica de haluros de plata con procesamiento de color en coma flotante de 16 bits para resolver dos necesidades fundamentales de la fotografía analógica contemporánea:
 
-1. **Emulación Analógica Auténtica:** Simulación espectral de **72 películas químicas clásicas** (Kodak Portra, Tri-X, Ektachrome, Fuji Velvia, Provia, Neopan, Ilford HP5+, Delta, CineStill 800T, etc.) mediante matrices de interpolación tetraédrica 3D LUT, grano volumétrico no repetitivo, halo rojo de capa antihalo y viñeteo óptico.
+1. **Emulación Analógica Auténtica:** Simulación espectral de **80 películas químicas clásicas** (Kodak Portra, Tri-X, Ektachrome, Fuji Velvia, Provia, Neopan, Ilford HP5+, Delta, CineStill 800T, etc.) mediante matrices de interpolación tetraédrica 3D LUT, grano volumétrico no repetitivo, halo rojo de capa antihalo y viñeteo óptico.
 2. **Revelado Digital de Negativos:** Inversión sensitométrica basada en el modelo **Hurter–Driffield (H&D)** para negativos color (C-41) y blanco y negro digitalizados mediante escáner plano, escáner dedicado de película o cámara digital con fuente de luz LED. Elimina matemáticamente la máscara naranja (D-min), desacopla el balance de blancos de la escena y emula la respuesta tonal de papeles fotográficos tradicionales (**Fuji Crystal Archive RA-4**, **Kodak Vision 2383 ECP** de cine, Minilabs **Noritsu / Frontier** y perfil logarítmico **V-Log**).
 
 ![Espacio de trabajo Haluro v2.5.0 en modo Emulación · 72 con Kodak Portra 400 y vista dividida](docs/images/02_espacio_trabajo_darkrooms.png)
@@ -219,7 +219,7 @@ Haluro incluye una potente interfaz CLI sin interfaz gráfica para automatizacio
 python cli.py --version
 python cli.py about
 
-# Listar las 72 emulsiones disponibles agrupadas por proceso
+# Listar las 80 emulsiones disponibles agrupadas por proceso
 python cli.py list --category neg
 
 # Emular película sobre una fotografía RAW
@@ -249,18 +249,11 @@ python cli.py invert negativo_01.tif \
                                         │
                  ┌──────────────────────┴──────────────────────┐
                  ▼                                             ▼
-     [Modo 1: Emulación · 72]                      [Modo 2: Revelar negativo]
-     - Catálogo de 72 emulsiones en español        - Proceso Color C-41 o Plata B&N y luz
-     - Compensación de exposición                  - Muestrear D-min (I) y Análisis de rollo
-     - Zonas tonales: sombras, medios y luces      - Curva tonal: Densidad neutra y Pull/Push
-     - Máscaras de exposición local (dodge & burn digital) - nuevas en 2.7.1
-     - Máscaras de exposición local (dodge & burn digital) - nuevas en 2.7.1
-     - Máscaras de exposición local (dodge & burn digital) - pincel, gradiente lineal/radial, offset EV
-     - Máscaras de exposición local (dodge & burn digital) - pincel, gradiente lineal/radial, offset EV
-     - Curva de usuario por canal (RGB, Luz, R/G/B) - 10 acabados y virados químicos de papel
-     - Halación en altas luces                     - Ampliadora CMY, 3 vías y Gris neutro (W)
-     - Sello de fecha en cuarzo ámbar              - Filtros ópticos y nitidez (Lab/Escáner)
-                 │                                 - Filtros ópticos y nitidez (Lab/Escáner)
+     [Modo 1: Emulación · 80]                      [Modo 2: Revelar negativo]
+     - Catálogo de 80 emulsiones en español        - Proceso Color C-41 o Plata B&N y luz
+     - Proceso químico (Normal/Stand/Push/Pull)    - Sustratos sin máscara y rebordes/sprockets
+     - Zonas tonales, grano y curva compartida     - Curva tonal, Split Grade B&N y limpieza puntual
+     - Sello de fecha, reciprocidad y marginador   - Ampliadora CMY, Flat-Field LED y F-Stop Strip
                  │                                             │
                  └──────────────────────┬──────────────────────┘
                                         │

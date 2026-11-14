@@ -76,21 +76,21 @@ def _trilinear(table, x):
     """Trilinear interpolation on a 3D table [B, G, R, 3] with query points x in [0, N-1]."""
     n = table.shape[0]
     flat = table.reshape(-1, 3)
-    
+
     i = np.clip(np.floor(x).astype(np.int32), 0, n - 2)
     f = x - i
     fr, fg, fb = f[..., 0:1], f[..., 1:2], f[..., 2:3]
-    
+
     base = (i[..., 2] * n + i[..., 1]) * n + i[..., 0]
-    
+
     def at(db, dg, dr):
         return flat[base + (db * n + dg) * n + dr]
-        
+
     c00 = at(0, 0, 0) + (at(0, 0, 1) - at(0, 0, 0)) * fr
     c01 = at(0, 1, 0) + (at(0, 1, 1) - at(0, 1, 0)) * fr
     c10 = at(1, 0, 0) + (at(1, 0, 1) - at(1, 0, 0)) * fr
     c11 = at(1, 1, 0) + (at(1, 1, 1) - at(1, 1, 0)) * fr
-    
+
     c0 = c00 + (c01 - c00) * fg
     c1 = c10 + (c11 - c10) * fg
     return c0 + (c1 - c0) * fb
@@ -104,7 +104,7 @@ class CubeLUT:
         self.domain_min = np.array([0.0, 0.0, 0.0], dtype=np.float32)
         self.domain_max = np.array([1.0, 1.0, 1.0], dtype=np.float32)
         rows = []
-        
+
         with open(self.path, encoding="utf-8-sig", errors="replace") as f:
             for line in f:
                 line = line.split("#", 1)[0].strip()
@@ -122,11 +122,11 @@ class CubeLUT:
                     self.domain_max = np.array([float(parts[1]), float(parts[2]), float(parts[3])], dtype=np.float32)
                 elif key[0].isdigit() or key[0] in "-+.":
                     rows.append([float(parts[0]), float(parts[1]), float(parts[2])])
-                    
+
         data = np.array(rows, dtype=np.float32)
         self.table1 = data[:size1] if size1 else None
         self.table3 = data[size1:].reshape(size3, size3, size3, 3) if size3 else None
-        
+
     def _apply_1d(self, x):
         """Interpolate 1D shaper table per channel."""
         m = self.table1.shape[0]
@@ -145,7 +145,7 @@ class CubeLUT:
         orig_shape = lin_rgb.shape
         flat = lin_rgb.reshape(-1, 3)
         out = np.empty_like(flat, dtype=np.float32)
-        
+
         encoded = encode(flat, self.space)
         span = np.maximum(self.domain_max - self.domain_min, 1e-6)
         encoded = (encoded - self.domain_min) / span
@@ -157,12 +157,12 @@ class CubeLUT:
             return np.clip(encoded.reshape(orig_shape), 0.0, 1.0)
 
         n = self.table3.shape[0]
-        
+
         for i in range(0, len(flat), chunk):
             sub = encoded[i:i + chunk]
             coords = np.clip(sub, 0.0, 1.0) * (n - 1)
             out[i:i + chunk] = _trilinear(self.table3, coords)
-            
+
         return np.clip(out.reshape(orig_shape), 0.0, 1.0)
 
 

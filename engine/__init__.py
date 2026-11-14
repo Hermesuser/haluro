@@ -10,11 +10,11 @@ hardcoded copy, which previously drifted (the Windows build kept shipping 2.4.5
 artefacts for a 2.4.6 release).
 """
 
-__version__ = "2.7.0"
+__version__ = "2.8.0"
 APP_NAME = "Haluro"
 APP_FULL_NAME = "Haluro — Laboratorio Analógico Digital"
 APP_TAGLINE = (
-    "Emulación de 72 películas químicas y revelado digital de negativos escaneados, "
+    "Emulación de 80 películas químicas y revelado digital de negativos escaneados, "
     "con edición 100% no destructiva."
 )
 APP_BUNDLE_ID = "studio.haluro.lab"

@@ -167,17 +167,17 @@ def test_negative_flow_preview_and_export(client, tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_films_and_health(client) -> None:
-    """El catálogo debe devolver 72 películas y /api/health debe estar OK."""
+    """El catálogo debe devolver 80 películas y /api/health debe estar OK."""
     resp = client.get("/api/films")
     assert resp.status_code == 200
     films = resp.get_json()["films"]
-    assert len(films) == 72, f"Se esperaban 72 películas, se obtuvieron {len(films)}"
+    assert len(films) == 80, f"Se esperaban 80 películas, se obtuvieron {len(films)}"
 
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
-    assert body["films_count"] == 72
+    assert body["films_count"] == 80
 
 
 # ---------------------------------------------------------------------------

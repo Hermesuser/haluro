@@ -198,7 +198,7 @@ def test_cross_platform_font_loader_handles_all_roles_and_fallback(
 
 def test_72_film_catalog_and_cube_luts() -> None:
     films = list_films()
-    assert len(films) == 72
+    assert len(films) == 80
     lut_files = list(LUT_DIR.rglob("*.cube"))
     assert len(lut_files) >= 60
     # Verify every LUT-backed film stock resolves to an existing .cube file
@@ -462,7 +462,7 @@ def test_api_health_and_security_headers(client) -> None:
     assert body["status"] == "ok"
     assert body["app"] == APP_NAME
     assert body["version"] == __EXPECTED_VERSION
-    assert body["films_count"] == 72
+    assert body["films_count"] == 80
     assert body["platform"] in {"macos", "windows", "linux"}
 
     # Verify Google / OWASP defense-in-depth headers (100% offline self-hosted assets)

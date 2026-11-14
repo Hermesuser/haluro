@@ -223,42 +223,6 @@ def build_curve_lut(points, size=256):
     return np.clip(lut, -0.5, 1.5).astype(np.float32)
 
 
-def apply_local_exposure_offset(display, mask, ev_offset):
-    """
-    Aplica un offset de exposición local a través de una máscara.
-
-    Parámetros
-    ----------
-    display : ndarray float32, display-referred (después de la curva tonal).
-    mask : ndarray float32 o bool, misma forma que display.
-        Valores 0.0 = sin efecto, 1.0 = efecto máximo.
-    ev_offset : float
-        Stops de exposición. Positivo = aclarar (dodge), negativo = oscurecer (burn).
-
-    Retorna
-    -------
-    ndarray float32, misma forma que display. La máscara se mezcla con la
-    exposición global de modo que los bordes queden suaves.
-    """
-    # Ganancia por stops: 2^EV
-    gain = 2.0 ** ev_offset
-
-    # La máscara debe tener el mismo shape que display.
-    # Asegurarse de que broadcast sea correcto.
-    if mask.shape != display.shape:
-        mask = np.broadcast_to(mask, display.shape).astype(np.float32)
-    else:
-        mask = mask.astype(np.float32)
-
-    # Mezcla: display * (1 - mask + mask * gain)
-    # Esto equivale a: donde mask=0 -> display sin cambiar
-    #                 donde mask=1 -> display * gain (aclarar u oscurecer)
-    result = display * (1.0 - mask + mask * gain)
-
-    # Clip a rango display-referred habitual [0, 1]
-    return np.clip(result, 0.0, 1.0)
-
-
 def apply_user_curves(display, curve_spec):
     """Aplica las curvas de usuario sobre la imagen ya revelada.
 
@@ -312,11 +276,11 @@ def shift_hues(rgb, hue_rules):
     h = np.arctan2(cr, cb)
     c = np.sqrt(cb * cb + cr * cr)
     gate = np.clip(c / 0.04, 0.0, 1.0)
-    
+
     dh = np.zeros_like(h)
     cm = np.ones_like(c)
     sigma = 35.0 * math.pi / 180.0
-    
+
     for from_name, to_name, amt, chroma in hue_rules:
         from_idx = HUE_NAMES.index(from_name)
         to_idx = HUE_NAMES.index(to_name)
@@ -327,17 +291,17 @@ def shift_hues(rgb, hue_rules):
             target_diff = wrap_angle(HUE_ANGLES[to_idx] - hs)
             dh += w * amt * target_diff
         cm *= 1.0 + w * (chroma - 1.0)
-        
+
     h_new = h + dh
     c_new = c * cm
-    
+
     cr_new = c_new * np.sin(h_new)
     cb_new = c_new * np.cos(h_new)
-    
+
     r = y + cr_new * 1.5748
     b = y + cb_new * 1.8556
     g = (y - LUMA[0] * r - LUMA[2] * b) / LUMA[1]
-    
+
     return np.clip(np.concatenate([r, g, b], axis=-1), 0.0, 1.0)
 
 
@@ -938,6 +902,72 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
             f.write(blob)
 
 
+EASEL_BORDERS = ("none", "white_thin", "white_gallery", "black_rebate")
+
+
+def apply_darkroom_print_finishing(
+    pil_img: Image.Image,
+    float_srgb: np.ndarray | None = None,
+    easel_border: str = "none",
+    dry_down_comp: float = 0.0,
+) -> tuple[Image.Image, np.ndarray | None]:
+    """Apply paper dry-down compensation and archival darkroom easel borders at export time."""
+    border_key = easel_border if easel_border in EASEL_BORDERS else "none"
+    comp = float(np.clip(float(dry_down_comp or 0.0), 0.0, 0.15))
+
+    if border_key == "none" and comp < 0.002:
+        return pil_img, float_srgb
+
+    arr_f = (
+        np.clip(np.asarray(float_srgb, dtype=np.float32), 0.0, 1.0).copy()
+        if float_srgb is not None
+        else np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0
+    )
+
+    # Dry-down compensation: fiber-base darkroom prints dry ~5-12% darker; lift tone smoothly
+    if comp >= 0.002:
+        gamma = 1.0 / (1.0 + comp * 0.85)
+        arr_f = np.power(np.clip(arr_f, 0.0, 1.0), gamma).astype(np.float32)
+
+    if border_key != "none":
+        h, w = arr_f.shape[:2]
+        short = min(h, w)
+        if border_key == "white_gallery":
+            side = max(20, int(round(short * 0.065)))
+            pad_top, pad_left, pad_right = side, side, side
+            pad_bottom = int(round(side * 1.32))
+            bg_rgb = np.array([0.965, 0.960, 0.945], dtype=np.float32)
+            keyline_rgb = np.array([0.16, 0.16, 0.16], dtype=np.float32)
+        elif border_key == "black_rebate":
+            pad = max(14, int(round(short * 0.032)))
+            pad_top = pad_left = pad_right = pad_bottom = pad
+            bg_rgb = np.array([0.035, 0.034, 0.033], dtype=np.float32)
+            keyline_rgb = np.array([0.11, 0.11, 0.11], dtype=np.float32)
+        else:
+            # "white_thin"
+            pad = max(12, int(round(short * 0.025)))
+            pad_top = pad_left = pad_right = pad_bottom = pad
+            bg_rgb = np.array([0.965, 0.960, 0.945], dtype=np.float32)
+            keyline_rgb = None
+
+        canvas = np.empty((h + pad_top + pad_bottom, w + pad_left + pad_right, 3), dtype=np.float32)
+        canvas[:, :, :] = bg_rgb
+        canvas[pad_top : pad_top + h, pad_left : pad_left + w, :] = arr_f
+        if keyline_rgb is not None:
+            t = max(1, short // 900)
+            y0, y1 = max(0, pad_top - t), min(canvas.shape[0], pad_top + h + t)
+            x0, x1 = max(0, pad_left - t), min(canvas.shape[1], pad_left + w + t)
+            canvas[y0:pad_top, x0:x1] = keyline_rgb
+            canvas[pad_top + h : y1, x0:x1] = keyline_rgb
+            canvas[pad_top : pad_top + h, x0:pad_left] = keyline_rgb
+            canvas[pad_top : pad_top + h, pad_left + w : x1] = keyline_rgb
+        arr_f = canvas
+
+    arr_f = np.clip(arr_f, 0.0, 1.0).astype(np.float32)
+    out_pil = Image.fromarray(np.rint(arr_f * 255.0).astype(np.uint8))
+    return out_pil, (arr_f if float_srgb is not None else None)
+
+
 def save_output_image(
     pil_img,
     target_path,
@@ -945,12 +975,20 @@ def save_output_image(
     quality=96,
     float_srgb: np.ndarray | None = None,
     analog_meta: dict | None = None,
+    easel_border: str = "none",
+    dry_down_comp: float = 0.0,
 ):
     """Save developed image in JPG (4:4:4 + EXIF), PNG, or 16-bit (48-bit RGB) archival TIFF.
 
     The file is written to a temporary sibling and then moved into place, so an
     interrupted export can never leave a truncated master behind.
     """
+    pil_img, float_srgb = apply_darkroom_print_finishing(
+        pil_img,
+        float_srgb=float_srgb,
+        easel_border=easel_border,
+        dry_down_comp=dry_down_comp,
+    )
     target_path = Path(target_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
     ext = target_path.suffix.lower()
@@ -966,7 +1004,7 @@ def save_output_image(
                 arr_f = np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0
                 save_tiff_16bit_rgb(arr_f, tmp_path, analog_meta=analog_meta)
             os.replace(tmp_path, target_path)
-            return
+            return pil_img
 
         exif_bytes = build_export_exif_bytes(source_path=source_path, analog_meta=analog_meta)
         icc_bytes = _get_srgb_icc_bytes()
@@ -990,6 +1028,7 @@ def save_output_image(
             pil_img.save(tmp_path, **save_kwargs)
 
         os.replace(tmp_path, target_path)
+        return pil_img
     except Exception:
         tmp_path.unlink(missing_ok=True)
         raise
@@ -1051,14 +1090,14 @@ def apply_halation(lin, strength=1.0, threshold=0.70, tint=(1.0, 0.28, 0.06)):
     """Simulates red halation around high-contrast specular highlights."""
     if strength <= 0.01:
         return lin
-        
+
     luma = np.sum(lin * LUMA, axis=-1)
     over = np.maximum(0.0, luma - threshold)
-    
+
     # 0.6% - 1.0% of frame width blur radius
     sigma = max(2.0, lin.shape[1] * 0.008)
     glow = scipy.ndimage.gaussian_filter(over, sigma=sigma)
-    
+
     tint_arr = np.array(tint, dtype=np.float32)[None, None, :]
     glow_rgb = glow[..., None] * tint_arr * (strength * 0.35)
     return lin + glow_rgb
@@ -1099,17 +1138,17 @@ def draw_date_stamp(image, date_str=None):
     if not date_str:
         import datetime
         date_str = datetime.datetime.now().strftime("'%y %m %d")
-        
+
     draw = ImageDraw.Draw(image)
     w, h = image.size
     font_size = max(16, int(h * 0.032))
     font = load_ui_font("mono-bold", font_size)
-        
+
     bbox = draw.textbbox((0, 0), date_str, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     x = w - tw - int(w * 0.04)
     y = h - th - int(h * 0.04)
-    
+
     # Outer glow + main stamp
     glow_color = (180, 50, 0, 120)
     text_color = (255, 140, 20, 240)
@@ -1135,6 +1174,50 @@ def _stable_grain_seed(image_input, film_key) -> int:
     return int.from_bytes(digest[:8], "big")
 
 
+DEV_PROCESSES = {
+    "standard": {
+        "name": "Estándar (C-41 / D-76)",
+        "ev_offset": 0.0,
+        "contrast_mult": 1.0,
+        "grain_mult": 1.0,
+        "acutance": 0.0,
+        "compensating": 0.0,
+    },
+    "stand_rodinal": {
+        "name": "Stand / Rodinal 1+100 (alta acutancia)",
+        "ev_offset": 0.0,
+        "contrast_mult": 0.96,
+        "grain_mult": 1.15,
+        "acutance": 0.45,
+        "compensating": 1.0,
+    },
+    "push_1": {
+        "name": "Push +1 EV (forzado 1 paso)",
+        "ev_offset": 0.35,
+        "contrast_mult": 1.12,
+        "grain_mult": 1.20,
+        "acutance": 0.15,
+        "compensating": 0.0,
+    },
+    "push_2": {
+        "name": "Push +2 EV (forzado 2 pasos)",
+        "ev_offset": 0.70,
+        "contrast_mult": 1.24,
+        "grain_mult": 1.40,
+        "acutance": 0.25,
+        "compensating": 0.0,
+    },
+    "pull_1": {
+        "name": "Pull -1 EV (subrevelado suave)",
+        "ev_offset": -0.25,
+        "contrast_mult": 0.88,
+        "grain_mult": 0.85,
+        "acutance": 0.0,
+        "compensating": 0.35,
+    },
+}
+
+
 def develop_frame(
     image_input,
     film_key="portra400",
@@ -1152,6 +1235,7 @@ def develop_frame(
     flip_h=False,
     return_float=False,
     grain_seed=None,
+    dev_process="standard",
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     if isinstance(image_input, (str, Path)):
@@ -1170,20 +1254,30 @@ def develop_frame(
             lin = apply_geometry(lin, rotate=rotate, flip_h=flip_h)
 
     film = get_film(film_key)
-    
-    # 1. Exposure compensation
-    total_ev = film.get("ev", 0.0) + ev_adjust
+    proc_spec = DEV_PROCESSES.get(str(dev_process or "standard"), DEV_PROCESSES["standard"])
+
+    # 1. Exposure compensation (film stock + user EV + chemical push/pull process)
+    total_ev = film.get("ev", 0.0) + ev_adjust + proc_spec["ev_offset"]
     if abs(total_ev) > 1e-4:
         lin = lin * (2.0 ** total_ev)
+
+    # 1a. Compensating stand development highlight shoulder protection
+    if proc_spec["compensating"] > 0.01:
+        comp = float(proc_spec["compensating"])
+        lin = np.where(
+            lin > 0.55,
+            0.55 + (lin - 0.55) / (1.0 + comp * 0.45 * np.maximum(0.0, lin - 0.55)),
+            lin,
+        )
 
     # 1b. Tonal zones (shadows / midtones / highlights) as linear exposure
     if abs(shadows) > 1e-4 or abs(mids) > 1e-4 or abs(highlights) > 1e-4:
         lin = apply_tonal_zones(lin, shadows=shadows, mids=mids, highlights=highlights)
-        
+
     # 2. Vignette
     if vignette_mult > 0.001:
         lin = apply_vignette(lin, strength=vignette_mult)
-        
+
     # 3. Halation
     hal_strength = film.get("halation", 0.0) * halation_mult
     if hal_strength > 0.01:
@@ -1193,11 +1287,11 @@ def develop_frame(
             threshold=film.get("hal_thr", 0.75),
             tint=film.get("hal_tint", (1.0, 0.28, 0.06))
         )
-        
+
     # 4. Color / Film Look
     lut_file = film.get("lut_file")
     cube_path = LUT_DIR / lut_file if lut_file else None
-    
+
     if cube_path and cube_path.is_file():
         lut_obj = load_lut(str(cube_path), space=film.get("lut_space", "srgb"))
         display = lut_obj.apply(lin)
@@ -1214,12 +1308,12 @@ def develop_frame(
             y = np.sum(lin * LUMA, axis=-1, keepdims=True)
             sat = film.get("sat", 1.0)
             lin_sat = np.maximum(0.0, y + (lin - y) * sat)
-            
+
             contrast = film["contrast"]
             pivot = film["pivot"]
             black = film["black"]
             white = film["white"]
-            
+
             channels = []
             for c in range(3):
                 c_slope = contrast[c] if len(contrast) > c else contrast[0]
@@ -1228,27 +1322,33 @@ def develop_frame(
                 c_wht = white[c] if len(white) > c else white[0]
                 channels.append(apply_characteristic_curve(lin_sat[..., c], c_slope, c_piv, c_blk, c_wht))
             display = np.stack(channels, axis=-1)
-            
+
             if film.get("hues"):
                 display = shift_hues(display, film["hues"])
 
     display = np.clip(display, 0.0, 1.0)
-    
+
+    # 4a. Chemical push/pull contrast & stand-development acutance
+    if abs(proc_spec["contrast_mult"] - 1.0) > 0.005:
+        display = np.clip(0.45 + (display - 0.45) * float(proc_spec["contrast_mult"]), 0.0, 1.0)
+    if proc_spec["acutance"] > 0.01:
+        display = apply_optical_sharpen(display, mode="lab", amount=float(proc_spec["acutance"]))
+
     # 4b. User tone curve (display-referred: same space as a darkroom curve)
     if curve:
         display = apply_user_curves(display, curve)
-    
+
     # 5. Film Grain
-    grain_amt = film.get("grain", 0.015) * grain_mult
+    grain_amt = film.get("grain", 0.015) * grain_mult * float(proc_spec["grain_mult"])
     if grain_amt > 0.001:
         seed = grain_seed if grain_seed is not None else _stable_grain_seed(image_input, film_key)
         display = apply_grain(display, amount=grain_amt, size=film.get("grain_size", 1.0), seed=seed)
-        
+
     # 6. Optical Softness
     soft = film.get("soft", 0.0)
     if soft > 0.4:
         display = scipy.ndimage.gaussian_filter(display, sigma=[soft * 0.4, soft * 0.4, 0.0])
-        
+
     display_clamped = np.clip(display, 0.0, 1.0).astype(np.float32)
     # np.rint rounds to nearest; a plain astype(uint8) truncates and applies a
     # systematic -0.5 LSB bias to every pixel of every exported master.
