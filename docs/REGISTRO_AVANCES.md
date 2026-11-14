@@ -104,9 +104,10 @@ Este documento mantiene el registro vivo de **investigación, propuestas de mejo
   - `static/js/app.js`: Eliminadas 8 llamadas redundantes a `updateDustSpotsUI()`; texto de copia *Acerca de* actualizado dinámicamente a la versión activa y `80 películas químicas`.
   - `engine/`, `app.py`, `tests/`: Limpieza automática de espacios en blanco (`ruff check --select W291,W293,W391 --fix`; 50 correcciones) y verificación completa con `ruff check .` (`E, F, B, I, UP, S`).
   - `haluro.spec`: Agregado `engine.roll_processor` explícitamente en `hidden_imports`.
-- **Versionado (`2.7.0` → `2.8.0`), compilación y empaquetado macOS arm64:**
+- **Versionado (`2.7.0` → `2.8.0`), compilación y empaquetado macOS (`arm64` y `x86_64`):**
   - Actualizados `engine/__init__.py`, `pyproject.toml`, `version.json` y `CHANGELOG.md`; validado con `.github/scripts/check_version.py`.
-  - Compilado bundle autónomo `dist/Haluro.app` (PyInstaller 6.22.3, smoke-test frozen validado: `films_count=80`, `luts_count=63`, `version=2.8.0`) y empaquetado `dist/Haluro-2.8.0-macOS-arm64.dmg` (SHA-256 `ef19240d28aeb7ae29f6cfe2a73681b4c8ad1349a2f9b2222901c9a429cd5274`).
+  - **Apple Silicon (`arm64`):** Compilado con PyInstaller 6.22.3 (smoke-test frozen validado: `films_count=80`, `luts_count=63`, `version=2.8.0`) y empaquetado `dist/Haluro-2.8.0-macOS-arm64.dmg` (SHA-256 `ef19240d28aeb7ae29f6cfe2a73681b4c8ad1349a2f9b2222901c9a429cd5274`).
+  - **macOS Intel (`x86_64`):** Compilado bajo entorno Python 3.12.15 `x86_64` (Rosetta 2, `pytest -v`: `94 passed, 1 skipped`, smoke-test frozen `x86_64` validado) y empaquetado `dist/Haluro-2.8.0-macOS-x86_64.dmg` (SHA-256 `79fc5ccac1c41170a933b7eccc388466d030a578b146924412e9238a27425c53`).
 
 ---
 
