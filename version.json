@@ -13,13 +13,13 @@
   ],
   "download_urls": {
     "macos_arm64": "dist/Haluro-2.9.1-macOS-arm64.dmg",
-    "macos_x86_64": "",
+    "macos_x86_64": "dist/Haluro-2.9.1-macOS-x86_64.dmg",
     "windows_x86_64": "",
     "windows_portable": ""
   },
   "checksums": {
     "macos_arm64": "5b74b0467addc486252eb132966303201a822f23fdd9f15b90212ce226b6d5a9",
-    "macos_x86_64": "",
+    "macos_x86_64": "cc38ed7a3c27474823b4817e93a43789d2c7374b583fcfe18c09aa3b8353f838",
     "windows_x86_64": "",
     "windows_portable": ""
   },

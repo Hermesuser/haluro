@@ -100,7 +100,7 @@ def test_e2e_negative_mode(page, haluro_server):
     page.locator("#tabNegativeMode").click()
 
     # Verificar que el panel de controles de negativo está visible
-    page.locator("#negativeControls").wait_for(timeout=5000)
+    page.locator("#negativeLabContainer").wait_for(timeout=5000)
 
 
 def test_e2e_accessibility_wcag22(page, haluro_server):
