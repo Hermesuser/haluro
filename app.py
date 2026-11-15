@@ -27,7 +27,14 @@ from werkzeug.utils import secure_filename
 
 from engine import APP_NAME, __version__, about_payload
 from engine.contact_sheet import generate_contact_sheet
-from engine.films import LUT_DIR, get_film, list_films
+from engine.films import (
+    LUT_DIR,
+    delete_user_lut,
+    get_film,
+    get_user_luts_dir,
+    list_films,
+    save_user_lut,
+)
 from engine.negative_inverter import (
     BW_TONING_PROFILES,
     COLOR_METHODS,
@@ -1089,6 +1096,62 @@ def api_films():
         "films": list_films(),
         "dev_processes": [{"key": k, "name": v["name"]} for k, v in DEV_PROCESSES.items()],
     })
+
+
+@app.route("/api/user_luts", methods=["POST"])
+def api_upload_user_luts():
+    files = request.files.getlist("files") or request.files.getlist("file")
+    if not files:
+        return jsonify({"error": "No se recibieron archivos .cube"}), 400
+
+    lut_space = (request.form.get("lut_space") or "srgb").strip().lower()
+    added = []
+    errors = []
+
+    for f in files:
+        fname = f.filename or ""
+        if not fname:
+            continue
+        try:
+            raw = f.read()
+            if not raw:
+                raise ValueError("El archivo está vacío.")
+            film_entry = save_user_lut(fname, raw, lut_space=lut_space)
+            added.append(film_entry)
+        except ValueError as exc:
+            errors.append({"filename": fname, "error": str(exc)})
+        except Exception as exc:
+            logger.exception("Error importando LUT %s", fname)
+            errors.append({"filename": fname, "error": f"Error inesperado: {exc}"})
+
+    if not added and errors:
+        return jsonify({
+            "success": False,
+            "added": [],
+            "errors": errors,
+            "error": errors[0]["error"],
+        }), 400
+
+    return jsonify({
+        "success": True,
+        "added": added,
+        "errors": errors,
+        "films": list_films(),
+    })
+
+
+@app.route("/api/user_luts/<path:key>", methods=["DELETE"])
+def api_delete_user_lut(key):
+    if not delete_user_lut(key):
+        return jsonify({"error": "LUT de usuario no encontrado"}), 404
+    return jsonify({"success": True, "films": list_films()})
+
+
+@app.route("/api/user_luts/open_folder", methods=["POST"])
+def api_open_user_luts_folder():
+    user_dir = get_user_luts_dir()
+    open_directory(user_dir)
+    return jsonify({"success": True, "path": str(user_dir)})
 
 
 @app.route("/api/load_sample", methods=["POST"])

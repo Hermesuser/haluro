@@ -170,6 +170,8 @@
         <div class="pane-header">
           <h2>Catálogo de películas</h2>
           <div class="pane-header-tools">
+            <button type="button" class="sort-toggle-btn" id="userLutUploadBtn" title="Cargar archivos .cube de usuario">+ LUT</button>
+            <input type="file" id="userLutInput" accept=".cube" multiple hidden>
             <button type="button" class="sort-toggle-btn" id="filmSortBtn" aria-pressed="false" title="Alternar orden por catálogo o sensibilidad ISO">Catálogo</button>
             <span class="mono-badge" id="filmCountBadge">80</span>
           </div>
@@ -193,6 +195,19 @@
           <button class="filter-pill" data-category="print" aria-pressed="false">Copia Cine</button>
           <button class="filter-pill" data-category="bw" aria-pressed="false">Plata B&amp;N</button>
           <button class="filter-pill" data-category="xpro" aria-pressed="false">Cross-Pro</button>
+          <button class="filter-pill" data-category="user" aria-pressed="false">Mis LUTs</button>
+        </div>
+
+        <div class="user-lut-toolbar" id="userLutToolbar" hidden>
+          <select id="userLutSpaceSelect" class="user-lut-space-select" aria-label="Espacio de color del LUT" title="Espacio de entrada esperado por el LUT">
+            <option value="srgb" selected>sRGB (Estándar)</option>
+            <option value="rec709">Rec.709</option>
+            <option value="slog3">S-Log3</option>
+            <option value="logc3">ARRI LogC3</option>
+            <option value="cineon">Cineon</option>
+            <option value="linear">Linear</option>
+          </select>
+          <button type="button" class="sort-toggle-btn" id="userLutOpenFolderBtn" title="Abrir carpeta de LUTs de usuario">Carpeta</button>
         </div>
 
         <div class="film-shelf-list" id="filmList" role="list" aria-label="Lista de películas analógicas">

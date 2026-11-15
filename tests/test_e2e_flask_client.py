@@ -171,13 +171,14 @@ def test_films_and_health(client) -> None:
     resp = client.get("/api/films")
     assert resp.status_code == 200
     films = resp.get_json()["films"]
-    assert len(films) == 80, f"Se esperaban 80 películas, se obtuvieron {len(films)}"
+    builtin_films = [f for f in films if not f.get("is_user_lut")]
+    assert len(builtin_films) == 80, f"Se esperaban 80 películas base, se obtuvieron {len(builtin_films)}"
 
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["status"] == "ok"
-    assert body["films_count"] == 80
+    assert body["films_count"] >= 80
 
 
 # ---------------------------------------------------------------------------

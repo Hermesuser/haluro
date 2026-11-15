@@ -916,6 +916,8 @@ function applyFilters() {
   const q = state.search.toLowerCase().trim();
   const clearBtn = document.getElementById("clearFilmSearchBtn");
   if (clearBtn) clearBtn.hidden = !state.search;
+  const userLutToolbar = document.getElementById("userLutToolbar");
+  if (userLutToolbar) userLutToolbar.hidden = state.category !== "user";
 
   const filtered = state.films.filter((f) => {
     const matchesCat =
@@ -955,7 +957,9 @@ function renderFilmShelf() {
     empty.textContent =
       state.category === "fav"
         ? "Aún no tienes películas marcadas como favoritas."
-        : "Ninguna película coincide con tu búsqueda.";
+        : state.category === "user"
+          ? "Aún no tienes LUTs propios. Pulsa «+ LUT» para importar archivos .cube."
+          : "Ninguna película coincide con tu búsqueda.";
     container.appendChild(empty);
     return;
   }
@@ -1015,12 +1019,102 @@ function renderFilmShelf() {
     });
 
     card.appendChild(selectBtn);
+    if (film.is_user_lut) {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "user-lut-delete-btn";
+      delBtn.title = "Eliminar LUT de usuario";
+      delBtn.setAttribute("aria-label", `Eliminar LUT: ${film.name}`);
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteUserLut(film);
+      });
+      card.appendChild(delBtn);
+    }
     card.appendChild(favBtn);
 
     frag.appendChild(card);
   });
 
   container.appendChild(frag);
+}
+
+async function uploadUserLuts(fileList) {
+  const files = Array.from(fileList || []).filter((f) => f && f.name);
+  if (!files.length) return;
+
+  const spaceSelect = document.getElementById("userLutSpaceSelect");
+  const lutSpace = spaceSelect ? spaceSelect.value : "srgb";
+  const form = new FormData();
+  form.append("lut_space", lutSpace);
+  files.forEach((f) => form.append("files", f));
+
+  try {
+    const res = await fetch("/api/user_luts", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al importar LUT", data.error || "No se pudo cargar el archivo .cube.");
+      return;
+    }
+
+    if (Array.isArray(data.films)) {
+      state.films = data.films;
+    } else {
+      await fetchFilms();
+    }
+
+    // Switch to "Mis LUTs" tab and select the first newly added LUT
+    const userPill = document.querySelector('.filter-pill[data-category="user"]');
+    if (userPill) {
+      setToggleGroupActive(".filter-pill", userPill, "aria-pressed");
+      state.category = "user";
+    }
+    applyFilters();
+
+    if (data.added && data.added.length > 0) {
+      selectFilm(data.added[0].key);
+    }
+
+    const addedCount = (data.added || []).length;
+    const errCount = (data.errors || []).length;
+    if (errCount > 0) {
+      showToast(
+        "LUTs importados con avisos",
+        `${addedCount} añadido(s), ${errCount} rechazado(s): ${data.errors[0].filename} (${data.errors[0].error})`
+      );
+    } else {
+      showToast("LUTs importados", `${addedCount} archivo(s) .cube listos en «Mis LUTs».`);
+    }
+  } catch (err) {
+    console.error("Error subiendo LUTs de usuario:", err);
+    showToast("Error de red", "No se pudieron importar los archivos .cube.");
+  }
+}
+
+async function deleteUserLut(film) {
+  try {
+    const res = await fetch(`/api/user_luts/${encodeURIComponent(film.key)}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al eliminar", data.error || "No se pudo eliminar el LUT.");
+      return;
+    }
+    if (Array.isArray(data.films)) {
+      state.films = data.films;
+    } else {
+      await fetchFilms();
+    }
+    if (state.selectedFilm === film.key) {
+      selectFilm("portra400");
+    } else {
+      applyFilters();
+    }
+    showToast("LUT eliminado", `Se eliminó «${film.name}».`);
+  } catch (err) {
+    console.error("Error eliminando LUT de usuario:", err);
+    showToast("Error de red", "No se pudo eliminar el LUT.");
+  }
 }
 
 function toggleFavoriteFilm(filmKey) {
@@ -7390,6 +7484,26 @@ function initUIListeners() {
       state.category = btn.dataset.category || "all";
       applyFilters();
     });
+  });
+
+  const userLutInput = document.getElementById("userLutInput");
+  document.getElementById("userLutUploadBtn")?.addEventListener("click", () => {
+    if (userLutInput) {
+      userLutInput.value = "";
+      userLutInput.click();
+    }
+  });
+  userLutInput?.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadUserLuts(e.target.files);
+    }
+  });
+  document.getElementById("userLutOpenFolderBtn")?.addEventListener("click", async () => {
+    try {
+      await fetch("/api/user_luts/open_folder", { method: "POST" });
+    } catch (err) {
+      console.error("Error abriendo carpeta de LUTs:", err);
+    }
   });
 
   // Viewport modes & geometry

@@ -671,6 +671,7 @@ html, body {
 .film-card[data-kind="cine"]  { border-left-color: var(--stock-cine); }
 .film-card[data-kind="bw"]    { border-left-color: var(--stock-bw); }
 .film-card[data-kind="xpro"]  { border-left-color: var(--stock-xpro); }
+.film-card[data-kind="user"]  { border-left-color: var(--sodium-amber); }
 
 .film-card:hover {
   background-color: var(--slate-hover);
@@ -753,6 +754,65 @@ html, body {
 }
 
 .film-empty {
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--pewter-muted);
+  font-size: 12px;
+}
+
+.user-lut-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+
+.user-lut-toolbar[hidden] {
+  display: none;
+}
+
+.user-lut-space-select {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline-rule);
+  background: var(--chamber-black);
+  color: var(--silver-text);
+}
+
+.user-lut-delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 32px;
+  z-index: 2;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--graphite-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  min-width: 22px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.film-card:hover .user-lut-delete-btn,
+.film-card:focus-within .user-lut-delete-btn {
+  opacity: 1;
+}
+
+.user-lut-delete-btn:hover {
+  color: #e06c75;
+}
   padding: 28px 14px;
   text-align: center;
   color: var(--pewter-muted);

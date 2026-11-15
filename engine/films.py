@@ -3,10 +3,16 @@ Includes color parameters, grain, halation, contrast, LUT mappings and UI metada
 """
 
 
-from .platform_io import get_resource_root
+import json
+import re
+from pathlib import Path
+
+from .lut import CubeLUT, load_lut
+from .platform_io import get_resource_root, get_user_data_root
 
 # Base directory for bundled 3D LUT files (supports both source & frozen .app/.exe)
 LUT_DIR = get_resource_root() / "luts"
+VALID_LUT_SPACES = ("srgb", "rec709", "slog3", "logc3", "cineon", "linear")
 
 # Descriptions for all 80 films (natural Spanish)
 DESCRIPTIONS = {
@@ -102,6 +108,7 @@ CATEGORY_NAMES = {
     "bw": "Blanco y Negro",
     "xpro": "Proceso Cruzado",
     "print": "Copia Cinematográfica",
+    "user": "Mis LUTs",
 }
 
 STOCKS_DATA = [
@@ -389,12 +396,186 @@ for entry in STOCKS_DATA:
     FILMS[key] = make_film(*entry)
 
 
+def get_user_luts_dir() -> Path:
+    """Return writable directory for user-imported `.cube` LUT files."""
+    target = (get_user_data_root() / "user_luts").resolve()
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _slugify_lut_name(stem: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_").lower()
+    return slug or "custom_lut"
+
+
+def _pretty_lut_name(stem: str) -> str:
+    cleaned = re.sub(r"[_]+", " ", stem).strip()
+    return cleaned or "LUT personalizado"
+
+
+def _sanitize_cube_filename(filename: str) -> str:
+    base = Path(filename).name.strip()
+    # Normalize double `.cube.cube` extensions
+    while base.lower().endswith(".cube.cube"):
+        base = base[:-5]
+    if not base.lower().endswith(".cube"):
+        raise ValueError("Solo se admiten archivos con extensión .cube")
+    stem = base[:-5]
+    safe_stem = re.sub(r"[^\w.\- ()+\[\]]+", "_", stem).strip(" .")
+    if not safe_stem:
+        safe_stem = "custom_lut"
+    return f"{safe_stem}.cube"
+
+
+def _load_user_lut_meta(user_dir: Path) -> dict:
+    meta_file = user_dir / "metadata.json"
+    if not meta_file.is_file():
+        return {}
+    try:
+        data = json.loads(meta_file.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_user_lut_meta(user_dir: Path, meta: dict) -> None:
+    meta_file = user_dir / "metadata.json"
+    meta_file.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _make_user_film(path: Path, meta_entry: dict | None = None) -> dict:
+    meta_entry = meta_entry or {}
+    slug = meta_entry.get("slug") or _slugify_lut_name(path.stem)
+    space = meta_entry.get("lut_space", "srgb")
+    if space not in VALID_LUT_SPACES:
+        space = "srgb"
+    display_name = meta_entry.get("name") or _pretty_lut_name(path.stem)
+    desc = meta_entry.get("desc") or f"LUT de usuario ({space.upper()})"
+    return {
+        "key": f"user:{slug}",
+        "brand": "Usuario",
+        "name": display_name,
+        "iso": int(meta_entry.get("iso", 100)),
+        "kind": "user",
+        "is_user_lut": True,
+        "filename": path.name,
+        "balance": 5500,
+        "lut_file": str(path.resolve()),
+        "lut_space": space,
+        "ev": 0.0,
+        "sat": 1.0,
+        "contrast": (0.18, 0.18, 0.18),
+        "pivot": (0.0, 0.0, 0.0),
+        "black": (0.03, 0.03, 0.03),
+        "white": (0.96, 0.96, 0.96),
+        "halation": 0.25,
+        "hal_thr": 0.78,
+        "hal_tint": (1.0, 0.28, 0.06),
+        "grain": 0.008,
+        "grain_size": 0.8,
+        "soft": 0.3,
+        "desc": desc,
+    }
+
+
+def _iter_user_films() -> list[dict]:
+    user_dir = get_user_luts_dir()
+    meta = _load_user_lut_meta(user_dir)
+    films = []
+    seen_keys = set()
+    for path in sorted(user_dir.glob("*.cube"), key=lambda p: p.name.lower()):
+        entry = meta.get(path.name, {})
+        film = _make_user_film(path, entry)
+        # Disambiguate rare slug collisions across distinct filenames
+        if film["key"] in seen_keys:
+            film["key"] = f"{film['key']}_{len(seen_keys)}"
+        seen_keys.add(film["key"])
+        films.append(film)
+    return films
+
+
+def save_user_lut(filename: str, raw_bytes: bytes, lut_space: str = "srgb", name: str | None = None) -> dict:
+    """Validate and store a user `.cube` LUT file in `user_luts/`."""
+    if lut_space not in VALID_LUT_SPACES:
+        raise ValueError(f"Espacio de color no válido: {lut_space}")
+    safe_name = _sanitize_cube_filename(filename)
+    user_dir = get_user_luts_dir()
+    target_path = user_dir / safe_name
+    tmp_path = user_dir / f".tmp_{safe_name}"
+
+    try:
+        tmp_path.write_bytes(raw_bytes)
+        lut = CubeLUT(tmp_path, space=lut_space)
+        if lut.table1 is None and lut.table3 is None:
+            raise ValueError("El archivo .cube no contiene una tabla 1D o 3D válida.")
+        import numpy as np
+        probe = np.array([[[0.0, 0.0, 0.0], [0.5, 0.5, 0.5], [1.0, 1.0, 1.0]]], dtype=np.float32)
+        out = lut.apply(probe)
+        if np.isnan(out).any() or np.isinf(out).any():
+            raise ValueError("El archivo .cube produce valores inválidos (NaN/Inf).")
+    except ValueError:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    except Exception as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise ValueError(f"Archivo .cube corrupto o incompatible ({type(exc).__name__}).") from exc
+
+    tmp_path.replace(target_path)
+    load_lut.cache_clear()
+
+    meta = _load_user_lut_meta(user_dir)
+    grid_desc = f"{lut.table3.shape[0]}³" if lut.table3 is not None else f"1D ({lut.table1.shape[0]})"
+    meta[safe_name] = {
+        "slug": _slugify_lut_name(Path(safe_name).stem),
+        "name": (name or "").strip() or _pretty_lut_name(Path(safe_name).stem),
+        "lut_space": lut_space,
+        "desc": f"LUT de usuario · {grid_desc} · {lut_space.upper()}",
+    }
+    _save_user_lut_meta(user_dir, meta)
+    film = _make_user_film(target_path, meta[safe_name])
+    return {
+        "key": film["key"],
+        "name": film["name"],
+        "brand": film["brand"],
+        "iso": film["iso"],
+        "kind": film["kind"],
+        "category": CATEGORY_NAMES.get(film["kind"], "Mis LUTs"),
+        "desc": film["desc"],
+        "is_user_lut": True,
+        "lut_space": film["lut_space"],
+    }
+
+
+def delete_user_lut(key: str) -> bool:
+    """Delete a user LUT by its `user:<slug>` key."""
+    if not key or not key.startswith("user:"):
+        return False
+    user_dir = get_user_luts_dir()
+    for film in _iter_user_films():
+        if film["key"] == key:
+            Path(film["lut_file"]).unlink(missing_ok=True)
+            meta = _load_user_lut_meta(user_dir)
+            if film["filename"] in meta:
+                meta.pop(film["filename"], None)
+                _save_user_lut_meta(user_dir, meta)
+            load_lut.cache_clear()
+            return True
+    return False
+
+
 def get_film(key):
     resolved = FILM_ALIASES.get(key, key)
-    return FILMS.get(resolved, FILMS["portra400"])
+    if resolved in FILMS:
+        return FILMS[resolved]
+    if isinstance(resolved, str) and resolved.startswith("user:"):
+        for film in _iter_user_films():
+            if film["key"] == resolved:
+                return film
+    return FILMS["portra400"]
 
 
 def list_films():
+    all_films = list(FILMS.values()) + _iter_user_films()
     return [
         {
             "key": f["key"],
@@ -403,7 +584,9 @@ def list_films():
             "iso": f["iso"],
             "kind": f["kind"],
             "category": CATEGORY_NAMES.get(f["kind"], "Film"),
-            "desc": f["desc"]
+            "desc": f["desc"],
+            "is_user_lut": bool(f.get("is_user_lut", False)),
+            "lut_space": f.get("lut_space", "srgb"),
         }
-        for f in FILMS.values()
+        for f in all_films
     ]

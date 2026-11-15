@@ -379,13 +379,13 @@ def test_p6_contemporary_stocks_and_dev_process(client) -> None:
         "fomapan400",
     }
     assert expected_new.issubset(keys)
-    assert len(films) == 80
+    assert len([f for f in films if not f.get("is_user_lut")]) == 80
 
     # /api/films exposes the chemical development process catalog
     f_res = client.get("/api/films")
     assert f_res.status_code == 200
     f_body = f_res.get_json()
-    assert len(f_body["films"]) == 80
+    assert len([f for f in f_body["films"] if not f.get("is_user_lut")]) == 80
     assert {p["key"] for p in f_body["dev_processes"]} == set(DEV_PROCESSES.keys())
 
     # Synthetic gradient verifies Push +2 EV brightens/increases contrast while Stand Rodinal tames peaks

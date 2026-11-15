@@ -1861,7 +1861,11 @@ def develop_frame(
 
     # 4. Color / Film Look
     lut_file = film.get("lut_file")
-    cube_path = LUT_DIR / lut_file if lut_file else None
+    if lut_file:
+        lut_path = Path(lut_file)
+        cube_path = lut_path if lut_path.is_absolute() else (LUT_DIR / lut_file)
+    else:
+        cube_path = None
 
     if cube_path and cube_path.is_file():
         lut_obj = load_lut(str(cube_path), space=film.get("lut_space", "srgb"))
