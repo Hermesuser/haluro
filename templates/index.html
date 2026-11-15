@@ -195,7 +195,7 @@
           <button class="filter-pill" data-category="xpro" aria-pressed="false">Cross-Pro</button>
         </div>
 
-        <div class="film-shelf-list" id="filmList" role="listbox" aria-label="Lista de películas analógicas">
+        <div class="film-shelf-list" id="filmList" role="list" aria-label="Lista de películas analógicas">
           <!-- Rendered dynamically -->
         </div>
       </div>
@@ -220,9 +220,9 @@
 
             <div class="control-group compact-top" id="negSubstrateGroup">
               <div class="control-label">
-                <span id="lblNegSubstrate" title="Adapta la detección de soporte y equilibrio de color según el sustrato de la película">Sustrato base</span>
+                <label id="lblNegSubstrate" for="negSubstrateSelect" title="Adapta la detección de soporte y equilibrio de color según el sustrato de la película">Sustrato base</label>
               </div>
-              <select id="negSubstrateSelect" class="dark-select" aria-labelledby="lblNegSubstrate">
+              <select id="negSubstrateSelect" class="dark-select">
                 <option value="c41_orange">C-41 máscara naranja (Estándar)</option>
                 <option value="clear_base">Base transparente (Aerocolor / SantaColor / Cine)</option>
                 <option value="phoenix">Harman Phoenix I / II (Sin máscara + cruce)</option>
@@ -391,9 +391,9 @@
             <!-- Contextual Color Print Finishing (0% - 200%) -->
             <div id="negColorFinishPanel" class="sub-panel-box">
               <div class="control-label">
-                <span>Acabado de copia en color</span>
+                <label for="negPrintFinishSelect">Acabado de copia en color</label>
               </div>
-              <select id="negPrintFinishSelect" class="dark-select" aria-label="Acabado de copia en color">
+              <select id="negPrintFinishSelect" class="dark-select">
                 <option value="none">Estándar (sin acabado extra)</option>
                 <option value="crystal_archive">Papel Fujicolor Crystal Archive</option>
                 <option value="portra_airy">Retrato Pastel Luminoso</option>
@@ -657,14 +657,14 @@
                   </svg>
                 </div>
                 <div class="crop-dimensions-badge" id="cropDimensionsBadge" aria-hidden="true">—</div>
-                <div class="crop-handle crop-handle-nw" data-handle="nw" aria-label="Esquina superior izquierda"></div>
-                <div class="crop-handle crop-handle-n" data-handle="n" aria-label="Borde superior"></div>
-                <div class="crop-handle crop-handle-ne" data-handle="ne" aria-label="Esquina superior derecha"></div>
-                <div class="crop-handle crop-handle-e" data-handle="e" aria-label="Borde derecho"></div>
-                <div class="crop-handle crop-handle-se" data-handle="se" aria-label="Esquina inferior derecha"></div>
-                <div class="crop-handle crop-handle-s" data-handle="s" aria-label="Borde inferior"></div>
-                <div class="crop-handle crop-handle-sw" data-handle="sw" aria-label="Esquina inferior izquierda"></div>
-                <div class="crop-handle crop-handle-w" data-handle="w" aria-label="Borde izquierdo"></div>
+                <button type="button" class="crop-handle crop-handle-nw" data-handle="nw" aria-label="Esquina superior izquierda (usa flechas para ajustar)"></button>
+                <button type="button" class="crop-handle crop-handle-n" data-handle="n" aria-label="Borde superior (usa flechas para ajustar)"></button>
+                <button type="button" class="crop-handle crop-handle-ne" data-handle="ne" aria-label="Esquina superior derecha (usa flechas para ajustar)"></button>
+                <button type="button" class="crop-handle crop-handle-e" data-handle="e" aria-label="Borde derecho (usa flechas para ajustar)"></button>
+                <button type="button" class="crop-handle crop-handle-se" data-handle="se" aria-label="Esquina inferior derecha (usa flechas para ajustar)"></button>
+                <button type="button" class="crop-handle crop-handle-s" data-handle="s" aria-label="Borde inferior (usa flechas para ajustar)"></button>
+                <button type="button" class="crop-handle crop-handle-sw" data-handle="sw" aria-label="Esquina inferior izquierda (usa flechas para ajustar)"></button>
+                <button type="button" class="crop-handle crop-handle-w" data-handle="w" aria-label="Borde izquierdo (usa flechas para ajustar)"></button>
               </div>
               <svg id="horizonLineSvg" class="horizon-line-svg" style="display: none;" aria-hidden="true">
                 <line id="horizonGuideLine" x1="0" y1="0" x2="0" y2="0" />
@@ -854,7 +854,7 @@
       <!-- Live RGB & Luminance Histogram -->
       <div class="histogram-box">
         <div class="histogram-header">
-          <span class="panel-label">Densitómetro RGB</span>
+          <h2 class="panel-label">Densitómetro RGB</h2>
           <div class="clip-indicators">
             <button type="button" class="clip-pill clip-toggle-btn" id="clipShadows" aria-pressed="false" title="Alternar aviso de sombras empastadas en azul (Tecla J)">Sombras 0.0%</button>
             <button type="button" class="clip-pill clip-toggle-btn" id="clipHighlights" aria-pressed="false" title="Alternar aviso de luces quemadas en rojo (Tecla J)">Luces 0.0%</button>
@@ -891,9 +891,9 @@
 
             <div class="control-group compact-top">
               <div class="control-label">
-                <span id="lblSimDevProcess">Proceso de revelado</span>
+                <label id="lblSimDevProcess" for="simDevProcessSelect">Proceso de revelado</label>
               </div>
-              <select id="simDevProcessSelect" class="select-input" aria-labelledby="lblSimDevProcess" title="Simula baño químico compensador o forzado">
+              <select id="simDevProcessSelect" class="dark-select" title="Simula baño químico compensador o forzado">
                 <option value="standard" selected>Estándar (C-41 / D-76)</option>
                 <option value="stand_rodinal">Stand / Rodinal 1+100 (alta acutancia)</option>
                 <option value="push_1">Push +1 EV (forzado 1 paso)</option>
@@ -1468,8 +1468,9 @@
 
           <div class="curve-canvas-wrap">
             <canvas id="curveCanvas" class="curve-canvas" height="248"
+                    tabindex="0"
                     role="application"
-                    aria-label="Editor de curva tonal. Clic para añadir un punto, arrastrar para moverlo, doble clic para quitarlo."></canvas>
+                    aria-label="Editor de curva tonal. Clic o Enter para añadir un punto, flechas para moverlo, corchetes para cambiar de punto, doble clic o Supr para quitarlo."></canvas>
           </div>
           <p class="helper-copy">Clic para añadir un punto · Arrastra para moverlo · Doble clic para quitarlo.</p>
         </section>
@@ -1702,7 +1703,7 @@
       <div class="modal-header">
         <div class="batch-title-row">
           <span class="batch-pulse-bulb" aria-hidden="true"></span>
-          <h3 id="batchProgressTitle">Revelando rollo en laboratorio</h3>
+          <h2 id="batchProgressTitle">Revelando rollo en laboratorio</h2>
         </div>
       </div>
       <div class="modal-body modal-body-left">
@@ -1730,7 +1731,7 @@
   <div class="modal-backdrop" id="resultModal" role="dialog" aria-modal="true" aria-labelledby="resultModalTitle">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="resultModalTitle">Rollo revelado a resolución nativa</h3>
+        <h2 id="resultModalTitle">Rollo revelado a resolución nativa</h2>
         <button class="modal-close" id="closeModalBtn" aria-label="Cerrar ventana">&times;</button>
       </div>
       <div class="modal-body">
@@ -1751,7 +1752,7 @@
   <div class="modal-backdrop" id="historyModal" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
     <div class="modal-box modal-wide">
       <div class="modal-header">
-        <h3 id="historyModalTitle">Historial de versiones y recetas</h3>
+        <h2 id="historyModalTitle">Historial de versiones y recetas</h2>
         <button class="modal-close" id="closeHistoryBtn" aria-label="Cerrar historial">&times;</button>
       </div>
       <div class="modal-body modal-body-left">
@@ -1769,7 +1770,7 @@
   <div class="modal-backdrop" id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="shortcutsModalTitle">Atajos de laboratorio</h3>
+        <h2 id="shortcutsModalTitle">Atajos de laboratorio</h2>
         <button class="modal-close" id="closeShortcutsBtn" aria-label="Cerrar atajos">&times;</button>
       </div>
       <div class="modal-body modal-body-left">
@@ -1794,7 +1795,7 @@
           <div class="shortcut-row"><span>Mover lienzo temporalmente</span><kbd>Espacio</kbd> + arrastrar</div>
           <div class="shortcut-row"><span>Copiar / Pegar receta óptica</span><kbd id="kbdCopyPaste">⇧ ⌘ C / V</kbd></div>
           <div class="shortcut-row"><span>Encajar zoom en mesa de luz</span><kbd>0</kbd></div>
-          <div class="shortcut-row"><span>Ocultar/mostrar paneles (Mesa limpia)</span><kbd>Tab</kbd></div>
+          <div class="shortcut-row"><span>Ocultar/mostrar paneles (Mesa limpia)</span><kbd id="kbdZenToggle">⌥ ⌘ Z</kbd></div>
           <div class="shortcut-row"><span>Luz roja de cuarto oscuro</span><kbd>L</kbd></div>
           <div class="shortcut-row"><span>Restablecer o editar valor exacto</span><kbd>Doble clic / Clic</kbd></div>
         </div>
@@ -1815,7 +1816,7 @@
             </svg>
           </div>
           <div>
-            <h3 id="aboutModalTitle">Haluro — Laboratorio Analógico Digital</h3>
+            <h2 id="aboutModalTitle">Haluro — Laboratorio Analógico Digital</h2>
             <span class="about-version-badge">Versión {{ about.version }} · Distribución Libre y Gratuita</span>
           </div>
         </div>
@@ -1895,7 +1896,7 @@
 
         <!-- Licensing & Copyright Details -->
         <div class="about-license-section">
-          <h4>Licencias de Software Libre y Atribución</h4>
+          <h3>Licencias de Software Libre y Atribución</h3>
           <ul class="about-license-list">
             <li><strong>Motor y diseño de Haluro:</strong> Código fuente abierto bajo licencia <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>. Copyright &copy; 2026 César Fernández Ardiles (Oregano, Chile).</li>
             <li><strong>Colección de Simulación de Película (3D LUTs):</strong> Basada en los perfiles libres de Pat David (PIXLS.US), GREYC/G'MIC y RawTherapee, distribuidos bajo licencia <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.</li>
@@ -1931,7 +1932,7 @@
             </svg>
           </div>
           <div>
-            <h3 id="updateModalTitle">¡Nueva versión disponible!</h3>
+            <h2 id="updateModalTitle">¡Nueva versión disponible!</h2>
             <span class="update-version-tag" id="updateVersionTag">Haluro</span>
           </div>
         </div>
@@ -1943,7 +1944,7 @@
         </p>
 
         <div class="update-highlights-box">
-          <h4>Novedades de esta versión:</h4>
+          <h3>Novedades de esta versión:</h3>
           <ul id="updateHighlightsList" class="update-highlights-list">
           </ul>
         </div>
@@ -1975,7 +1976,7 @@
   <div class="modal-backdrop" id="syncRollModal" role="dialog" aria-modal="true" aria-labelledby="syncRollModalTitle">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="syncRollModalTitle">Sincronizar receta con el rollo</h3>
+        <h2 id="syncRollModalTitle">Sincronizar receta con el rollo</h2>
         <button class="modal-close" id="closeSyncRollModalBtn" aria-label="Cerrar sincronización">&times;</button>
       </div>
       <div class="modal-body modal-body-left">

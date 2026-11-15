@@ -15,7 +15,7 @@
       --accent-secondary: #06b6d4;
       --text-main: #f3f4f6;
       --text-muted: #9ca3af;
-      --text-dim: #6b7280;
+      --text-dim: #8e96a4;
       --code-bg: #090a0c;
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -23,6 +23,15 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    [id] {
+      scroll-margin-top: 72px;
+    }
     
     body {
       background-color: var(--bg);

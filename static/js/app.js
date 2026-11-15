@@ -963,13 +963,17 @@ function renderFilmShelf() {
   const frag = document.createDocumentFragment();
   state.filteredFilms.forEach((film) => {
     const isFav = state.favorites.has(film.key);
+    const isSelected = film.key === state.selectedFilm;
     const card = document.createElement("div");
-    card.className = `film-card ${film.key === state.selectedFilm ? "selected" : ""}`;
+    card.className = `film-card ${isSelected ? "selected" : ""}`;
     card.dataset.key = film.key;
     card.dataset.kind = film.kind || "neg";
-    card.setAttribute("role", "option");
-    card.setAttribute("tabindex", "0");
-    card.setAttribute("aria-selected", film.key === state.selectedFilm ? "true" : "false");
+    card.setAttribute("role", "listitem");
+
+    const selectBtn = document.createElement("button");
+    selectBtn.type = "button";
+    selectBtn.className = "film-card-select-btn";
+    selectBtn.setAttribute("aria-pressed", isSelected ? "true" : "false");
 
     const header = document.createElement("div");
     header.className = "film-card-header";
@@ -986,19 +990,7 @@ function renderFilmShelf() {
     iso.className = "film-iso";
     iso.textContent = `ISO ${film.iso}`;
 
-    const favBtn = document.createElement("button");
-    favBtn.type = "button";
-    favBtn.className = `fav-btn ${isFav ? "is-fav" : ""}`;
-    favBtn.title = isFav ? "Quitar de favoritas" : "Añadir a favoritas";
-    favBtn.setAttribute("aria-label", favBtn.title);
-    favBtn.innerHTML = isFav ? ICON_STAR_FILL : ICON_STAR_OUTLINE;
-    favBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleFavoriteFilm(film.key);
-    });
-
     badges.appendChild(iso);
-    badges.appendChild(favBtn);
     header.appendChild(title);
     header.appendChild(badges);
 
@@ -1006,16 +998,24 @@ function renderFilmShelf() {
     meta.className = "film-card-meta";
     meta.textContent = film.desc ? `${film.category} · ${film.desc}` : film.category;
 
-    card.appendChild(header);
-    card.appendChild(meta);
+    selectBtn.appendChild(header);
+    selectBtn.appendChild(meta);
+    selectBtn.addEventListener("click", () => selectFilm(film.key));
 
-    card.addEventListener("click", () => selectFilm(film.key));
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        selectFilm(film.key);
-      }
+    const favBtn = document.createElement("button");
+    favBtn.type = "button";
+    favBtn.className = `fav-btn ${isFav ? "is-fav" : ""}`;
+    favBtn.title = isFav ? "Quitar de favoritas" : "Añadir a favoritas";
+    favBtn.setAttribute("aria-label", `${favBtn.title}: ${film.name}`);
+    favBtn.setAttribute("aria-pressed", isFav ? "true" : "false");
+    favBtn.innerHTML = isFav ? ICON_STAR_FILL : ICON_STAR_OUTLINE;
+    favBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFavoriteFilm(film.key);
     });
+
+    card.appendChild(selectBtn);
+    card.appendChild(favBtn);
 
     frag.appendChild(card);
   });
@@ -1041,7 +1041,8 @@ function selectFilm(key) {
   document.querySelectorAll(".film-card").forEach((el) => {
     const sel = el.dataset.key === key;
     el.classList.toggle("selected", sel);
-    el.setAttribute("aria-selected", sel ? "true" : "false");
+    const btn = el.querySelector(".film-card-select-btn");
+    if (btn) btn.setAttribute("aria-pressed", sel ? "true" : "false");
   });
   saveActiveFrameRecipe();
   updateActiveRecipeBanner();
@@ -1702,7 +1703,6 @@ function renderFilmStrip() {
     thumb.title = custom
       ? `${frame.name} (Fotograma #${idx + 1}${sampleNote}${pickNote} · Con ajustes propios)`
       : `${frame.name} (Fotograma #${idx + 1}${sampleNote}${pickNote})`;
-    thumb.setAttribute("tabindex", "0");
 
     if (custom) {
       const dot = document.createElement("span");
@@ -1765,18 +1765,17 @@ function renderFilmStrip() {
 
     scrim.appendChild(nameCap);
     scrim.appendChild(badge);
-    thumb.appendChild(img);
-    thumb.appendChild(scrim);
-
-    const activate = () => activateFrameByIndex(idx, "split");
-
-    thumb.addEventListener("click", activate);
-    thumb.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        activate();
-      }
-    });
+    const selectBtn = document.createElement("button");
+    selectBtn.type = "button";
+    selectBtn.className = "film-frame-select-btn";
+    selectBtn.setAttribute("aria-label", `Seleccionar fotograma ${idx + 1}: ${frame.name}`);
+    if (idx === state.activeFrameIndex) {
+      selectBtn.setAttribute("aria-current", "true");
+    }
+    selectBtn.appendChild(img);
+    selectBtn.appendChild(scrim);
+    selectBtn.addEventListener("click", () => activateFrameByIndex(idx, "split"));
+    thumb.appendChild(selectBtn);
 
     // Drag-to-reorder frames within the light table strip
     thumb.draggable = state.frames.length > 1;
@@ -2624,7 +2623,8 @@ function applySimRecipeToUI(rec) {
   document.querySelectorAll(".film-card").forEach((el) => {
     const sel = el.dataset.key === state.selectedFilm;
     el.classList.toggle("selected", sel);
-    el.setAttribute("aria-selected", sel ? "true" : "false");
+    const btn = el.querySelector(".film-card-select-btn");
+    if (btn) btn.setAttribute("aria-pressed", sel ? "true" : "false");
   });
   document.getElementById("flipHBtn")?.classList.toggle("active", state.flip_h);
   document.getElementById("flipHBtn")?.setAttribute("aria-pressed", state.flip_h ? "true" : "false");
@@ -4296,6 +4296,73 @@ function initCurveEditor() {
     triggerDebouncedPreview("curve");
     ev.preventDefault();
   });
+
+  let curveKeyIndex = 0;
+  canvas.addEventListener("keydown", (ev) => {
+    const channel = state.curveChannel;
+    let pts = curvePoints(getActiveCurve(), channel);
+    const step = ev.shiftKey ? 0.05 : 0.02;
+
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      pushUndoSnapshotForFrame();
+      const targetX = pts.length === 0 ? 0.5 : Math.min(0.92, Math.max(0.08, (pts[pts.length - 1][0] + 0.15) % 0.9));
+      curveAddPoint([targetX, targetX]);
+      pts = curvePoints(getActiveCurve(), channel);
+      curveKeyIndex = Math.max(0, pts.findIndex((p) => Math.abs(p[0] - targetX) < 0.02));
+      saveActiveFrameRecipe();
+      drawCurveEditor();
+      triggerDebouncedPreview("curve");
+      return;
+    }
+
+    if (ev.key === "[" || ev.key === "]") {
+      if (!pts.length) return;
+      ev.preventDefault();
+      curveKeyIndex = (curveKeyIndex + (ev.key === "]" ? 1 : pts.length - 1)) % pts.length;
+      return;
+    }
+
+    if (ev.key === "Delete" || ev.key === "Backspace") {
+      if (!pts.length) return;
+      ev.preventDefault();
+      pushUndoSnapshotForFrame();
+      const idx = Math.min(Math.max(0, curveKeyIndex), pts.length - 1);
+      curveRemovePoint(idx);
+      pts = curvePoints(getActiveCurve(), channel);
+      curveKeyIndex = Math.max(0, Math.min(idx, pts.length - 1));
+      saveActiveFrameRecipe();
+      drawCurveEditor();
+      triggerDebouncedPreview("curve");
+      return;
+    }
+
+    let dx = 0;
+    let dy = 0;
+    if (ev.key === "ArrowLeft") dx = -step;
+    else if (ev.key === "ArrowRight") dx = step;
+    else if (ev.key === "ArrowUp") dy = step;
+    else if (ev.key === "ArrowDown") dy = -step;
+    else return;
+
+    ev.preventDefault();
+    pushUndoSnapshotForFrame();
+    if (!pts.length) {
+      curveAddPoint([0.5, 0.5]);
+      pts = curvePoints(getActiveCurve(), channel);
+      curveKeyIndex = 0;
+    }
+    const idx = Math.min(Math.max(0, curveKeyIndex), pts.length - 1);
+    const nx = Math.min(1, Math.max(0, Number((pts[idx][0] + dx).toFixed(3))));
+    const ny = Math.min(1, Math.max(0, Number((pts[idx][1] + dy).toFixed(3))));
+    curveMovePoint(idx, [nx, ny]);
+    const updatedPts = curvePoints(getActiveCurve(), channel);
+    const movedIdx = updatedPts.findIndex((p) => Math.abs(p[0] - nx) < 1e-4 && Math.abs(p[1] - ny) < 1e-4);
+    if (movedIdx >= 0) curveKeyIndex = movedIdx;
+    saveActiveFrameRecipe();
+    drawCurveEditor();
+    triggerDebouncedPreview("curve");
+  });
 }
 
 
@@ -5324,6 +5391,40 @@ function initGeometryTool() {
     renderCropOverlay();
   });
 
+  overlay.addEventListener("keydown", (e) => {
+    if (!state.cropMode) return;
+    const handleEl = e.target.closest(".crop-handle");
+    if (!handleEl) return;
+    const handle = handleEl.dataset.handle || "";
+    const step = e.shiftKey ? 0.05 : 0.01;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === "ArrowLeft") dx = -step;
+    else if (e.key === "ArrowRight") dx = step;
+    else if (e.key === "ArrowUp") dy = -step;
+    else if (e.key === "ArrowDown") dy = step;
+    else return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    pushUndoSnapshotForFrame();
+    const cur = state.crop_rect || { x: 0, y: 0, w: 1, h: 1 };
+    const minSize = 0.05;
+    let left = cur.x;
+    let top = cur.y;
+    let right = cur.x + cur.w;
+    let bottom = cur.y + cur.h;
+
+    if (handle.includes("w")) left = Math.max(0, Math.min(right - minSize, left + dx));
+    if (handle.includes("e")) right = Math.min(1, Math.max(left + minSize, right + dx));
+    if (handle.includes("n")) top = Math.max(0, Math.min(bottom - minSize, top + dy));
+    if (handle.includes("s")) bottom = Math.min(1, Math.max(top + minSize, bottom + dy));
+
+    state.crop_rect = { x: left, y: top, w: right - left, h: bottom - top };
+    renderCropOverlay();
+    saveActiveFrameRecipe();
+  });
+
   const finishDrag = (e) => {
     if (!dragMode) return;
     if (dragMode === "horizon" && horizonStart) {
@@ -5940,9 +6041,15 @@ function enhanceControlPrecision() {
       );
     }
 
-    // Inline numeric edit when clicking the numeric readout
-    valEl.title = valEl.title || "Clic para escribir un valor exacto";
-    valEl.addEventListener("click", () => {
+    // Inline numeric edit when clicking or pressing Enter/Space on the numeric readout
+    valEl.title = valEl.title || "Clic o Enter para escribir un valor exacto";
+    valEl.setAttribute("role", "button");
+    valEl.setAttribute("tabindex", "0");
+    valEl.setAttribute(
+      "aria-label",
+      `Editar valor numérico para ${labelRow.firstElementChild?.textContent || slider.id}`
+    );
+    const openInlineEdit = () => {
       if (labelRow.querySelector(".val-inline-edit")) return;
       const beforeSnap = captureModeRecipeSnapshot();
       const input = document.createElement("input");
@@ -5988,6 +6095,13 @@ function enhanceControlPrecision() {
         }
       });
       input.addEventListener("blur", () => commitOrCancel(true));
+    };
+    valEl.addEventListener("click", openInlineEdit);
+    valEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openInlineEdit();
+      }
     });
 
     // Inject fine - / + 0.02 nudge buttons on the 6 CMY sliders
@@ -6760,7 +6874,8 @@ function renderContactSheetOverlay(layoutBoxes, sourceFrames = null) {
     const idx = resolvedIdx >= 0 ? resolvedIdx : box.index;
     const frame = state.frames[idx];
 
-    const hotspot = document.createElement("div");
+    const hotspot = document.createElement("button");
+    hotspot.type = "button";
     hotspot.className = "sheet-frame-hotspot";
     hotspot.style.left = `${(box.x_pct * 100).toFixed(3)}%`;
     hotspot.style.top = `${(box.y_pct * 100).toFixed(3)}%`;
@@ -6770,6 +6885,7 @@ function renderContactSheetOverlay(layoutBoxes, sourceFrames = null) {
     hotspot.title = frame
       ? `Clic para editar ${frame.name} (Fotograma ${String(idx + 1).padStart(2, "0")}A)`
       : `Clic para editar fotograma #${idx + 1}`;
+    hotspot.setAttribute("aria-label", hotspot.title);
 
     const pill = document.createElement("span");
     pill.className = "sheet-hotspot-pill";

@@ -101,3 +101,47 @@ def test_e2e_negative_mode(page, haluro_server):
 
     # Verificar que el panel de controles de negativo está visible
     page.locator("#negativeControls").wait_for(timeout=5000)
+
+
+def test_e2e_accessibility_wcag22(page, haluro_server):
+    """Verifica invariantes WCAG 2.2 AA: sin controles anidados, objetivos >= 24px y jerarquía."""
+    page.goto(haluro_server)
+    page.locator("#loadSampleBtn").click()
+    page.locator(".film-frame-thumb").first.wait_for(timeout=5000)
+
+    # 1. Sin elementos interactivos anidados en catálogo de películas ni tira de fotogramas
+    nested_count = page.evaluate("""() => {
+        const cards = [...document.querySelectorAll('.film-card')];
+        const thumbs = [...document.querySelectorAll('.film-frame-thumb')];
+        let bad = 0;
+        for (const el of [...cards, ...thumbs]) {
+            if (el.hasAttribute('tabindex')) bad++;
+            for (const btn of el.querySelectorAll('button, [role="button"]')) {
+                if (btn.querySelector('button, a, input, select, [tabindex]')) bad++;
+            }
+        }
+        return bad;
+    }""")
+    assert nested_count == 0
+
+    # 2. Asas de recorte y hotspots como botones nativos, y valores numéricos operables por teclado
+    assert page.locator("button.crop-handle").count() == 8
+    assert page.locator(".control-val[role='button'][tabindex='0']").count() > 0
+
+    # 3. Objetivos táctiles >= 24x24 px en controles de ajuste fino CMY
+    page.locator("#tabNegativeMode").click()
+    page.locator(".step-nudge-btn").first.wait_for(timeout=5000)
+    nudge_box = page.locator(".step-nudge-btn").first.bounding_box()
+    assert nudge_box is not None and nudge_box["width"] >= 24 and nudge_box["height"] >= 24
+
+    # 4. Sin saltos en jerarquía de encabezados visibles (h1 -> h2 -> h3)
+    heading_skip = page.evaluate("""() => {
+        const levels = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')]
+            .filter(h => h.offsetParent !== null)
+            .map(h => Number(h.tagName[1]));
+        for (let i = 1; i < levels.length; i++) {
+            if (levels[i] - levels[i - 1] > 1) return [levels[i - 1], levels[i]];
+        }
+        return null;
+    }""")
+    assert heading_skip is None

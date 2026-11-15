@@ -192,3 +192,43 @@ def test_upload_rejects_non_image(client) -> None:
         content_type="multipart/form-data",
     )
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Flujo 5: Contrato HTML de accesibilidad (WCAG 2.2 AA)
+# ---------------------------------------------------------------------------
+
+def test_accessibility_html_contract(client) -> None:
+    """Verifica que el HTML servido cumpla invariantes clave de accesibilidad."""
+    resp = client.get("/")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+
+    # Asas de recorte como botones nativos operables por teclado
+    assert html.count('class="crop-handle ') == 8
+    assert html.count('<button type="button" class="crop-handle ') == 8
+
+    # Editor de curva enfocable por teclado
+    assert 'id="curveCanvas"' in html and 'tabindex="0"' in html
+
+    # Lista de películas como list semántico (sin listbox con hijos interactivos)
+    assert 'id="filmList" role="list"' in html
+
+    # Etiquetas nativas <label for="..."> en selectores clave
+    assert '<label id="lblNegSubstrate" for="negSubstrateSelect"' in html
+    assert '<label for="negPrintFinishSelect">' in html
+    assert '<label id="lblSimDevProcess" for="simDevProcessSelect">' in html
+    assert 'id="simDevProcessSelect" class="dark-select"' in html
+
+    # Jerarquía de encabezados continua: Densitómetro y modales en <h2>
+    assert '<h2 class="panel-label">Densitómetro RGB</h2>' in html
+    for modal_title in (
+        "batchProgressTitle",
+        "resultModalTitle",
+        "historyModalTitle",
+        "shortcutsModalTitle",
+        "aboutModalTitle",
+        "updateModalTitle",
+        "syncRollModalTitle",
+    ):
+        assert f'<h2 id="{modal_title}">' in html

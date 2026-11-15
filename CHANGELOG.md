@@ -9,6 +9,16 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.9.1] — 2026-11-15
+
+### Accesibilidad (WCAG 2.2 AA) y UX/UI
+- **Contraste y tokens:** Nuevo token `--border-control` (`≥ 3:1` en modo darkroom y `theme-safelight`) aplicado a inputs, selects, deslizadores e interruptores; ajuste de `--crimson-alert` (`#f25557`) y `--text-dim` en `manual.html` (`#8e96a4`) para superar `4.5:1`.
+- **Objetivos interactivos ≥ 24 × 24 px:** Ampliados `.search-clear-btn`, `.step-nudge-btn`, `.fav-btn`, `.tool-icon-btn` en barras estrechas, y áreas de impacto `::after` en `.crop-handle` y `.slider`.
+- **Operabilidad por teclado y semántica ARIA:** Eliminados controles interactivos anidados en `.film-card` y `.film-frame-thumb`; `.sheet-frame-hotspot` y `.crop-handle` convertidos a `<button type="button">` con soporte de flechas en recorte y en `#curveCanvas`; `.control-val` operable con `Enter`/`Espacio`; etiquetas `<label for="...">` nativas y jerarquía continua `h1 → h2 → h3` en panel derecho y modales.
+- **Consistencia UI:** Unificado `#simDevProcessSelect` con `.dark-select`, unificado atajo de Mesa limpia (`⌥ ⌘ Z`) en el modal de atajos, y pruebas de regresión WCAG 2.2 AA en `tests/test_e2e_flask_client.py` y `tests/test_e2e_playwright.py`.
+
+---
+
 ## [2.9.0] — 2026-11-15
 
 ### Añadido
