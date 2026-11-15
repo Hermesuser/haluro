@@ -87,7 +87,7 @@ La interfaz de Haluro está organizada en tres áreas principales diseñadas par
    - Tira perforada de 35 mm inferior con navegación por fotogramas (`←` / `→`), punto ámbar en tomas personalizadas, botón **+ Añadir** y **× Vaciar**.
 
 3. **Paneles Laterales:**
-   - **Panel Izquierdo:** Catálogo buscable de 80 películas con filtros en español (`Todas`, `★ Favoritas`, `Negativo C-41`, `Diapositiva E-6`, `Cine`, `Plata B&N`, `Cross-Pro`) en modo *Emulación*, o calibración de soporte base D-min, perfiles de escáner y virados B&N en modo *Revelar negativo*.
+   - **Panel Izquierdo:** Catálogo buscable de 80 películas con filtros en español (`Todas`, `★ Favoritas`, `Negativo C-41`, `Diapositiva E-6`, `Cine`, `Copia Cine`, `Plata B&N`, `Cross-Pro`, `Mis LUTs`) en modo *Emulación*, o calibración de soporte base D-min, perfiles de escáner y virados B&N en modo *Revelar negativo*.
    - **Panel Derecho (Inspector):** **Densitómetro RGB** en vivo (lectura de sombras y luces recortadas), controles de **Química y óptica** / **Zonas tonales** (sombras, tonos medios y luces) / **Curva tonal** (editor de curva) / **Curva tonal y proceso**, **Ampliadora CMY y 3 vías**, **Filtros y nitidez óptica**, **Ficha técnica EXIF analógica** y selector de **Formato maestro** (`JPG 4:4:4`, `PNG`, `TIFF 16b`).
 
 ---
@@ -197,9 +197,19 @@ El deslizador **Latitud Pull ↔ Push** (y *Compensación de exposición* en mod
 
 ## 4. Modo 2: Emulación · 80 Películas Químicas
 
-El modo **«Emulación · 80»** aplica perfiles matemáticos y curvas características sensitométricas (pie, zona recta y hombro) sobre imágenes positivas (digitales o escaneos ya invertidos), recreando en español el catálogo de 80 emulsiones clásicas con filtros por familia (**Todas**, **★ Favoritas**, **Negativo C-41**, **Diapositiva E-6**, **Cine**, **Plata B&N**, **Cross-Pro**).
+El modo **«Emulación · 80»** aplica perfiles matemáticos y curvas características sensitométricas (pie, zona recta y hombro) sobre imágenes positivas (digitales o escaneos ya invertidos), recreando en español el catálogo de 80 emulsiones clásicas con filtros por familia (**Todas**, **★ Favoritas**, **Negativo C-41**, **Diapositiva E-6**, **Cine**, **Copia Cine**, **Plata B&N**, **Cross-Pro**, **Mis LUTs**).
 
 ![Catálogo de Películas Haluro](docs/images/06_catalogo_peliculas_cinestill.png)
+
+### LUTs 3D de Usuario (`.cube`) — Pestaña «Mis LUTs»
+
+Además de las 80 emulsiones incluidas, puedes cargar tus propios archivos **`.cube`** (1D shaper y/o grilla 3D):
+
+![Pestaña Mis LUTs con LUTs 3D de usuario](docs/images/10_mis_luts_usuario.png)
+
+1. **Importar desde la interfaz (`+ LUT`):** Pulsa **+ LUT** en la cabecera del catálogo para seleccionar uno o varios archivos `.cube`. Haluro valida cada archivo antes de guardarlo (rechazando archivos corruptos o sin tabla válida) y normaliza automáticamente extensiones dobles como `.cube.cube`.
+2. **Espacio de color de entrada:** En la barra de **Mis LUTs** puedes elegir el espacio esperado por el LUT antes de importar: `sRGB (Estándar)`, `Rec.709`, `S-Log3`, `ARRI LogC3`, `Cineon` o `Linear`.
+3. **Gestión directa (`Carpeta` y `×`):** Pulsa **Carpeta** para abrir el directorio `user_luts/` (`~/Library/Application Support/Haluro/user_luts` en la `.app` de macOS o `%LOCALAPPDATA%\Haluro\user_luts` en Windows) y copiar archivos manualmente, o usa el botón **×** de cada tarjeta para eliminarlo.
 
 ### Las 80 Emulsiones Clásicas
 

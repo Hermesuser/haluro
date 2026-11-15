@@ -65,7 +65,7 @@ cambios que más se notan en el uso diario son:
 
 **Haluro** es una estación de trabajo fotográfica de escritorio nativa para **macOS** y **Windows 11** concebida desde la experiencia directa en cuarto oscuro químico. Combina la sensitometría clásica de haluros de plata con procesamiento de color en coma flotante de 16 bits para resolver dos necesidades fundamentales de la fotografía analógica contemporánea:
 
-1. **Emulación Analógica Auténtica:** Simulación espectral de **80 películas químicas clásicas** (Kodak Portra, Tri-X, Ektachrome, Fuji Velvia, Provia, Neopan, Ilford HP5+, Delta, CineStill 800T, etc.) mediante matrices de interpolación tetraédrica 3D LUT, grano volumétrico no repetitivo, halo rojo de capa antihalo y viñeteo óptico.
+1. **Emulación Analógica Auténtica:** Simulación espectral de **80 películas químicas clásicas** (Kodak Portra, Tri-X, Ektachrome, Fuji Velvia, Provia, Neopan, Ilford HP5+, Delta, CineStill 800T, etc.) mediante matrices de interpolación tetraédrica 3D LUT, grano volumétrico no repetitivo, halo rojo de capa antihalo y viñeteo óptico, además de soporte para **LUTs 3D de usuario (`.cube`)** desde la pestaña **Mis LUTs**.
 2. **Revelado Digital de Negativos:** Inversión sensitométrica basada en el modelo **Hurter–Driffield (H&D)** para negativos color (C-41) y blanco y negro digitalizados mediante escáner plano, escáner dedicado de película o cámara digital con fuente de luz LED. Elimina matemáticamente la máscara naranja (D-min), desacopla el balance de blancos de la escena y emula la respuesta tonal de papeles fotográficos tradicionales (**Fuji Crystal Archive RA-4**, **Kodak Vision 2383 ECP** de cine, Minilabs **Noritsu / Frontier** y perfil logarítmico **V-Log**).
 
 ![Espacio de trabajo Haluro v2.5.0 en modo Emulación · 72 con Kodak Portra 400 y vista dividida](docs/images/02_espacio_trabajo_darkrooms.png)
@@ -76,6 +76,9 @@ cambios que más se notan en el uso diario son:
 
 ![Pestaña interactiva Contactos con tira inferior de fotogramas y exportación directa de hoja de contactos](docs/images/07_hoja_de_contactos.png)
 *Pestaña interactiva **Contactos** (`HALURO · SERIE 35MM`) con cuadrícula configurable (3 a 6 columnas), zoom panorámico y exportación contextual con `Guardar contactos`.*
+
+![Pestaña Mis LUTs con archivos .cube de usuario y vista dividida](docs/images/10_mis_luts_usuario.png)
+*Pestaña **Mis LUTs** con importación directa de archivos `.cube` (`+ LUT`), selector de espacio de color de entrada (`sRGB`, `Rec.709`, `S-Log3`, `LogC3`, `Cineon`, `Linear`) y acceso directo a la carpeta de usuario.*
 
 ---
 
