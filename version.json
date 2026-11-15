@@ -1,19 +1,19 @@
 {
-  "version": "2.8.0",
-  "release_date": "2026-11-14",
-  "name": "Haluro v2.8.0",
-  "title": "Edición Cuarto Oscuro Completa (80 películas, Split Grade, Minilab y Exportación Archival)",
-  "description": "Haluro 2.8.0: 80 emulsiones, procesos químicos (Stand/Push/Pull), sustratos sin máscara, Flat-Field LED, Split Grade B&N, Curva y Tira f-stop compartidas, limpieza de motas sin IR, reciprocidad EXIF, Vista Esencial Minilab y marginadores con Dry-Down.",
+  "version": "2.9.0",
+  "release_date": "2026-11-15",
+  "name": "Haluro v2.9.0",
+  "title": "Geometría Unificada, Corte, Nivelar, Perspectiva y Linear DNG 16-bit",
+  "description": "Haluro 2.9.0: herramientas interactivas de corte, nivelado (con trazado de horizonte 2 puntos), rotación, giro horizontal/vertical y perspectiva para Emulación y Revelado Negativos; exportación en formato Original, Linear DNG 16-bit (.dng) y sidecar .XMP.",
   "highlights": [
-    "Catálogo ampliado a 80 películas + procesos químicos (Stand/Rodinal, Push +1/+2, Pull −1)",
-    "Sustratos sin máscara naranja, visor de rebordes/sprockets y calibración Flat-Field LED",
-    "Positivado B&N Split Grade (Grado 00/5 + Pre-flash) y limpieza puntual de motas sin IR",
-    "Curva tonal compartida, Tira f-stop de 5 bandas, Vista Esencial y atajos estilo Fuji Frontier",
-    "Calculadora de reciprocidad Schwarzschild, presets EXIF y marginador Easel + Dry-Down"
+    "Corte interactivo en lienzo con 8 anclas, regla de tercios y proporciones analógicas (3:2, 6x6, 6x7, 4x5, XPan)",
+    "Nivelar (-45° a +45°) con auto-recorte inscrito, herramienta Trazar Horizonte (2 puntos) y giro vertical",
+    "Corrección de perspectiva (Keystone vertical y horizontal) en coma flotante lineal de 32 bits",
+    "Exportación en formato Original y Linear DNG 16-bit (.dng) compatible con Lightroom y Darktable",
+    "Generación opcional de sidecar .XMP no destructivo con recorte, ángulo y orientación"
   ],
   "download_urls": {
-    "macos_arm64": "dist/Haluro-2.8.0-macOS-arm64.dmg",
-    "macos_x86_64": "dist/Haluro-2.8.0-macOS-x86_64.dmg",
+    "macos_arm64": "dist/Haluro-2.9.0-macOS-arm64.dmg",
+    "macos_x86_64": "dist/Haluro-2.9.0-macOS-x86_64.dmg",
     "windows_x86_64": "",
     "windows_portable": ""
   },

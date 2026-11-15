@@ -609,8 +609,110 @@ def _try_read_tiff16_rgb(path: Path, pil_src: Image.Image):
         return None
 
 
-def apply_geometry(arr, rotate=0, flip_h=False):
-    """Apply lossless 90-degree rotations (clockwise degrees: 0, 90, 180, 270) and horizontal mirror."""
+def normalize_crop_rect(crop_rect) -> tuple[float, float, float, float] | None:
+    """Normalize [x, y, w, h] crop rectangle in [0..1]; returns None when full-frame."""
+    if crop_rect is None:
+        return None
+    if isinstance(crop_rect, dict):
+        raw = (crop_rect.get("x", 0.0), crop_rect.get("y", 0.0), crop_rect.get("w", 1.0), crop_rect.get("h", 1.0))
+    elif isinstance(crop_rect, (list, tuple)) and len(crop_rect) == 4:
+        raw = tuple(crop_rect)
+    else:
+        return None
+    try:
+        x, y, w, h = (float(v) for v in raw)
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(v) for v in (x, y, w, h)):
+        return None
+    x = max(0.0, min(0.98, x))
+    y = max(0.0, min(0.98, y))
+    w = max(0.02, min(1.0 - x, w))
+    h = max(0.02, min(1.0 - y, h))
+    if x <= 1e-4 and y <= 1e-4 and w >= 0.9998 and h >= 0.9998:
+        return None
+    return (x, y, w, h)
+
+
+def inscribed_crop_for_angle(w: int, h: int, angle_deg: float) -> tuple[float, float, float, float]:
+    """Return normalized (x, y, w, h) of largest axis-aligned rectangle inside rotated frame."""
+    if w <= 0 or h <= 0:
+        return (0.0, 0.0, 1.0, 1.0)
+    theta = abs(math.radians(float(angle_deg)))
+    if theta < 1e-5:
+        return (0.0, 0.0, 1.0, 1.0)
+    quad_wide = w >= h
+    side_long, side_short = (float(w), float(h)) if quad_wide else (float(h), float(w))
+    sin_a = math.sin(theta)
+    cos_a = math.cos(theta)
+    if side_short <= 2.0 * sin_a * cos_a * side_long:
+        x_s = 0.5 * side_short
+        wr, hr = (x_s / sin_a, x_s / cos_a) if quad_wide else (x_s / cos_a, x_s / sin_a)
+    else:
+        cos_2a = max(1e-5, cos_a * cos_a - sin_a * sin_a)
+        wr = (w * cos_a - h * sin_a) / cos_2a
+        hr = (h * cos_a - w * sin_a) / cos_2a
+    wr = max(4.0, min(float(w), wr))
+    hr = max(4.0, min(float(h), hr))
+    return ((w - wr) / (2.0 * w), (h - hr) / (2.0 * h), wr / float(w), hr / float(h))
+
+
+def _apply_perspective_and_straighten(
+    arr: np.ndarray,
+    straighten: float = 0.0,
+    keystone_v: float = 0.0,
+    keystone_h: float = 0.0,
+) -> np.ndarray:
+    """Apply fine rotation (straighten) and vertical/horizontal perspective in linear float32."""
+    h, w = arr.shape[:2]
+    if h < 4 or w < 4:
+        return arr
+
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    half_w = w * 0.5
+    half_h = h * 0.5
+    u = (xx - half_w) / max(1.0, half_w)
+    v = (yy - half_h) / max(1.0, half_h)
+
+    kv = math.radians(max(-30.0, min(30.0, float(keystone_v)))) * 0.65
+    kh = math.radians(max(-30.0, min(30.0, float(keystone_h)))) * 0.65
+    if abs(kv) > 1e-4 or abs(kh) > 1e-4:
+        denom = np.maximum(0.25, 1.0 + kv * v + kh * u)
+        u = u / denom
+        v = v / denom
+
+    dx = u * half_w
+    dy = v * half_h
+    rad = math.radians(-float(straighten))
+    if abs(rad) > 1e-5:
+        cos_a = math.cos(rad)
+        sin_a = math.sin(rad)
+        src_x = half_w + dx * cos_a - dy * sin_a
+        src_y = half_h + dx * sin_a + dy * cos_a
+    else:
+        src_x = half_w + dx
+        src_y = half_h + dy
+
+    coords = np.array([src_y, src_x], dtype=np.float32)
+    channels = [
+        scipy.ndimage.map_coordinates(arr[..., c], coords, order=1, mode="nearest")
+        for c in range(arr.shape[2])
+    ]
+    return np.stack(channels, axis=-1).astype(np.float32)
+
+
+def apply_geometry(
+    arr,
+    rotate=0,
+    flip_h=False,
+    flip_v=False,
+    straighten=0.0,
+    keystone_v=0.0,
+    keystone_h=0.0,
+    crop_rect=None,
+    auto_crop_straighten=True,
+):
+    """Apply 90-degree rotations, horizontal/vertical mirror, straighten, perspective, and crop."""
     out = arr
     rot = int(rotate or 0) % 360
     if rot == 90:
@@ -621,10 +723,44 @@ def apply_geometry(arr, rotate=0, flip_h=False):
         out = np.rot90(out, k=1, axes=(0, 1))
     if flip_h:
         out = np.fliplr(out)
+    if flip_v:
+        out = np.flipud(out)
+
+    str_deg = max(-45.0, min(45.0, float(straighten or 0.0)))
+    kv_deg = max(-30.0, min(30.0, float(keystone_v or 0.0)))
+    kh_deg = max(-30.0, min(30.0, float(keystone_h or 0.0)))
+    if abs(str_deg) > 0.01 or abs(kv_deg) > 0.01 or abs(kh_deg) > 0.01:
+        out = _apply_perspective_and_straighten(out, straighten=str_deg, keystone_v=kv_deg, keystone_h=kh_deg)
+
+    norm_crop = normalize_crop_rect(crop_rect)
+    if norm_crop is None and auto_crop_straighten and abs(str_deg) > 0.01:
+        h, w = out.shape[:2]
+        norm_crop = inscribed_crop_for_angle(w, h, str_deg)
+
+    if norm_crop is not None:
+        h, w = out.shape[:2]
+        cx, cy, cw, ch = norm_crop
+        x0 = max(0, min(w - 4, int(round(cx * w))))
+        y0 = max(0, min(h - 4, int(round(cy * h))))
+        x1 = max(x0 + 4, min(w, int(round((cx + cw) * w))))
+        y1 = max(y0 + 4, min(h, int(round((cy + ch) * h))))
+        out = out[y0:y1, x0:x1]
+
     return np.ascontiguousarray(out)
 
 
-def load_image_linear(path, max_dim=None, rotate=0, flip_h=False):
+def load_image_linear(
+    path,
+    max_dim=None,
+    rotate=0,
+    flip_h=False,
+    flip_v=False,
+    straighten=0.0,
+    keystone_v=0.0,
+    keystone_h=0.0,
+    crop_rect=None,
+    auto_crop_straighten=True,
+):
     """Loads a RAW or standard image into scene-linear float32 RGB, utilizing RAM cache for previews."""
     path = Path(path).resolve()
     if max_dim is not None and path.is_file() and _cacheable_preview(max_dim):
@@ -632,8 +768,26 @@ def load_image_linear(path, max_dim=None, rotate=0, flip_h=False):
         base = _load_image_linear_cached(str(path), mtime_ns, int(max_dim)).copy()
     else:
         base = _decode_image_linear_uncached(path, max_dim=max_dim)
-    if rotate or flip_h:
-        base = apply_geometry(base, rotate=rotate, flip_h=flip_h)
+    if (
+        rotate
+        or flip_h
+        or flip_v
+        or abs(float(straighten or 0.0)) > 0.01
+        or abs(float(keystone_v or 0.0)) > 0.01
+        or abs(float(keystone_h or 0.0)) > 0.01
+        or normalize_crop_rect(crop_rect) is not None
+    ):
+        base = apply_geometry(
+            base,
+            rotate=rotate,
+            flip_h=flip_h,
+            flip_v=flip_v,
+            straighten=straighten,
+            keystone_v=keystone_v,
+            keystone_h=keystone_h,
+            crop_rect=crop_rect,
+            auto_crop_straighten=auto_crop_straighten,
+        )
     return base
 
 
@@ -781,16 +935,17 @@ def extract_clean_exif(path):
     return build_export_exif_bytes(source_path=path, analog_meta=None)
 
 
-def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: dict | None = None) -> None:
-    """Write a true 48-bit (16-bit per channel uint16 RGB) lossless Adobe-Deflate archival TIFF."""
-    target_path = Path(target_path)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-
-    u16 = np.clip(np.rint(np.clip(float_srgb, 0.0, 1.0) * 65535.0), 0, 65535).astype("<u2")
+def _write_tiff_container(
+    u16: np.ndarray,
+    target_path: Path,
+    photometric: int = 2,
+    analog_meta: dict | None = None,
+    icc_bytes: bytes | None = None,
+    extra_tags: list[tuple[int, int, int, bytes]] | None = None,
+) -> None:
+    """Write a 16-bit/channel RGB TIFF 6.0 / TIFF-EP container with Adobe Deflate strips."""
     u16 = np.ascontiguousarray(u16)
     h, w = u16.shape[:2]
-
-    # Compress in horizontal strips (~64 rows per strip) for fast random-access & universal viewer support
     rows_per_strip = max(1, min(h, 64))
     strip_blobs: list[bytes] = []
     for y0 in range(0, h, rows_per_strip):
@@ -809,16 +964,12 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
         clean_ascii = _to_ascii_transliterated(text)
         return clean_ascii.encode("ascii", errors="ignore") + b"\x00"
 
-    icc_bytes = _get_srgb_icc_bytes()
-
-    # Build sorted TIFF 6.0 IFD entries: (tag, field_type, count, raw_data_bytes)
-    # Types: 2=ASCII, 3=SHORT (uint16), 4=LONG (uint32), 5=RATIONAL (2x uint32), 7=UNDEFINED
     raw_tags: list[tuple[int, int, int, bytes]] = [
         (256, 4, 1, struct.pack("<I", w)),  # ImageWidth
         (257, 4, 1, struct.pack("<I", h)),  # ImageLength
         (258, 3, 3, struct.pack("<HHH", 16, 16, 16)),  # BitsPerSample = (16, 16, 16)
         (259, 3, 1, struct.pack("<H", 8)),  # Compression = 8 (Adobe Deflate)
-        (262, 3, 1, struct.pack("<H", 2)),  # PhotometricInterpretation = 2 (RGB)
+        (262, 3, 1, struct.pack("<H", photometric)),
     ]
     if caption:
         ab = _ascii_bytes(caption)
@@ -830,14 +981,13 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
         ab = _ascii_bytes(clean_meta["camera_model"])
         raw_tags.append((272, 2, len(ab), ab))  # Model
 
-    # Placeholders for 273 StripOffsets & 279 StripByteCounts (filled once header size is known)
     raw_tags.extend(
         [
             (273, 4, num_strips, b"\x00" * (4 * num_strips)),  # StripOffsets
             (274, 3, 1, struct.pack("<H", 1)),  # Orientation = 1
             (277, 3, 1, struct.pack("<H", 3)),  # SamplesPerPixel = 3
             (278, 4, 1, struct.pack("<I", rows_per_strip)),  # RowsPerStrip
-            (279, 4, num_strips, struct.pack(f"<{num_strips}I", *[len(b) for b in strip_blobs])),  # StripByteCounts
+            (279, 4, num_strips, struct.pack(f"<{num_strips}I", *[len(b) for b in strip_blobs])),
             (282, 5, 1, struct.pack("<II", 300, 1)),  # XResolution = 300 DPI
             (283, 5, 1, struct.pack("<II", 300, 1)),  # YResolution = 300 DPI
             (284, 3, 1, struct.pack("<H", 1)),  # PlanarConfiguration = 1 (Chunky)
@@ -850,14 +1000,15 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
         ab = _ascii_bytes(clean_meta["photographer"])
         raw_tags.append((315, 2, len(ab), ab))  # Artist
     if icc_bytes:
-        raw_tags.append((34675, 7, len(icc_bytes), icc_bytes))  # InterColorProfile (sRGB IEC61966-2.1)
+        raw_tags.append((34675, 7, len(icc_bytes), icc_bytes))
+    if extra_tags:
+        raw_tags.extend(extra_tags)
 
     raw_tags.sort(key=lambda item: item[0])
     num_entries = len(raw_tags)
     ifd_offset = 8
     extra_start = ifd_offset + 2 + num_entries * 12 + 4
 
-    # First pass to calculate exact byte offset where compressed strip payloads start
     probe_cursor = extra_start
     for _tag, _typ, _cnt, val_b in raw_tags:
         if len(val_b) > 4:
@@ -870,7 +1021,6 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
         strip_offsets.append(cur_strip_off)
         cur_strip_off += len(blob)
 
-    # Replace StripOffsets tag 273 with exact offsets
     final_tags: list[tuple[int, int, int, bytes]] = []
     for tag, typ, cnt, val_b in raw_tags:
         if tag == 273:
@@ -900,6 +1050,150 @@ def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: 
         f.write(extra_buf)
         for blob in strip_blobs:
             f.write(blob)
+
+
+def save_tiff_16bit_rgb(float_srgb: np.ndarray, target_path: Path, analog_meta: dict | None = None) -> None:
+    """Write a true 48-bit (16-bit per channel uint16 RGB) lossless Adobe-Deflate archival TIFF."""
+    target_path = Path(target_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    u16 = np.clip(np.rint(np.clip(float_srgb, 0.0, 1.0) * 65535.0), 0, 65535).astype("<u2")
+    _write_tiff_container(
+        u16,
+        target_path,
+        photometric=2,
+        analog_meta=analog_meta,
+        icc_bytes=_get_srgb_icc_bytes(),
+    )
+
+
+def save_linear_dng_16bit(float_srgb: np.ndarray, target_path: Path, analog_meta: dict | None = None) -> None:
+    """Write a 16-bit Linear DNG (TIFF-EP LinearRaw) preserving full 16-bit tonal headroom."""
+    target_path = Path(target_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    lin = srgb_to_linear(np.clip(float_srgb, 0.0, 1.0))
+    u16 = np.clip(np.rint(np.clip(lin, 0.0, 1.0) * 65535.0), 0, 65535).astype("<u2")
+
+    # XYZ D65 -> linear sRGB matrix (DNG ColorMatrix1 maps XYZ to camera/linear space)
+    xyz_to_srgb = (
+        (3.2406, -1.5372, -0.4986),
+        (-0.9689, 1.8758, 0.0415),
+        (0.0557, -0.2040, 1.0570),
+    )
+    cm1_bytes = b"".join(
+        struct.pack("<ii", int(round(val * 10000)), 10000)
+        for row in xyz_to_srgb
+        for val in row
+    )
+    as_shot_neutral = struct.pack("<IIIIII", 1, 1, 1, 1, 1, 1)
+    model_str = "Haluro Digital Darkroom"
+    if isinstance(analog_meta, dict) and analog_meta.get("camera_model"):
+        model_str = f"{analog_meta.get('camera_make', '')} {analog_meta['camera_model']}".strip()
+    model_bytes = _to_ascii_transliterated(model_str).encode("ascii", errors="ignore") + b"\x00"
+
+    dng_tags: list[tuple[int, int, int, bytes]] = [
+        (254, 4, 1, struct.pack("<I", 0)),  # NewSubfileType = 0 (Full-resolution image)
+        (50706, 1, 4, struct.pack("<BBBB", 1, 4, 0, 0)),  # DNGVersion = 1.4.0.0
+        (50707, 1, 4, struct.pack("<BBBB", 1, 1, 0, 0)),  # DNGBackwardVersion = 1.1.0.0
+        (50708, 2, len(model_bytes), model_bytes),  # UniqueCameraModel
+        (50721, 10, 9, cm1_bytes),  # ColorMatrix1 (SRATIONAL[9])
+        (50728, 5, 3, as_shot_neutral),  # AsShotNeutral (RATIONAL[3])
+        (50778, 3, 1, struct.pack("<H", 21)),  # CalibrationIlluminant1 = D65 (21)
+    ]
+    _write_tiff_container(
+        u16,
+        target_path,
+        photometric=34892,  # LinearRaw
+        analog_meta=analog_meta,
+        icc_bytes=None,
+        extra_tags=dng_tags,
+    )
+
+
+def resolve_export_extension(fmt_str: str | None, source_path: Path | str | None = None) -> str:
+    """Resolve output extension from format selector ('original', 'dng', 'tiff', 'png', 'jpg')."""
+    fmt = str(fmt_str or "jpg").strip().lower().lstrip(".")
+    if fmt == "original":
+        if source_path is not None:
+            src_ext = Path(source_path).suffix.lower()
+            if src_ext in (".jpg", ".jpeg"):
+                return ".jpg"
+            if src_ext == ".png":
+                return ".png"
+            if src_ext in (".tif", ".tiff"):
+                return ".tiff"
+            if src_ext == ".webp":
+                return ".webp"
+            if src_ext == ".dng" or src_ext in RAW_EXTENSIONS:
+                return ".dng"
+            if src_ext in HEIF_EXTENSIONS:
+                return ".tiff"
+        return ".tiff"
+    mapping = {
+        "jpg": ".jpg",
+        "jpeg": ".jpg",
+        "png": ".png",
+        "tif": ".tiff",
+        "tiff": ".tiff",
+        "dng": ".dng",
+        "webp": ".webp",
+    }
+    return mapping.get(fmt, ".jpg")
+
+
+def write_geometry_xmp_sidecar(
+    target_path: Path,
+    rotate: int = 0,
+    flip_h: bool = False,
+    flip_v: bool = False,
+    straighten: float = 0.0,
+    crop_rect=None,
+) -> Path:
+    """Write a standard non-destructive XMP sidecar describing crop, straighten, and orientation."""
+    target_path = Path(target_path)
+    xmp_path = target_path.with_suffix(".xmp")
+    norm_crop = normalize_crop_rect(crop_rect)
+    if norm_crop is not None:
+        cx, cy, cw, ch = norm_crop
+        has_crop = "True"
+        left, top, right, bottom = cx, cy, cx + cw, cy + ch
+    else:
+        has_crop = "False"
+        left, top, right, bottom = 0.0, 0.0, 1.0, 1.0
+
+    rot = int(rotate or 0) % 360
+    orient_map = {
+        (0, False, False): 1,
+        (0, True, False): 2,
+        (180, False, False): 3,
+        (0, False, True): 4,
+        (90, True, False): 5,
+        (90, False, False): 6,
+        (270, True, False): 7,
+        (270, False, False): 8,
+    }
+    tiff_orient = orient_map.get((rot, bool(flip_h), bool(flip_v)), 1)
+    angle = round(max(-45.0, min(45.0, float(straighten or 0.0))), 3)
+
+    xmp_body = f"""<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Haluro {__version__}">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:tiff="http://ns.adobe.com/tiff/1.0/"
+    xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+    tiff:Orientation="{tiff_orient}"
+    crs:Version="15.0"
+    crs:HasCrop="{has_crop}"
+    crs:CropLeft="{left:.6f}"
+    crs:CropTop="{top:.6f}"
+    crs:CropRight="{right:.6f}"
+    crs:CropBottom="{bottom:.6f}"
+    crs:CropAngle="{angle:.3f}" />
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>
+"""
+    xmp_path.write_text(xmp_body, encoding="utf-8")
+    return xmp_path
 
 
 EASEL_BORDERS = ("none", "white_thin", "white_gallery", "black_rebate")
@@ -1006,11 +1300,25 @@ def save_output_image(
             os.replace(tmp_path, target_path)
             return pil_img
 
+        if ext == ".dng":
+            if float_srgb is not None:
+                save_linear_dng_16bit(float_srgb, tmp_path, analog_meta=analog_meta)
+            else:
+                arr_f = np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0
+                save_linear_dng_16bit(arr_f, tmp_path, analog_meta=analog_meta)
+            os.replace(tmp_path, target_path)
+            return pil_img
+
         exif_bytes = build_export_exif_bytes(source_path=source_path, analog_meta=analog_meta)
         icc_bytes = _get_srgb_icc_bytes()
 
         if ext == ".png":
             save_kwargs = {"format": "PNG", "compress_level": 4, "icc_profile": icc_bytes}
+            if exif_bytes:
+                save_kwargs["exif"] = exif_bytes
+            pil_img.save(tmp_path, **save_kwargs)
+        elif ext == ".webp":
+            save_kwargs = {"format": "WEBP", "quality": quality, "method": 4, "icc_profile": icc_bytes}
             if exif_bytes:
                 save_kwargs["exif"] = exif_bytes
             pil_img.save(tmp_path, **save_kwargs)
@@ -1032,6 +1340,200 @@ def save_output_image(
     except Exception:
         tmp_path.unlink(missing_ok=True)
         raise
+
+
+def apply_dust_spot_healing(pos: np.ndarray, dust_spots=None) -> np.ndarray:
+    """Gentle annular surround healing for pinpoint dust/hairs without IR channels."""
+    if not dust_spots:
+        return pos
+    out = np.asarray(pos, dtype=np.float32).copy()
+    h, w = out.shape[:2]
+    max_dim = max(h, w)
+    if max_dim < 8:
+        return out
+
+    for spot in dust_spots:
+        if isinstance(spot, dict):
+            nx = float(spot.get("x", -1.0))
+            ny = float(spot.get("y", -1.0))
+            nr = float(spot.get("r", 0.008))
+        elif isinstance(spot, (list, tuple)) and len(spot) >= 2:
+            nx = float(spot[0])
+            ny = float(spot[1])
+            nr = float(spot[2]) if len(spot) >= 3 else 0.008
+        else:
+            continue
+
+        if not (0.0 <= nx <= 1.0 and 0.0 <= ny <= 1.0):
+            continue
+        rad = max(2, min(int(round(max(0.002, min(0.045, nr)) * max_dim)), max_dim // 6))
+        cx = int(round(nx * (w - 1)))
+        cy = int(round(ny * (h - 1)))
+        patch_r = rad * 2 + 4
+
+        y0, y1 = max(0, cy - patch_r), min(h, cy + patch_r + 1)
+        x0, x1 = max(0, cx - patch_r), min(w, cx + patch_r + 1)
+        patch = out[y0:y1, x0:x1]
+        if patch.size == 0:
+            continue
+
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2, dtype=np.float32)
+        ring_mask = (dist >= rad * 1.15) & (dist <= rad * 2.25)
+        inner_mask = dist <= rad
+        if not np.any(ring_mask) or not np.any(inner_mask):
+            continue
+
+        ring_vals = patch[ring_mask]
+        ring_med = np.median(ring_vals, axis=0)
+        ry, rx = np.nonzero(ring_mask)
+        design = np.column_stack(
+            [
+                np.ones_like(rx, dtype=np.float32),
+                (rx - (cx - x0)).astype(np.float32),
+                (ry - (cy - y0)).astype(np.float32),
+            ]
+        )
+        try:
+            coeffs, _, _, _ = np.linalg.lstsq(design, ring_vals, rcond=None)
+            gy, gx = np.meshgrid(
+                np.arange(y0, y1, dtype=np.float32) - cy,
+                np.arange(x0, x1, dtype=np.float32) - cx,
+                indexing="ij",
+            )
+            fill = coeffs[0] + gy[..., None] * coeffs[1] + gx[..., None] * coeffs[2]
+            fill = 0.65 * fill + 0.35 * ring_med
+        except np.linalg.LinAlgError:
+            fill = np.broadcast_to(ring_med, patch.shape)
+
+        fill = np.clip(fill, 0.0, 1.0)
+        alpha = np.where(inner_mask, 0.5 * (1.0 + np.cos(np.pi * np.clip(dist / max(rad, 1e-4), 0.0, 1.0))), 0.0)
+        alpha = alpha[..., None].astype(np.float32)
+        out[y0:y1, x0:x1] = patch * (1.0 - alpha) + fill * alpha
+
+    return np.clip(out, 0.0, 1.0)
+
+
+def apply_digital_denoise(
+    lin: np.ndarray,
+    luma_strength: float = 0.0,
+    chroma_strength: float = 0.0,
+) -> np.ndarray:
+    """Edge-preserving digital noise reduction in linear space prior to film grain synthesis."""
+    l_str = float(max(0.0, min(1.0, luma_strength)))
+    c_str = float(max(0.0, min(1.0, chroma_strength)))
+    if l_str <= 0.005 and c_str <= 0.005:
+        return lin
+
+    arr = np.maximum(np.asarray(lin, dtype=np.float32), 0.0)
+    y = 0.2126 * arr[..., 0] + 0.7152 * arr[..., 1] + 0.0722 * arr[..., 2]
+    cb = arr[..., 2] - y
+    cr = arr[..., 0] - y
+
+    if c_str > 0.005:
+        sigma_c = 1.0 + 3.2 * c_str
+        cb_smooth = scipy.ndimage.gaussian_filter(cb, sigma=sigma_c)
+        cr_smooth = scipy.ndimage.gaussian_filter(cr, sigma=sigma_c)
+        cb = cb * (1.0 - c_str) + cb_smooth * c_str
+        cr = cr * (1.0 - c_str) + cr_smooth * c_str
+
+    if l_str > 0.005:
+        sigma_l = 0.7 + 1.4 * l_str
+        y_smooth = scipy.ndimage.gaussian_filter(y, sigma=sigma_l)
+        # Edge protection: preserve high-frequency structural edges
+        gy, gx = np.gradient(y)
+        edge_mag = np.sqrt(gx * gx + gy * gy)
+        edge_thresh = np.maximum(0.015, 0.08 * np.percentile(edge_mag, 90) + 1e-5)
+        edge_protect = np.clip(edge_mag / edge_thresh, 0.0, 1.0)
+        blend = l_str * (1.0 - 0.85 * edge_protect)
+        y = y * (1.0 - blend) + y_smooth * blend
+
+    r = np.maximum(0.0, y + cr)
+    b = np.maximum(0.0, y + cb)
+    g = np.maximum(0.0, (y - 0.2126 * r - 0.0722 * b) / 0.7152)
+    return np.stack([r, g, b], axis=-1).astype(np.float32)
+
+
+def apply_defringe(lin: np.ndarray, strength: float = 0.0) -> np.ndarray:
+    """Suppress purple/magenta and green lateral chromatic aberration along high-contrast edges."""
+    amt = float(max(0.0, min(1.0, strength)))
+    if amt <= 0.005:
+        return lin
+
+    arr = np.maximum(np.asarray(lin, dtype=np.float32), 0.0)
+    y = 0.2126 * arr[..., 0] + 0.7152 * arr[..., 1] + 0.0722 * arr[..., 2]
+    local_max = scipy.ndimage.maximum_filter(y, size=5)
+    local_min = scipy.ndimage.minimum_filter(y, size=5)
+    edge_band = np.clip((local_max - local_min) * 3.5, 0.0, 1.0)
+
+    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
+    # Purple fringe: R & B elevated relative to G; Green fringe: G elevated relative to R & B
+    purple_excess = np.maximum(0.0, np.minimum(r, b) - g)
+    green_excess = np.maximum(0.0, g - np.maximum(r, b))
+    p_w = np.clip(purple_excess * 4.0, 0.0, 1.0) * edge_band * amt
+    g_w = np.clip(green_excess * 4.0, 0.0, 1.0) * edge_band * amt
+
+    r_out = r - p_w * np.maximum(0.0, r - g)
+    b_out = b - p_w * np.maximum(0.0, b - g)
+    rb_avg = 0.5 * (r_out + b_out)
+    g_out = g - g_w * np.maximum(0.0, g - rb_avg)
+    return np.maximum(np.stack([r_out, g_out, b_out], axis=-1), 0.0).astype(np.float32)
+
+
+def apply_local_dodge_burn(lin: np.ndarray, local_masks=None) -> np.ndarray:
+    """Apply non-destructive linear-gradient and radial Dodge & Burn masks in linear exposure space."""
+    if not local_masks:
+        return lin
+    h, w = lin.shape[:2]
+    if h < 4 or w < 4:
+        return lin
+
+    yy, xx = np.meshgrid(
+        np.linspace(0.0, 1.0, h, dtype=np.float32),
+        np.linspace(0.0, 1.0, w, dtype=np.float32),
+        indexing="ij",
+    )
+    total_ev_map = np.zeros((h, w), dtype=np.float32)
+
+    for mask in local_masks[:8]:
+        if not isinstance(mask, dict):
+            continue
+        mtype = str(mask.get("type", "linear") or "linear").lower()
+        ev = float(max(-2.5, min(2.5, float(mask.get("ev", 0.0) or 0.0))))
+        if abs(ev) < 1e-4:
+            continue
+        x1 = float(mask.get("x1", 0.5))
+        y1 = float(mask.get("y1", 0.25))
+        x2 = float(mask.get("x2", 0.5))
+        y2 = float(mask.get("y2", 0.75))
+        feather = float(max(0.05, min(1.0, float(mask.get("feather", 0.4) or 0.4))))
+        invert = bool(mask.get("invert", False))
+
+        if mtype == "radial":
+            rx = max(0.03, abs(x2 - x1))
+            ry = max(0.03, abs(y2 - y1))
+            dist = np.sqrt(((xx - x1) / rx) ** 2 + ((yy - y1) / ry) ** 2)
+            inner = max(0.0, 1.0 - feather)
+            t = np.clip((dist - inner) / max(1e-4, 1.0 - inner), 0.0, 1.0)
+            alpha = 1.0 - (t * t * (3.0 - 2.0 * t))
+        else:
+            dx = x2 - x1
+            dy = y2 - y1
+            len_sq = dx * dx + dy * dy
+            if len_sq < 1e-6:
+                continue
+            proj = ((xx - x1) * dx + (yy - y1) * dy) / len_sq
+            t = np.clip(proj, 0.0, 1.0)
+            alpha = 1.0 - (t * t * (3.0 - 2.0 * t))
+
+        if invert:
+            alpha = 1.0 - alpha
+        total_ev_map += ev * alpha
+
+    if not np.any(np.abs(total_ev_map) > 1e-4):
+        return lin
+    gain = np.power(2.0, np.clip(total_ev_map, -3.5, 3.5)).astype(np.float32)
+    return np.maximum(lin * gain[..., None], 0.0)
 
 
 def apply_optical_sharpen(srgb_arr: np.ndarray, mode: str = "off", amount: float = 1.0) -> np.ndarray:
@@ -1233,25 +1735,94 @@ def develop_frame(
     max_dim=None,
     rotate=0,
     flip_h=False,
+    flip_v=False,
+    straighten=0.0,
+    keystone_v=0.0,
+    keystone_h=0.0,
+    crop_rect=None,
+    auto_crop_straighten=True,
     return_float=False,
     grain_seed=None,
     dev_process="standard",
+    denoise_luma=0.0,
+    denoise_chroma=0.0,
+    defringe=0.0,
+    local_masks=None,
+    dust_spots=None,
+    sharpen_mode="off",
+    sharpen_amount=1.0,
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
+    has_geom = bool(
+        rotate
+        or flip_h
+        or flip_v
+        or abs(float(straighten or 0.0)) > 0.01
+        or abs(float(keystone_v or 0.0)) > 0.01
+        or abs(float(keystone_h or 0.0)) > 0.01
+        or normalize_crop_rect(crop_rect) is not None
+    )
     if isinstance(image_input, (str, Path)):
-        lin = load_image_linear(image_input, max_dim=max_dim, rotate=rotate, flip_h=flip_h)
+        lin = load_image_linear(
+            image_input,
+            max_dim=max_dim,
+            rotate=rotate,
+            flip_h=flip_h,
+            flip_v=flip_v,
+            straighten=straighten,
+            keystone_v=keystone_v,
+            keystone_h=keystone_h,
+            crop_rect=crop_rect,
+            auto_crop_straighten=auto_crop_straighten,
+        )
     elif isinstance(image_input, Image.Image):
         if max_dim is not None and max(image_input.size) > max_dim:
             scale = max_dim / max(image_input.size)
             new_size = (int(image_input.width * scale), int(image_input.height * scale))
             image_input = image_input.resize(new_size, Image.Resampling.LANCZOS)
         lin = srgb_to_linear(np.asarray(image_input, dtype=np.float32) / 255.0)
-        if rotate or flip_h:
-            lin = apply_geometry(lin, rotate=rotate, flip_h=flip_h)
+        if has_geom:
+            lin = apply_geometry(
+                lin,
+                rotate=rotate,
+                flip_h=flip_h,
+                flip_v=flip_v,
+                straighten=straighten,
+                keystone_v=keystone_v,
+                keystone_h=keystone_h,
+                crop_rect=crop_rect,
+                auto_crop_straighten=auto_crop_straighten,
+            )
     else:
         lin = np.array(image_input, dtype=np.float32)
-        if rotate or flip_h:
-            lin = apply_geometry(lin, rotate=rotate, flip_h=flip_h)
+        if has_geom:
+            lin = apply_geometry(
+                lin,
+                rotate=rotate,
+                flip_h=flip_h,
+                flip_v=flip_v,
+                straighten=straighten,
+                keystone_v=keystone_v,
+                keystone_h=keystone_h,
+                crop_rect=crop_rect,
+                auto_crop_straighten=auto_crop_straighten,
+            )
+
+    # 0. Pre-development digital cleanup (defringe, denoise, pinpoint dust heal, local dodge/burn)
+    if float(defringe or 0.0) > 0.005:
+        lin = apply_defringe(lin, strength=float(defringe))
+    if float(denoise_luma or 0.0) > 0.005 or float(denoise_chroma or 0.0) > 0.005:
+        lin = apply_digital_denoise(
+            lin,
+            luma_strength=float(denoise_luma or 0.0),
+            chroma_strength=float(denoise_chroma or 0.0),
+        )
+    if dust_spots:
+        lin_clipped = np.clip(lin, 0.0, 1.0)
+        lin_healed = apply_dust_spot_healing(lin_clipped, dust_spots)
+        lin = np.where(lin > 1.0, lin, lin_healed)
+    if local_masks:
+        lin = apply_local_dodge_burn(lin, local_masks)
 
     film = get_film(film_key)
     proc_spec = DEV_PROCESSES.get(str(dev_process or "standard"), DEV_PROCESSES["standard"])
@@ -1344,10 +1915,13 @@ def develop_frame(
         seed = grain_seed if grain_seed is not None else _stable_grain_seed(image_input, film_key)
         display = apply_grain(display, amount=grain_amt, size=film.get("grain_size", 1.0), seed=seed)
 
-    # 6. Optical Softness
+    # 6. Optical Softness & Output Sharpening
     soft = film.get("soft", 0.0)
     if soft > 0.4:
         display = scipy.ndimage.gaussian_filter(display, sigma=[soft * 0.4, soft * 0.4, 0.0])
+
+    if sharpen_mode and sharpen_mode != "off" and float(sharpen_amount or 0.0) > 0.01:
+        display = apply_optical_sharpen(display, mode=str(sharpen_mode), amount=float(sharpen_amount))
 
     display_clamped = np.clip(display, 0.0, 1.0).astype(np.float32)
     # np.rint rounds to nearest; a plain astype(uint8) truncates and applies a

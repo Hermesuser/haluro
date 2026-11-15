@@ -126,7 +126,20 @@ def render_frame_thumbnail(
         max_dim=max_dim,
         rotate=int(_frame_val("rotate", common_params.get("rotate", 0))),
         flip_h=bool(_frame_val("flip_h", common_params.get("flip_h", False))),
+        flip_v=bool(_frame_val("flip_v", common_params.get("flip_v", False))),
+        straighten=float(_frame_val("straighten", common_params.get("straighten", 0.0)) or 0.0),
+        keystone_v=float(_frame_val("keystone_v", common_params.get("keystone_v", 0.0)) or 0.0),
+        keystone_h=float(_frame_val("keystone_h", common_params.get("keystone_h", 0.0)) or 0.0),
+        crop_rect=_frame_val("crop_rect", common_params.get("crop_rect")),
+        auto_crop_straighten=bool(_frame_val("auto_crop_straighten", common_params.get("auto_crop_straighten", True))),
         dev_process=str(_frame_val("dev_process", common_params.get("dev_process", "standard")) or "standard"),
+        denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
+        denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
+        defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),
+        local_masks=_frame_val("local_masks", common_params.get("local_masks")),
+        dust_spots=_frame_val("dust_spots", common_params.get("dust_spots")),
+        sharpen_mode=str(_frame_val("sharpen_mode", common_params.get("sharpen_mode", "off")) or "off"),
+        sharpen_amount=float(_frame_val("sharpen_amount", common_params.get("sharpen_amount", 1.0)) or 1.0),
     )
 
 
@@ -150,6 +163,9 @@ def develop_one_full_res(
         return None
 
     fr = per_frame_recipes.get(fname) if isinstance(per_frame_recipes, dict) else None
+    from engine.pipeline import resolve_export_extension, write_geometry_xmp_sidecar
+
+    resolved_ext = resolve_export_extension(out_ext, source_path=fpath)
 
     if mode == "negative":
         from app import _parse_negative_params
@@ -166,7 +182,8 @@ def develop_one_full_res(
             return_float=True,
             **frame_params,
         )
-        out_name = f"{fpath.stem}_positive_{prof_key}{out_ext}"
+        out_name = f"{fpath.stem}_positive_{prof_key}{resolved_ext}"
+        geom_meta = frame_params
     else:
         from engine.pipeline import develop_frame
 
@@ -179,6 +196,13 @@ def develop_one_full_res(
         def _frame_val(key: str, default) -> object:
             return fr.get(key, default) if isinstance(fr, dict) else default
 
+        geom_meta = {
+            "rotate": int(_frame_val("rotate", common_params.get("rotate", 0))),
+            "flip_h": bool(_frame_val("flip_h", common_params.get("flip_h", False))),
+            "flip_v": bool(_frame_val("flip_v", common_params.get("flip_v", False))),
+            "straighten": float(_frame_val("straighten", common_params.get("straighten", 0.0)) or 0.0),
+            "crop_rect": _frame_val("crop_rect", common_params.get("crop_rect")),
+        }
         dev_img, srgb_f = develop_frame(
             fpath,
             film_key=film_key,
@@ -192,13 +216,28 @@ def develop_one_full_res(
             curve=_frame_val("curve", common_params.get("curve")),
             add_date=bool(_frame_val("date", common_params.get("add_date", False))),
             max_dim=None,
-            rotate=int(_frame_val("rotate", common_params.get("rotate", 0))),
-            flip_h=bool(_frame_val("flip_h", common_params.get("flip_h", False))),
+            rotate=geom_meta["rotate"],
+            flip_h=geom_meta["flip_h"],
+            flip_v=geom_meta["flip_v"],
+            straighten=geom_meta["straighten"],
+            keystone_v=float(_frame_val("keystone_v", common_params.get("keystone_v", 0.0)) or 0.0),
+            keystone_h=float(_frame_val("keystone_h", common_params.get("keystone_h", 0.0)) or 0.0),
+            crop_rect=geom_meta["crop_rect"],
+            auto_crop_straighten=bool(
+                _frame_val("auto_crop_straighten", common_params.get("auto_crop_straighten", True))
+            ),
             return_float=True,
             dev_process=str(_frame_val("dev_process", common_params.get("dev_process", "standard")) or "standard"),
+            denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
+            denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
+            defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),
+            local_masks=_frame_val("local_masks", common_params.get("local_masks")),
+            dust_spots=_frame_val("dust_spots", common_params.get("dust_spots")),
+            sharpen_mode=str(_frame_val("sharpen_mode", common_params.get("sharpen_mode", "off")) or "off"),
+            sharpen_amount=float(_frame_val("sharpen_amount", common_params.get("sharpen_amount", 1.0)) or 1.0),
         )
         pos_img = dev_img
-        out_name = f"{fpath.stem}_{film_key}{out_ext}"
+        out_name = f"{fpath.stem}_{film_key}{resolved_ext}"
         srgb_f = srgb_f
         prof_key = film_key
 
@@ -217,6 +256,15 @@ def develop_one_full_res(
         easel_border=easel_border,
         dry_down_comp=dry_down_comp,
     )
+    if bool(src_raw.get("write_xmp", False)):
+        write_geometry_xmp_sidecar(
+            target_path,
+            rotate=int(geom_meta.get("rotate", 0)),
+            flip_h=bool(geom_meta.get("flip_h", False)),
+            flip_v=bool(geom_meta.get("flip_v", False)),
+            straighten=float(geom_meta.get("straighten", 0.0) or 0.0),
+            crop_rect=geom_meta.get("crop_rect"),
+        )
     return (fpath.name, out_name, pos_img)
 
 
@@ -312,7 +360,8 @@ class RollBatchJob:
                 return
 
             gen_sheet = bool(data.get("sheet", True))
-            out_ext = resolve_output_extension(data.get("format", "jpg"))
+            raw_fmt = str(data.get("format", "jpg") or "jpg").strip().lower()
+            out_ext = "original" if raw_fmt == "original" else resolve_output_extension(raw_fmt)
             raw_roll_name = str(data.get("roll_name", "HALURO ROLL")).strip()[:40] or "HALURO ROLL"
             roll_name = _canonical_profile_key(raw_roll_name) if mode == "negative" else raw_roll_name
             roll_name = roll_name or ("HALURO_ROLL" if mode == "negative" else "HALURO_ROLL")

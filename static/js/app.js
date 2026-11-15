@@ -97,6 +97,11 @@ const USER_PREFS_DEFAULTS = {
   date: false,
   rotate: 0,
   flip_h: false,
+  flip_v: false,
+  straighten: 0.0,
+  keystone_v: 0.0,
+  keystone_h: 0.0,
+  auto_crop_straighten: true,
   outputFormat: "jpg",
   viewMode: "split",
   splitPercent: 50,
@@ -150,6 +155,7 @@ function saveUserPreferences() {
       date: state.date,
       rotate: state.rotate,
       flip_h: state.flip_h,
+      flip_v: state.flip_v,
       outputFormat: state.outputFormat,
       viewMode: state.viewMode,
       splitPercent: state.splitPercent,
@@ -266,7 +272,17 @@ const state = {
   // Shared non-destructive geometry & export
   rotate: 0, // 0 | 90 | 180 | 270
   flip_h: false,
-  outputFormat: "jpg", // 'jpg' | 'png' | 'tiff'
+  flip_v: false,
+  straighten: 0.0, // -45..45 deg
+  keystone_v: 0.0, // -30..30 deg
+  keystone_h: 0.0, // -30..30 deg
+  crop_rect: null, // null | { x, y, w, h } normalized [0..1]
+  auto_crop_straighten: true,
+  cropMode: false,
+  horizonDrawMode: false,
+  cropAspect: "free",
+  cropAspectSwapped: false,
+  outputFormat: "jpg", // 'jpg' | 'png' | 'tiff' | 'dng' | 'original'
   easelBorder: "none",
   dryDownComp: 0.0,
 
@@ -800,9 +816,14 @@ function applyPrefsToUI(prefs) {
     if (el) el.value = prefs.rotate;
   }
   if (prefs.flip_h !== undefined) setCheckbox("flipHToggle", prefs.flip_h);
+  if (prefs.flip_v !== undefined) state.flip_v = Boolean(prefs.flip_v);
   if (prefs.outputFormat !== undefined) {
-    const el = document.getElementById("outputFormatSelect");
-    if (el) el.value = prefs.outputFormat;
+    state.outputFormat = prefs.outputFormat || "jpg";
+    document.querySelectorAll("#outputFormatPills .fmt-pill").forEach((pill) => {
+      const isMatch = pill.dataset.format === state.outputFormat;
+      pill.classList.toggle("active", isMatch);
+      pill.setAttribute("aria-checked", isMatch ? "true" : "false");
+    });
   }
   if (prefs.easelBorder !== undefined) {
     const el = document.getElementById("easelBorderSelect");
@@ -2158,7 +2179,10 @@ let lastPreviewErrorToastAt = 0;
 function computeOriginalCacheKey(filename) {
   const uncroppedForBase = state.appMode === "negative" && negativeState.eyedropperMode === "base";
   const cropKey = state.appMode === "negative" && !uncroppedForBase ? negativeState.cropPct.toFixed(3) : "0";
-  return `${filename}|${state.rotate}|${state.flip_h}|${cropKey}`;
+  const cRect = state.cropMode || uncroppedForBase || !state.crop_rect
+    ? "none"
+    : `${state.crop_rect.x.toFixed(4)},${state.crop_rect.y.toFixed(4)},${state.crop_rect.w.toFixed(4)},${state.crop_rect.h.toFixed(4)}`;
+  return `${filename}|${state.rotate}|${state.flip_h}|${state.flip_v}|${state.straighten.toFixed(2)}|${state.keystone_v.toFixed(1)}|${state.keystone_h.toFixed(1)}|${cRect}|${state.auto_crop_straighten}|${cropKey}`;
 }
 
 async function requestPreview(forceOriginal = false) {
@@ -2284,10 +2308,55 @@ function applyPreviewResult(data, origKey, requestedOriginal) {
   const statTime = document.getElementById("statTime");
   if (statRes && data.width && data.height) {
     statRes.textContent = `${data.width}×${data.height}`;
+    state.activePreviewWidth = data.width;
+    state.activePreviewHeight = data.height;
   }
   if (statTime && data.render_time != null) {
     statTime.textContent = `${Math.round(data.render_time * 1000)} ms`;
   }
+  updateOutputFormatHint();
+}
+
+function updateOutputFormatHint() {
+  const hintEl = document.getElementById("outputFormatHint");
+  if (!hintEl) return;
+  const frame = state.frames?.[state.activeFrameIndex];
+  const rawExts = new Set([".cr2", ".cr3", ".dng", ".nef", ".arw", ".orf", ".rw2", ".raf", ".pef", ".srw", ".iiq"]);
+  const name = (frame?.filename || frame?.name || "").toLowerCase();
+  const dotIdx = name.lastIndexOf(".");
+  const ext = dotIdx >= 0 ? name.slice(dotIdx) : "";
+  const isRaw = Boolean(frame?.is_raw || rawExts.has(ext));
+  const fmt = state.outputFormat || "jpg";
+
+  if (fmt === "original") {
+    if (!frame) {
+      hintEl.textContent = "Mantiene JPG/PNG/TIFF de entrada, o exporta Linear DNG 16-bit para archivos RAW.";
+    } else if (isRaw) {
+      const extLabel = ext ? ext.toUpperCase() : "RAW";
+      hintEl.textContent = `Entrada ${extLabel} → Original exporta Linear DNG 16-bit (.dng) editable sin pérdida.`;
+    } else {
+      const extLabel = ext ? ext.toUpperCase() : "JPG";
+      hintEl.textContent = `Entrada ${extLabel} → Original conserva el mismo formato (${extLabel}).`;
+    }
+  } else if (fmt === "dng") {
+    hintEl.textContent = "Linear DNG 16-bit: estándar RAW editable compatible con Lightroom, ACR y Darktable.";
+  } else if (fmt === "tiff") {
+    hintEl.textContent = "TIFF maestro de 16 bits por canal (48-bit RGB) sin compresión con pérdida.";
+  } else {
+    hintEl.textContent = "";
+  }
+}
+
+function buildSharedOpticsPayload() {
+  return {
+    denoise_luma: Number(state.denoiseLuma || 0),
+    denoise_chroma: Number(state.denoiseChroma || 0),
+    defringe: Number(state.defringe || 0),
+    sharpen_mode: negativeState.sharpenMode || "off",
+    sharpen_amount: Number(negativeState.sharpenAmount ?? 1.0),
+    dust_spots: (negativeState.dustSpots || []).map((s) => ({ x: s.x, y: s.y, r: s.r })),
+    local_masks: (state.localMasks || []).map((m) => ({ ...m })),
+  };
 }
 
 function buildSimulationPayload() {
@@ -2303,12 +2372,25 @@ function buildSimulationPayload() {
     highlights: state.highlights,
     curve: curvePayload(state.curve),
     date: state.date,
-    rotate: state.rotate,
-    flip_h: state.flip_h,
+    ...buildGeometryPayload(true),
+    ...buildSharedOpticsPayload(),
   };
 }
 
-function buildNegativePayload() {
+function buildGeometryPayload(forPreview = false) {
+  return {
+    rotate: state.rotate,
+    flip_h: state.flip_h,
+    flip_v: state.flip_v,
+    straighten: Number(state.straighten) || 0.0,
+    keystone_v: Number(state.keystone_v) || 0.0,
+    keystone_h: Number(state.keystone_h) || 0.0,
+    crop_rect: forPreview && state.cropMode ? null : state.crop_rect ? { ...state.crop_rect } : null,
+    auto_crop_straighten: forPreview && state.cropMode ? false : Boolean(state.auto_crop_straighten),
+  };
+}
+
+function buildNegativePayload(forPreview = true) {
   return {
     film_type: negativeState.filmType,
     film_substrate: negativeState.filmSubstrate,
@@ -2368,8 +2450,8 @@ function buildNegativePayload() {
     fade: negativeState.fade,
     dust_spots: (negativeState.dustSpots || []).map((s) => ({ x: s.x, y: s.y, r: s.r })),
     curve: curvePayload(negativeState.curve),
-    rotate: state.rotate,
-    flip_h: state.flip_h,
+    ...buildGeometryPayload(forPreview),
+    ...buildSharedOpticsPayload(),
   };
 }
 
@@ -2395,14 +2477,14 @@ function snapshotSimRecipe() {
     highlights: state.highlights,
     curve: state.curve ? cloneCurve(state.curve) : null,
     date: state.date,
-    rotate: state.rotate,
-    flip_h: state.flip_h,
+    ...buildGeometryPayload(false),
+    ...buildSharedOpticsPayload(),
   };
 }
 
 function snapshotNegRecipe() {
   return {
-    ...buildNegativePayload(),
+    ...buildNegativePayload(false),
     base_hex: negativeState.baseHex,
     flat_field_label: negativeState.flatFieldLabel,
   };
@@ -2520,6 +2602,24 @@ function applySimRecipeToUI(rec) {
   state.date = Boolean(rec.date);
   if (typeof rec.rotate === "number") state.rotate = rec.rotate;
   if (typeof rec.flip_h === "boolean") state.flip_h = rec.flip_h;
+  if (typeof rec.flip_v === "boolean") state.flip_v = rec.flip_v;
+  state.straighten = Number(rec.straighten ?? 0.0);
+  state.keystone_v = Number(rec.keystone_v ?? 0.0);
+  state.keystone_h = Number(rec.keystone_h ?? 0.0);
+  state.crop_rect = rec.crop_rect ? { ...rec.crop_rect } : null;
+  state.auto_crop_straighten = rec.auto_crop_straighten !== false;
+  state.denoiseLuma = Number(rec.denoise_luma ?? 0);
+  state.denoiseChroma = Number(rec.denoise_chroma ?? 0);
+  state.defringe = Number(rec.defringe ?? 0);
+  state.localMasks = Array.isArray(rec.local_masks) ? rec.local_masks.map((m) => ({ ...m })) : [];
+  state.activeMaskIndex = state.localMasks.length > 0 ? 0 : -1;
+  negativeState.sharpenMode = rec.sharpen_mode || "off";
+  negativeState.sharpenAmount = Number(rec.sharpen_amount ?? 1.0);
+  negativeState.dustSpots = Array.isArray(rec.dust_spots)
+    ? rec.dust_spots.map((s) => ({ x: Number(s.x), y: Number(s.y), r: Number(s.r || 0.008) }))
+    : [];
+  syncGeometryUiControls();
+  syncSharedOpticsUI();
 
   document.querySelectorAll(".film-card").forEach((el) => {
     const sel = el.dataset.key === state.selectedFilm;
@@ -2618,6 +2718,24 @@ function applyNegRecipeToUI(rec, preserveCurrentBaseIfMissing = false) {
 
   if (typeof rec.rotate === "number") state.rotate = rec.rotate;
   if (typeof rec.flip_h === "boolean") state.flip_h = rec.flip_h;
+  if (typeof rec.flip_v === "boolean") state.flip_v = rec.flip_v;
+  state.straighten = Number(rec.straighten ?? 0.0);
+  state.keystone_v = Number(rec.keystone_v ?? 0.0);
+  state.keystone_h = Number(rec.keystone_h ?? 0.0);
+  state.crop_rect = rec.crop_rect ? { ...rec.crop_rect } : null;
+  state.auto_crop_straighten = rec.auto_crop_straighten !== false;
+  state.denoiseLuma = Number(rec.denoise_luma ?? 0);
+  state.denoiseChroma = Number(rec.denoise_chroma ?? 0);
+  state.defringe = Number(rec.defringe ?? 0);
+  state.localMasks = Array.isArray(rec.local_masks) ? rec.local_masks.map((m) => ({ ...m })) : [];
+  state.activeMaskIndex = state.localMasks.length > 0 ? 0 : -1;
+  negativeState.sharpenMode = rec.sharpen_mode || "off";
+  negativeState.sharpenAmount = Number(rec.sharpen_amount ?? 1.0);
+  negativeState.dustSpots = Array.isArray(rec.dust_spots)
+    ? rec.dust_spots.map((s) => ({ x: Number(s.x), y: Number(s.y), r: Number(s.r || 0.008) }))
+    : [];
+  syncGeometryUiControls();
+  syncSharedOpticsUI();
   document.getElementById("flipHBtn")?.classList.toggle("active", state.flip_h);
   document.getElementById("flipHBtn")?.setAttribute("aria-pressed", state.flip_h ? "true" : "false");
 
@@ -3323,17 +3441,26 @@ function initAnalogExifControls() {
 
 function updateDustSpotsUI() {
   const count = Array.isArray(negativeState.dustSpots) ? negativeState.dustSpots.length : 0;
+  const label = `${count} ${count === 1 ? "mota" : "motas"}`;
   const badge = document.getElementById("dustSpotCountBadge");
   const undoBtn = document.getElementById("btnDustUndo");
   const clearBtn = document.getElementById("btnDustClear");
-  if (badge) badge.textContent = `${count} ${count === 1 ? "mota" : "motas"}`;
+  if (badge) badge.textContent = label;
   if (undoBtn) undoBtn.disabled = count === 0;
   if (clearBtn) clearBtn.disabled = count === 0;
+
+  const sBadge = document.getElementById("sharedDustCountBadge");
+  const sUndo = document.getElementById("sharedDustUndoBtn");
+  const sClear = document.getElementById("sharedDustClearBtn");
+  if (sBadge) sBadge.textContent = label;
+  if (sUndo) sUndo.disabled = count === 0;
+  if (sClear) sClear.disabled = count === 0;
+  if (typeof updateSharedOpticsBadge === "function") updateSharedOpticsBadge();
 }
 
 function undoLastDustSpot() {
   if (!Array.isArray(negativeState.dustSpots) || negativeState.dustSpots.length === 0) return;
-  pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], "negative");
+  pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], state.appMode === "negative" ? "negative" : "simulation");
   negativeState.dustSpots.pop();
   updateDustSpotsUI();
   saveActiveFrameRecipe();
@@ -3342,7 +3469,7 @@ function undoLastDustSpot() {
 
 function clearAllDustSpots() {
   if (!Array.isArray(negativeState.dustSpots) || negativeState.dustSpots.length === 0) return;
-  pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], "negative");
+  pushUndoSnapshotForFrame(state.frames[state.activeFrameIndex], state.appMode === "negative" ? "negative" : "simulation");
   negativeState.dustSpots = [];
   updateDustSpotsUI();
   saveActiveFrameRecipe();
@@ -3377,6 +3504,9 @@ function setEyedropperMode(mode) {
   btnDust?.classList.toggle("active", cleanMode === "dust");
   btnDust?.setAttribute("aria-pressed", cleanMode === "dust" ? "true" : "false");
   if (tipDust) tipDust.style.display = cleanMode === "dust" ? "block" : "none";
+  const sharedDustBtn = document.getElementById("sharedDustHealBtn");
+  sharedDustBtn?.classList.toggle("active", cleanMode === "dust");
+  sharedDustBtn?.setAttribute("aria-pressed", cleanMode === "dust" ? "true" : "false");
 
   wrapper?.classList.toggle("eyedropper-active", negativeState.eyedropperActive);
   if (!negativeState.eyedropperActive) {
@@ -3660,7 +3790,8 @@ function initEyedropperViewport() {
   });
 
   wrapper.addEventListener("click", async (e) => {
-    if (!negativeState.eyedropperActive || state.appMode !== "negative") return;
+    if (!negativeState.eyedropperActive) return;
+    if (negativeState.eyedropperMode !== "dust" && state.appMode !== "negative") return;
     if (state.spacePressed || viewportDragMoved > 4) return;
     if (e.target.closest("#splitDivider")) return;
 
@@ -3677,7 +3808,7 @@ function initEyedropperViewport() {
         setEyedropperMode(null);
         return;
       }
-      pushUndoSnapshotForFrame(activeFrame, "negative");
+      pushUndoSnapshotForFrame(activeFrame, state.appMode === "negative" ? "negative" : "simulation");
       negativeState.dustSpots.push({
         x: Number(xPct.toFixed(5)),
         y: Number(yPct.toFixed(5)),
@@ -4896,6 +5027,815 @@ function toggleHorizontalFlip() {
   requestPreview(true);
 }
 
+function toggleVerticalFlip() {
+  pushUndoSnapshotForFrame();
+  state.flip_v = !state.flip_v;
+  syncGeometryUiControls();
+  saveActiveFrameRecipe();
+  state.lastOriginalKey = "";
+  requestPreview(true);
+}
+
+function hasNonDefaultGeometry() {
+  const r = state.crop_rect;
+  const hasCrop = Boolean(r && (r.x > 0.002 || r.y > 0.002 || r.w < 0.996 || r.h < 0.996));
+  return Boolean(
+    hasCrop ||
+    Math.abs(Number(state.straighten || 0)) > 0.05 ||
+    Math.abs(Number(state.keystone_v || 0)) > 0.05 ||
+    Math.abs(Number(state.keystone_h || 0)) > 0.05 ||
+    (Number(state.rotate || 0) % 360) !== 0 ||
+    state.flip_h ||
+    state.flip_v
+  );
+}
+
+function syncGeometryUiControls() {
+  const fvBtn = document.getElementById("flipVBtn");
+  if (fvBtn) {
+    fvBtn.classList.toggle("active", Boolean(state.flip_v));
+    fvBtn.setAttribute("aria-pressed", state.flip_v ? "true" : "false");
+  }
+  document.getElementById("inspFlipVBtn")?.classList.toggle("active", Boolean(state.flip_v));
+  document.getElementById("geomFlipVBtn")?.classList.toggle("active", Boolean(state.flip_v));
+  document.getElementById("inspFlipHBtn")?.classList.toggle("active", Boolean(state.flip_h));
+  document.getElementById("geomFlipHBtn")?.classList.toggle("active", Boolean(state.flip_h));
+
+  const sValNum = Number(state.straighten || 0);
+  const sSlider = document.getElementById("straightenSlider");
+  const sVal = document.getElementById("straightenVal");
+  if (sSlider) sSlider.value = String(sValNum);
+  if (sVal) sVal.textContent = `${sValNum.toFixed(1)}°`;
+
+  const inspSSlider = document.getElementById("inspStraightenSlider");
+  const inspSVal = document.getElementById("inspStraightenVal");
+  if (inspSSlider) inspSSlider.value = String(sValNum);
+  if (inspSVal) inspSVal.textContent = `${sValNum.toFixed(1)}°`;
+
+  const kvSlider = document.getElementById("keystoneVSlider");
+  const kvVal = document.getElementById("keystoneVVal");
+  if (kvSlider) kvSlider.value = String(state.keystone_v || 0);
+  if (kvVal) kvVal.textContent = `${Number(state.keystone_v || 0).toFixed(1)}°`;
+
+  const khSlider = document.getElementById("keystoneHSlider");
+  const khVal = document.getElementById("keystoneHVal");
+  if (khSlider) khSlider.value = String(state.keystone_h || 0);
+  if (khVal) khVal.textContent = `${Number(state.keystone_h || 0).toFixed(1)}°`;
+
+  const autoChk = document.getElementById("autoCropStraightenCheck");
+  if (autoChk) autoChk.checked = state.auto_crop_straighten !== false;
+
+  const edited = hasNonDefaultGeometry();
+  document.getElementById("cropToolBtn")?.classList.toggle("has-geometry", edited);
+  const badge = document.getElementById("geomStatusBadge");
+  if (badge) badge.textContent = edited ? "Editado" : "Original";
+}
+
+function getAspectRatioValue(aspectKey, imgW, imgH) {
+  if (!aspectKey || aspectKey === "free") return null;
+  let ratio = null;
+  if (aspectKey === "original") {
+    ratio = imgW > 0 && imgH > 0 ? imgW / imgH : 1.5;
+  } else {
+    const parts = aspectKey.split(":").map(Number);
+    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+      ratio = parts[0] / parts[1];
+    }
+  }
+  if (!ratio) return null;
+  return state.cropAspectSwapped ? 1.0 / ratio : ratio;
+}
+
+function renderCropOverlay() {
+  const overlay = document.getElementById("cropOverlay");
+  const box = document.getElementById("cropBox");
+  const imgEl = document.getElementById("imgDeveloped");
+  if (!overlay || !box || !state.cropMode) return;
+
+  if (imgEl && imgEl.offsetWidth > 10 && imgEl.offsetHeight > 10) {
+    overlay.style.left = `${imgEl.offsetLeft}px`;
+    overlay.style.top = `${imgEl.offsetTop}px`;
+    overlay.style.width = `${imgEl.offsetWidth}px`;
+    overlay.style.height = `${imgEl.offsetHeight}px`;
+    overlay.style.right = "auto";
+    overlay.style.bottom = "auto";
+  }
+
+  const rect = state.crop_rect || { x: 0, y: 0, w: 1, h: 1 };
+  const left = Math.max(0, Math.min(0.96, rect.x));
+  const top = Math.max(0, Math.min(0.96, rect.y));
+  const width = Math.max(0.04, Math.min(1 - left, rect.w));
+  const height = Math.max(0.04, Math.min(1 - top, rect.h));
+
+  box.style.left = `${(left * 100).toFixed(3)}%`;
+  box.style.top = `${(top * 100).toFixed(3)}%`;
+  box.style.width = `${(width * 100).toFixed(3)}%`;
+  box.style.height = `${(height * 100).toFixed(3)}%`;
+
+  const mTop = document.getElementById("cropMaskTop");
+  const mBottom = document.getElementById("cropMaskBottom");
+  const mLeft = document.getElementById("cropMaskLeft");
+  const mRight = document.getElementById("cropMaskRight");
+  if (mTop) {
+    mTop.style.cssText = `left:0;top:0;width:100%;height:${(top * 100).toFixed(3)}%;`;
+  }
+  if (mBottom) {
+    mBottom.style.cssText = `left:0;top:${((top + height) * 100).toFixed(3)}%;width:100%;height:${((1 - top - height) * 100).toFixed(3)}%;`;
+  }
+  if (mLeft) {
+    mLeft.style.cssText = `left:0;top:${(top * 100).toFixed(3)}%;width:${(left * 100).toFixed(3)}%;height:${(height * 100).toFixed(3)}%;`;
+  }
+  if (mRight) {
+    mRight.style.cssText = `left:${((left + width) * 100).toFixed(3)}%;top:${(top * 100).toFixed(3)}%;width:${((1 - left - width) * 100).toFixed(3)}%;height:${(height * 100).toFixed(3)}%;`;
+  }
+
+  const baseW = Number(state.activePreviewWidth || imgEl?.naturalWidth || 0);
+  const baseH = Number(state.activePreviewHeight || imgEl?.naturalHeight || 0);
+  const dimText = baseW > 0 && baseH > 0
+    ? `${Math.max(1, Math.round(baseW * width))} × ${Math.max(1, Math.round(baseH * height))} px`
+    : `${Math.round(width * 100)}% × ${Math.round(height * 100)}%`;
+  const dimBadge = document.getElementById("cropDimensionsBadge");
+  if (dimBadge) dimBadge.textContent = dimText;
+  const panelDim = document.getElementById("geomDimensionsReadout");
+  if (panelDim) panelDim.textContent = dimText;
+}
+
+function setCropMode(enabled) {
+  const next = Boolean(enabled);
+  if (next && state.viewMode === "split") {
+    state.cropPrevViewMode = "split";
+    setViewMode("full");
+  } else if (!next && state.cropPrevViewMode === "split" && state.viewMode === "full") {
+    state.cropPrevViewMode = null;
+    setViewMode("split");
+  } else if (!next) {
+    state.cropPrevViewMode = null;
+  }
+
+  state.cropMode = next;
+  state.horizonDrawMode = false;
+  const btn = document.getElementById("cropToolBtn");
+  const inspBtn = document.getElementById("openCropFromInspectorBtn");
+  const inspLabel = document.getElementById("openCropFromInspectorLabel");
+  const panel = document.getElementById("geometryPanel");
+  const overlay = document.getElementById("cropOverlay");
+  const hBtn = document.getElementById("horizonDrawBtn");
+  const hSvg = document.getElementById("horizonLineSvg");
+
+  btn?.classList.toggle("active", state.cropMode);
+  btn?.setAttribute("aria-pressed", state.cropMode ? "true" : "false");
+  inspBtn?.classList.toggle("active", state.cropMode);
+  if (inspLabel) {
+    inspLabel.textContent = state.cropMode ? "Cerrar marco de recorte (Esc)" : "Recortar y nivelar en lienzo (C)";
+  }
+  if (panel) panel.style.display = state.cropMode ? "block" : "none";
+  if (overlay) overlay.style.display = state.cropMode ? "block" : "none";
+  if (hBtn) {
+    hBtn.classList.remove("active");
+    hBtn.setAttribute("aria-pressed", "false");
+  }
+  if (hSvg) hSvg.style.display = "none";
+
+  if (state.cropMode) {
+    if (!state.crop_rect) {
+      state.crop_rect = { x: 0.0, y: 0.0, w: 1.0, h: 1.0 };
+    }
+    syncGeometryUiControls();
+    renderCropOverlay();
+  }
+  state.lastOriginalKey = "";
+  requestPreview(true);
+}
+
+function initGeometryTool() {
+  const overlay = document.getElementById("cropOverlay");
+  const box = document.getElementById("cropBox");
+  if (!overlay || !box) return;
+
+  let dragMode = null; // 'move' | handle ('nw','n','ne','e','se','s','sw','w') | 'horizon'
+  let startMouse = { x: 0, y: 0 };
+  let startRect = { x: 0, y: 0, w: 1, h: 1 };
+  let horizonStart = null;
+
+  overlay.addEventListener("pointerdown", (e) => {
+    if (!state.cropMode) return;
+    const ovRect = overlay.getBoundingClientRect();
+    if (ovRect.width < 10 || ovRect.height < 10) return;
+
+    if (state.horizonDrawMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragMode = "horizon";
+      horizonStart = {
+        x: e.clientX - ovRect.left,
+        y: e.clientY - ovRect.top,
+      };
+      const svg = document.getElementById("horizonLineSvg");
+      const line = document.getElementById("horizonGuideLine");
+      const ptA = document.getElementById("horizonPtA");
+      const ptB = document.getElementById("horizonPtB");
+      if (svg && line && ptA && ptB) {
+        svg.style.display = "block";
+        line.setAttribute("x1", horizonStart.x);
+        line.setAttribute("y1", horizonStart.y);
+        line.setAttribute("x2", horizonStart.x);
+        line.setAttribute("y2", horizonStart.y);
+        ptA.setAttribute("cx", horizonStart.x);
+        ptA.setAttribute("cy", horizonStart.y);
+        ptB.setAttribute("cx", horizonStart.x);
+        ptB.setAttribute("cy", horizonStart.y);
+      }
+      overlay.setPointerCapture?.(e.pointerId);
+      return;
+    }
+
+    const handleEl = e.target.closest(".crop-handle");
+    if (handleEl) {
+      dragMode = handleEl.dataset.handle;
+    } else if (e.target.closest("#cropBox")) {
+      dragMode = "move";
+    } else {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    pushUndoSnapshotForFrame();
+    startMouse = { x: e.clientX, y: e.clientY };
+    const cur = state.crop_rect || { x: 0, y: 0, w: 1, h: 1 };
+    startRect = { ...cur };
+    overlay.setPointerCapture?.(e.pointerId);
+  });
+
+  overlay.addEventListener("pointermove", (e) => {
+    if (!dragMode || !state.cropMode) return;
+    const ovRect = overlay.getBoundingClientRect();
+    if (ovRect.width < 10 || ovRect.height < 10) return;
+
+    if (dragMode === "horizon" && horizonStart) {
+      const curX = Math.max(0, Math.min(ovRect.width, e.clientX - ovRect.left));
+      const curY = Math.max(0, Math.min(ovRect.height, e.clientY - ovRect.top));
+      document.getElementById("horizonGuideLine")?.setAttribute("x2", curX);
+      document.getElementById("horizonGuideLine")?.setAttribute("y2", curY);
+      document.getElementById("horizonPtB")?.setAttribute("cx", curX);
+      document.getElementById("horizonPtB")?.setAttribute("cy", curY);
+      return;
+    }
+
+    const dx = (e.clientX - startMouse.x) / ovRect.width;
+    const dy = (e.clientY - startMouse.y) / ovRect.height;
+    let { x, y, w, h } = startRect;
+    const minSize = 0.05;
+
+    if (dragMode === "move") {
+      x = Math.max(0, Math.min(1 - w, x + dx));
+      y = Math.max(0, Math.min(1 - h, y + dy));
+    } else {
+      let left = x;
+      let top = y;
+      let right = x + w;
+      let bottom = y + h;
+
+      if (dragMode.includes("w")) left = Math.max(0, Math.min(right - minSize, left + dx));
+      if (dragMode.includes("e")) right = Math.min(1, Math.max(left + minSize, right + dx));
+      if (dragMode.includes("n")) top = Math.max(0, Math.min(bottom - minSize, top + dy));
+      if (dragMode.includes("s")) bottom = Math.min(1, Math.max(top + minSize, bottom + dy));
+
+      w = right - left;
+      h = bottom - top;
+
+      const imgEl = document.getElementById("imgDeveloped");
+      const imgW = imgEl?.naturalWidth || ovRect.width;
+      const imgH = imgEl?.naturalHeight || ovRect.height;
+      const targetRatio = getAspectRatioValue(state.cropAspect, imgW, imgH);
+      if (targetRatio && ovRect.height > 0) {
+        const pxW = w * ovRect.width;
+        const pxH = pxW / targetRatio;
+        let normH = pxH / ovRect.height;
+        if (top + normH > 1.0) {
+          normH = 1.0 - top;
+          w = (normH * ovRect.height * targetRatio) / ovRect.width;
+        }
+        h = Math.max(minSize, normH);
+      }
+      x = left;
+      y = top;
+    }
+    state.crop_rect = { x, y, w, h };
+    renderCropOverlay();
+  });
+
+  const finishDrag = (e) => {
+    if (!dragMode) return;
+    if (dragMode === "horizon" && horizonStart) {
+      const ovRect = overlay.getBoundingClientRect();
+      const endX = e.clientX - ovRect.left;
+      const endY = e.clientY - ovRect.top;
+      const dx = endX - horizonStart.x;
+      const dy = endY - horizonStart.y;
+      if (Math.hypot(dx, dy) >= 12) {
+        let angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+        if (angleDeg > 45) angleDeg -= 90;
+        if (angleDeg < -45) angleDeg += 90;
+        if (angleDeg > 45) angleDeg -= 90;
+        if (angleDeg < -45) angleDeg += 90;
+        pushUndoSnapshotForFrame();
+        state.straighten = Math.max(-45, Math.min(45, Number((state.straighten - angleDeg).toFixed(1))));
+        syncGeometryUiControls();
+        saveActiveFrameRecipe();
+        state.lastOriginalKey = "";
+        requestPreview(true);
+      }
+      state.horizonDrawMode = false;
+      const hBtn = document.getElementById("horizonDrawBtn");
+      hBtn?.classList.remove("active");
+      hBtn?.setAttribute("aria-pressed", "false");
+      const svg = document.getElementById("horizonLineSvg");
+      if (svg) svg.style.display = "none";
+      horizonStart = null;
+    } else {
+      saveActiveFrameRecipe();
+    }
+    dragMode = null;
+  };
+  overlay.addEventListener("pointerup", finishDrag);
+  overlay.addEventListener("pointercancel", finishDrag);
+
+  document.getElementById("cropAspectSelect")?.addEventListener("change", (e) => {
+    state.cropAspect = e.target.value || "free";
+    const ovRect = overlay.getBoundingClientRect();
+    const imgEl = document.getElementById("imgDeveloped");
+    const targetRatio = getAspectRatioValue(
+      state.cropAspect,
+      imgEl?.naturalWidth || ovRect.width,
+      imgEl?.naturalHeight || ovRect.height
+    );
+    if (targetRatio && ovRect.width > 0 && ovRect.height > 0) {
+      const cur = state.crop_rect || { x: 0, y: 0, w: 1, h: 1 };
+      let newW = cur.w;
+      let newH = (newW * ovRect.width) / (targetRatio * ovRect.height);
+      if (newH > 1.0) {
+        newH = 1.0;
+        newW = (newH * ovRect.height * targetRatio) / ovRect.width;
+      }
+      const cx = cur.x + cur.w * 0.5;
+      const cy = cur.y + cur.h * 0.5;
+      state.crop_rect = {
+        x: Math.max(0, Math.min(1 - newW, cx - newW * 0.5)),
+        y: Math.max(0, Math.min(1 - newH, cy - newH * 0.5)),
+        w: newW,
+        h: newH,
+      };
+      renderCropOverlay();
+    }
+  });
+
+  document.getElementById("cropSwapAspectBtn")?.addEventListener("click", () => {
+    state.cropAspectSwapped = !state.cropAspectSwapped;
+    document.getElementById("cropAspectSelect")?.dispatchEvent(new Event("change"));
+  });
+
+  const bindGeomSlider = (sliderId, valId, key, unit, minVal, maxVal) => {
+    const el = document.getElementById(sliderId);
+    const valEl = document.getElementById(valId);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      state[key] = Number(el.value) || 0;
+      if (valEl) valEl.textContent = `${state[key].toFixed(1)}${unit}`;
+      if (key === "straighten") {
+        const otherId = sliderId === "straightenSlider" ? "inspStraightenSlider" : "straightenSlider";
+        const otherValId = valId === "straightenVal" ? "inspStraightenVal" : "straightenVal";
+        const otherEl = document.getElementById(otherId);
+        const otherVal = document.getElementById(otherValId);
+        if (otherEl) otherEl.value = String(state[key]);
+        if (otherVal) otherVal.textContent = `${state[key].toFixed(1)}${unit}`;
+        const edited = hasNonDefaultGeometry();
+        document.getElementById("cropToolBtn")?.classList.toggle("has-geometry", edited);
+        const badge = document.getElementById("geomStatusBadge");
+        if (badge) badge.textContent = edited ? "Editado" : "Original";
+      }
+      debouncedPreview(key);
+    });
+    el.addEventListener("dblclick", () => {
+      pushUndoSnapshotForFrame();
+      state[key] = Math.max(minVal, Math.min(maxVal, 0));
+      syncGeometryUiControls();
+      saveActiveFrameRecipe();
+      state.lastOriginalKey = "";
+      requestPreview(true);
+    });
+  };
+  bindGeomSlider("straightenSlider", "straightenVal", "straighten", "°", -45, 45);
+  bindGeomSlider("inspStraightenSlider", "inspStraightenVal", "straighten", "°", -45, 45);
+  bindGeomSlider("keystoneVSlider", "keystoneVVal", "keystone_v", "°", -30, 30);
+  bindGeomSlider("keystoneHSlider", "keystoneHVal", "keystone_h", "°", -30, 30);
+
+  document.getElementById("cropGuideSelect")?.addEventListener("change", (e) => {
+    const grid = document.getElementById("cropGrid");
+    if (grid) grid.dataset.guide = e.target.value || "thirds";
+  });
+
+  document.getElementById("openCropFromInspectorBtn")?.addEventListener("click", () => {
+    setCropMode(!state.cropMode);
+  });
+  document.getElementById("inspRotLeftBtn")?.addEventListener("click", () => rotateCurrentFrame(-90));
+  document.getElementById("inspRotRightBtn")?.addEventListener("click", () => rotateCurrentFrame(90));
+  document.getElementById("inspFlipHBtn")?.addEventListener("click", toggleHorizontalFlip);
+  document.getElementById("inspFlipVBtn")?.addEventListener("click", toggleVerticalFlip);
+  document.getElementById("inspGeomResetBtn")?.addEventListener("click", () => {
+    document.getElementById("cropResetBtn")?.click();
+  });
+
+  document.getElementById("autoCropStraightenCheck")?.addEventListener("change", (e) => {
+    state.auto_crop_straighten = Boolean(e.target.checked);
+    saveActiveFrameRecipe();
+    state.lastOriginalKey = "";
+    requestPreview(true);
+  });
+
+  document.getElementById("horizonDrawBtn")?.addEventListener("click", () => {
+    state.horizonDrawMode = !state.horizonDrawMode;
+    const hBtn = document.getElementById("horizonDrawBtn");
+    hBtn?.classList.toggle("active", state.horizonDrawMode);
+    hBtn?.setAttribute("aria-pressed", state.horizonDrawMode ? "true" : "false");
+  });
+
+  document.getElementById("geomRotLeftBtn")?.addEventListener("click", () => rotateCurrentFrame(-90));
+  document.getElementById("geomRotRightBtn")?.addEventListener("click", () => rotateCurrentFrame(90));
+  document.getElementById("geomFlipHBtn")?.addEventListener("click", toggleHorizontalFlip);
+  document.getElementById("geomFlipVBtn")?.addEventListener("click", toggleVerticalFlip);
+
+  document.getElementById("cropResetBtn")?.addEventListener("click", () => {
+    pushUndoSnapshotForFrame();
+    state.straighten = 0.0;
+    state.keystone_v = 0.0;
+    state.keystone_h = 0.0;
+    state.crop_rect = state.cropMode ? { x: 0, y: 0, w: 1, h: 1 } : null;
+    state.flip_v = false;
+    state.flip_h = false;
+    state.rotate = 0;
+    syncGeometryUiControls();
+    document.getElementById("flipHBtn")?.classList.remove("active");
+    document.getElementById("flipHBtn")?.setAttribute("aria-pressed", "false");
+    renderCropOverlay();
+    saveActiveFrameRecipe();
+    state.lastOriginalKey = "";
+    requestPreview(true);
+  });
+
+  document.getElementById("cropApplyBtn")?.addEventListener("click", () => {
+    if (
+      state.crop_rect &&
+      state.crop_rect.x <= 0.002 &&
+      state.crop_rect.y <= 0.002 &&
+      state.crop_rect.w >= 0.996 &&
+      state.crop_rect.h >= 0.996
+    ) {
+      state.crop_rect = null;
+    }
+    saveActiveFrameRecipe();
+    setCropMode(false);
+  });
+  document.getElementById("cropCloseBtn")?.addEventListener("click", () => {
+    setCropMode(false);
+  });
+  document.getElementById("imgDeveloped")?.addEventListener("load", () => {
+    if (state.cropMode) renderCropOverlay();
+    if (state.maskEditMode) renderLocalMaskOverlay();
+  });
+  window.addEventListener("resize", () => {
+    if (state.cropMode) renderCropOverlay();
+    if (state.maskEditMode) renderLocalMaskOverlay();
+  });
+}
+
+function updateSharedOpticsBadge() {
+  const badge = document.getElementById("sharedOpticsBadge");
+  if (!badge) return;
+  const parts = [];
+  const dustCount = Array.isArray(negativeState.dustSpots) ? negativeState.dustSpots.length : 0;
+  if (dustCount > 0) parts.push(`${dustCount} motas`);
+  if ((state.denoiseLuma || 0) > 0 || (state.denoiseChroma || 0) > 0) parts.push("Ruido");
+  if ((state.defringe || 0) > 0) parts.push("Defringe");
+  if (negativeState.sharpenMode && negativeState.sharpenMode !== "off") parts.push("Nitidez");
+  const maskCount = Array.isArray(state.localMasks) ? state.localMasks.length : 0;
+  if (maskCount > 0) parts.push(`${maskCount} ${maskCount === 1 ? "reserva" : "reservas"}`);
+  badge.textContent = parts.length > 0 ? parts.join(" · ") : "Neutro";
+}
+
+function syncSharedOpticsUI() {
+  const dl = Math.round(Number(state.denoiseLuma || 0) * 100);
+  const dc = Math.round(Number(state.denoiseChroma || 0) * 100);
+  const df = Math.round(Number(state.defringe || 0) * 100);
+  setSliderSilent("denoiseLumaSlider", "denoiseLumaVal", dl, `${dl}%`);
+  setSliderSilent("denoiseChromaSlider", "denoiseChromaVal", dc, `${dc}%`);
+  setSliderSilent("defringeSlider", "defringeVal", df, `${df}%`);
+
+  const mode = negativeState.sharpenMode || "off";
+  document.querySelectorAll("#sharedSharpenModeBar .seg-btn, #negSharpenModeBar .seg-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.sharpen === mode);
+  });
+  const sAmt = Math.round(Number(negativeState.sharpenAmount ?? 1.0) * 100);
+  setSliderSilent("sharedSharpenAmountSlider", "sharedSharpenAmountVal", sAmt, `${sAmt}%`);
+  setSliderSilent("negSharpenAmountSlider", "negSharpenAmountVal", sAmt, `${sAmt}%`);
+  const sGrp = document.getElementById("sharedSharpenAmountGroup");
+  const nGrp = document.getElementById("negSharpenAmountGroup");
+  if (sGrp) sGrp.style.display = mode !== "off" ? "block" : "none";
+  if (nGrp) nGrp.style.display = mode !== "off" ? "flex" : "none";
+
+  updateDustSpotsUI();
+  renderLocalMasksUI();
+  updateSharedOpticsBadge();
+}
+
+function renderLocalMasksUI() {
+  const masks = Array.isArray(state.localMasks) ? state.localMasks : [];
+  const countBadge = document.getElementById("localMasksCountBadge");
+  const listEl = document.getElementById("localMasksList");
+  const editorEl = document.getElementById("activeMaskEditor");
+  const toggleBtn = document.getElementById("toggleMaskEditBtn");
+
+  if (countBadge) countBadge.textContent = String(masks.length);
+  if (toggleBtn) {
+    toggleBtn.disabled = masks.length === 0;
+    if (masks.length === 0 && state.maskEditMode) {
+      setLocalMaskEditMode(false);
+    }
+  }
+
+  if (listEl) {
+    listEl.innerHTML = "";
+    masks.forEach((m, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `mask-chip${idx === state.activeMaskIndex ? " active" : ""}`;
+      const evNum = Number(m.ev || 0);
+      const evStr = `${evNum >= 0 ? "+" : ""}${evNum.toFixed(1)}EV`;
+      btn.textContent = `${m.type === "radial" ? "Radial" : "Grad"} ${idx + 1} (${evStr})`;
+      btn.addEventListener("click", () => {
+        state.activeMaskIndex = idx;
+        renderLocalMasksUI();
+        renderLocalMaskOverlay();
+      });
+      listEl.appendChild(btn);
+    });
+  }
+
+  const active = masks[state.activeMaskIndex];
+  if (editorEl) {
+    if (!active) {
+      editorEl.style.display = "none";
+    } else {
+      editorEl.style.display = "flex";
+      const evVal = Number(active.ev || 0);
+      setSliderSilent("maskEvSlider", "maskEvVal", evVal, `${evVal >= 0 ? "+" : ""}${evVal.toFixed(1)} EV`);
+      const featherPct = Math.round(Number(active.feather ?? 0.4) * 100);
+      setSliderSilent("maskFeatherSlider", "maskFeatherVal", featherPct, `${featherPct}%`);
+      const invChk = document.getElementById("maskInvertCheck");
+      if (invChk) invChk.checked = Boolean(active.invert);
+    }
+  }
+  updateSharedOpticsBadge();
+}
+
+function setLocalMaskEditMode(enabled) {
+  const masks = Array.isArray(state.localMasks) ? state.localMasks : [];
+  const next = Boolean(enabled) && masks.length > 0;
+  if (next && state.cropMode) setCropMode(false);
+  if (next && state.viewMode === "split") {
+    state.maskPrevViewMode = "split";
+    setViewMode("full");
+  } else if (!next && state.maskPrevViewMode === "split" && state.viewMode === "full") {
+    state.maskPrevViewMode = null;
+    setViewMode("split");
+  } else if (!next) {
+    state.maskPrevViewMode = null;
+  }
+  state.maskEditMode = next;
+  const btn = document.getElementById("toggleMaskEditBtn");
+  const svg = document.getElementById("localMaskOverlay");
+  btn?.classList.toggle("active", next);
+  btn?.setAttribute("aria-pressed", next ? "true" : "false");
+  if (btn) btn.textContent = next ? "Listo" : "Editar en lienzo";
+  if (svg) svg.style.display = next ? "block" : "none";
+  if (next) {
+    if (state.activeMaskIndex < 0 || state.activeMaskIndex >= masks.length) {
+      state.activeMaskIndex = 0;
+    }
+    renderLocalMaskOverlay();
+  }
+}
+
+function renderLocalMaskOverlay() {
+  const svg = document.getElementById("localMaskOverlay");
+  const imgEl = document.getElementById("imgDeveloped");
+  const masks = Array.isArray(state.localMasks) ? state.localMasks : [];
+  const active = masks[state.activeMaskIndex];
+  if (!svg || !state.maskEditMode || !active) return;
+
+  if (imgEl && imgEl.offsetWidth > 10 && imgEl.offsetHeight > 10) {
+    svg.style.left = `${imgEl.offsetLeft}px`;
+    svg.style.top = `${imgEl.offsetTop}px`;
+    svg.style.width = `${imgEl.offsetWidth}px`;
+    svg.style.height = `${imgEl.offsetHeight}px`;
+  }
+  const w = svg.clientWidth || imgEl?.offsetWidth || 100;
+  const h = svg.clientHeight || imgEl?.offsetHeight || 100;
+  const x1 = active.x1 * w;
+  const y1 = active.y1 * h;
+  const x2 = active.x2 * w;
+  const y2 = active.y2 * h;
+
+  svg.innerHTML = "";
+  const ns = "http://www.w3.org/2000/svg";
+  if (active.type === "radial") {
+    const el = document.createElementNS(ns, "ellipse");
+    el.setAttribute("class", "mask-guide-ellipse");
+    el.setAttribute("cx", String(x1));
+    el.setAttribute("cy", String(y1));
+    el.setAttribute("rx", String(Math.max(12, Math.abs(x2 - x1))));
+    el.setAttribute("ry", String(Math.max(12, Math.abs(y2 - y1))));
+    svg.appendChild(el);
+  } else {
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("class", "mask-guide-line");
+    line.setAttribute("x1", String(x1));
+    line.setAttribute("y1", String(y1));
+    line.setAttribute("x2", String(x2));
+    line.setAttribute("y2", String(y2));
+    svg.appendChild(line);
+  }
+  [
+    { id: "p1", cx: x1, cy: y1 },
+    { id: "p2", cx: x2, cy: y2 },
+  ].forEach((pt) => {
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("class", "mask-handle");
+    c.setAttribute("data-pt", pt.id);
+    c.setAttribute("cx", String(pt.cx));
+    c.setAttribute("cy", String(pt.cy));
+    c.setAttribute("r", "6");
+    svg.appendChild(c);
+  });
+}
+
+function initSharedDarkroomTools() {
+  document.getElementById("sharedDustHealBtn")?.addEventListener("click", () => {
+    setEyedropperMode(negativeState.eyedropperMode === "dust" ? null : "dust");
+  });
+  document.getElementById("sharedDustUndoBtn")?.addEventListener("click", undoLastDustSpot);
+  document.getElementById("sharedDustClearBtn")?.addEventListener("click", clearAllDustSpots);
+
+  const bindPctSlider = (sliderId, valId, stateKey) => {
+    const el = document.getElementById(sliderId);
+    const valEl = document.getElementById(valId);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      const pct = Math.max(0, Math.min(100, Number(el.value) || 0));
+      state[stateKey] = pct / 100.0;
+      if (valEl) valEl.textContent = `${pct}%`;
+      updateSharedOpticsBadge();
+      debouncedPreview(stateKey);
+    });
+    el.addEventListener("dblclick", () => {
+      pushUndoSnapshotForFrame();
+      state[stateKey] = 0.0;
+      syncSharedOpticsUI();
+      saveActiveFrameRecipe();
+      requestPreview(false);
+    });
+  };
+  bindPctSlider("denoiseLumaSlider", "denoiseLumaVal", "denoiseLuma");
+  bindPctSlider("denoiseChromaSlider", "denoiseChromaVal", "denoiseChroma");
+  bindPctSlider("defringeSlider", "defringeVal", "defringe");
+
+  document.querySelectorAll("#sharedSharpenModeBar .seg-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      pushUndoSnapshotForFrame();
+      negativeState.sharpenMode = btn.dataset.sharpen || "off";
+      syncSharedOpticsUI();
+      saveActiveFrameRecipe();
+      requestPreview(false);
+    });
+  });
+
+  document.getElementById("sharedSharpenAmountSlider")?.addEventListener("input", (e) => {
+    const pct = Math.max(0, Math.min(200, Number(e.target.value) || 100));
+    negativeState.sharpenAmount = pct / 100.0;
+    syncSharedOpticsUI();
+    debouncedPreview("sharpen_amount");
+  });
+
+  const addMask = (type) => {
+    if (!Array.isArray(state.localMasks)) state.localMasks = [];
+    if (state.localMasks.length >= 8) {
+      showToast("Límite de máscaras", "Máximo 8 reservas Dodge & Burn por fotograma.");
+      return;
+    }
+    pushUndoSnapshotForFrame();
+    const mask = type === "radial"
+      ? { type: "radial", x1: 0.5, y1: 0.5, x2: 0.78, y2: 0.78, ev: 0.5, feather: 0.5, invert: false }
+      : { type: "linear", x1: 0.5, y1: 0.12, x2: 0.5, y2: 0.62, ev: -0.6, feather: 0.45, invert: false };
+    state.localMasks.push(mask);
+    state.activeMaskIndex = state.localMasks.length - 1;
+    renderLocalMasksUI();
+    setLocalMaskEditMode(true);
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  };
+
+  document.getElementById("addLinearMaskBtn")?.addEventListener("click", () => addMask("linear"));
+  document.getElementById("addRadialMaskBtn")?.addEventListener("click", () => addMask("radial"));
+  document.getElementById("toggleMaskEditBtn")?.addEventListener("click", () => {
+    setLocalMaskEditMode(!state.maskEditMode);
+  });
+
+  document.getElementById("maskEvSlider")?.addEventListener("input", (e) => {
+    const active = state.localMasks?.[state.activeMaskIndex];
+    if (!active) return;
+    active.ev = Number(e.target.value) || 0;
+    renderLocalMasksUI();
+    debouncedPreview("local_masks");
+  });
+  document.getElementById("maskFeatherSlider")?.addEventListener("input", (e) => {
+    const active = state.localMasks?.[state.activeMaskIndex];
+    if (!active) return;
+    active.feather = Math.max(0.05, Math.min(1.0, (Number(e.target.value) || 40) / 100.0));
+    renderLocalMasksUI();
+    debouncedPreview("local_masks");
+  });
+  document.getElementById("maskInvertCheck")?.addEventListener("change", (e) => {
+    const active = state.localMasks?.[state.activeMaskIndex];
+    if (!active) return;
+    active.invert = Boolean(e.target.checked);
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("deleteActiveMaskBtn")?.addEventListener("click", () => {
+    if (!Array.isArray(state.localMasks) || state.activeMaskIndex < 0) return;
+    pushUndoSnapshotForFrame();
+    state.localMasks.splice(state.activeMaskIndex, 1);
+    state.activeMaskIndex = state.localMasks.length > 0 ? Math.min(state.activeMaskIndex, state.localMasks.length - 1) : -1;
+    renderLocalMasksUI();
+    renderLocalMaskOverlay();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("resetSharedOpticsBtn")?.addEventListener("click", () => {
+    pushUndoSnapshotForFrame();
+    state.denoiseLuma = 0;
+    state.denoiseChroma = 0;
+    state.defringe = 0;
+    state.localMasks = [];
+    state.activeMaskIndex = -1;
+    negativeState.sharpenMode = "off";
+    negativeState.sharpenAmount = 1.0;
+    negativeState.dustSpots = [];
+    setLocalMaskEditMode(false);
+    syncSharedOpticsUI();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+
+  const svg = document.getElementById("localMaskOverlay");
+  if (svg) {
+    let draggingPt = null;
+    svg.addEventListener("pointerdown", (e) => {
+      const hEl = e.target.closest(".mask-handle");
+      if (!hEl || !state.maskEditMode) return;
+      e.preventDefault();
+      e.stopPropagation();
+      draggingPt = hEl.dataset.pt;
+      pushUndoSnapshotForFrame();
+      svg.setPointerCapture?.(e.pointerId);
+    });
+    svg.addEventListener("pointermove", (e) => {
+      if (!draggingPt || !state.maskEditMode) return;
+      const active = state.localMasks?.[state.activeMaskIndex];
+      if (!active) return;
+      const rect = svg.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return;
+      const nx = Math.max(-0.2, Math.min(1.2, (e.clientX - rect.left) / rect.width));
+      const ny = Math.max(-0.2, Math.min(1.2, (e.clientY - rect.top) / rect.height));
+      if (draggingPt === "p1") {
+        active.x1 = Number(nx.toFixed(4));
+        active.y1 = Number(ny.toFixed(4));
+      } else {
+        active.x2 = Number(nx.toFixed(4));
+        active.y2 = Number(ny.toFixed(4));
+      }
+      renderLocalMaskOverlay();
+      debouncedPreview("local_masks");
+    });
+    const endDrag = () => {
+      if (!draggingPt) return;
+      draggingPt = null;
+      saveActiveFrameRecipe();
+    };
+    svg.addEventListener("pointerup", endDrag);
+    svg.addEventListener("pointercancel", endDrag);
+  }
+}
+
 // =============================================================
 // GLOBAL DRAG & DROP IMPORT
 // =============================================================
@@ -5385,7 +6325,12 @@ function initKeyboardShortcuts() {
     } else if (e.key === "r" || e.key === "R") {
       rotateCurrentFrame(e.shiftKey ? -90 : 90);
     } else if (e.key === "f" || e.key === "F") {
-      toggleHorizontalFlip();
+      if (e.shiftKey) toggleVerticalFlip();
+      else toggleHorizontalFlip();
+    } else if ((e.key === "c" || e.key === "C") && !e.shiftKey) {
+      setCropMode(!state.cropMode);
+    } else if (e.key === "Escape" && state.cropMode) {
+      setCropMode(false);
     } else if ((e.key === "i" || e.key === "I") && state.appMode === "negative") {
       setEyedropperMode(negativeState.eyedropperMode === "base" ? null : "base");
     } else if ((e.key === "w" || e.key === "W") && state.appMode === "negative") {
@@ -5487,6 +6432,7 @@ function buildExportPrintOptions() {
   return {
     easel_border: state.easelBorder || "none",
     dry_down_comp: Number(state.dryDownComp) || 0.0,
+    write_xmp: Boolean(document.getElementById("writeXmpCheck")?.checked),
   };
 }
 
@@ -5557,7 +6503,20 @@ async function saveAsWithDialog() {
   }
   const activeFrame = state.frames[state.activeFrameIndex];
   const stem = activeFrame.filename.replace(/\.[^/.]+$/, "");
-  const ext = state.outputFormat === "tiff" ? ".tiff" : state.outputFormat === "png" ? ".png" : ".jpg";
+  const srcExt = (activeFrame.filename.match(/\.[^/.]+$/) || [".jpg"])[0].toLowerCase();
+  const rawExts = new Set([".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2", ".raf", ".pef"]);
+  let ext = ".jpg";
+  if (state.outputFormat === "tiff") ext = ".tiff";
+  else if (state.outputFormat === "png") ext = ".png";
+  else if (state.outputFormat === "dng") ext = ".dng";
+  else if (state.outputFormat === "original") {
+    if (srcExt === ".png") ext = ".png";
+    else if (srcExt === ".tif" || srcExt === ".tiff") ext = ".tiff";
+    else if (srcExt === ".webp") ext = ".webp";
+    else if (rawExts.has(srcExt)) ext = ".dng";
+    else if (srcExt === ".heic" || srcExt === ".heif") ext = ".tiff";
+    else ext = ".jpg";
+  }
   const defaultName =
     state.appMode === "negative"
       ? `${stem}_positive_${negativeState.profile}${ext}`
@@ -6345,6 +7304,10 @@ function initUIListeners() {
   document.getElementById("rotateLeftBtn")?.addEventListener("click", () => rotateCurrentFrame(-90));
   document.getElementById("rotateRightBtn")?.addEventListener("click", () => rotateCurrentFrame(90));
   document.getElementById("flipHBtn")?.addEventListener("click", toggleHorizontalFlip);
+  document.getElementById("flipVBtn")?.addEventListener("click", toggleVerticalFlip);
+  document.getElementById("cropToolBtn")?.addEventListener("click", () => setCropMode(!state.cropMode));
+  initGeometryTool();
+  initSharedDarkroomTools();
 
   document.getElementById("zoomInBtn")?.addEventListener("click", () => {
     const base = state.viewMode === "sheet" ? state.sheetZoom : state.zoom;
@@ -6840,8 +7803,10 @@ function initUIListeners() {
     pill.addEventListener("click", () => {
       setToggleGroupActive("#outputFormatPills .fmt-pill", pill, "aria-checked");
       state.outputFormat = pill.dataset.format || "jpg";
+      updateOutputFormatHint();
     });
   });
+  updateOutputFormatHint();
 
   document.getElementById("openFolderBtn")?.addEventListener("click", async () => {
     if (window.pywebview && window.pywebview.api && window.pywebview.api.open_developed_folder) {

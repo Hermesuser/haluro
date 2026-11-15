@@ -9,6 +9,25 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.9.0] — 2026-11-15
+
+### Añadido
+- **Geometría Unificada (Emulación y Revelado de Negativos):** Recorte interactivo sobre el lienzo (ratios `free`, `original`, `1:1`, `4:3`, `3:2`, `16:9`, `5:4`, `6:7` y botón `⇄` para invertir orientación), nivelación fina (`±15°`), herramienta de **Trazar horizonte** sobre dos puntos, corrección de perspectiva vertical (`Keystone`), rotación en pasos de `90°`, volteo horizontal/vertical, auto-recorte y guías de composición (`Tercios`, `Áurea`, `Diagonal`, `Centro`) con lectura de píxeles en vivo.
+- **Óptica, Limpieza y Cuarto Oscuro Local Compartido:** Disponibles tanto en **Emulación** como en **Revelado Negativos**:
+  - **Limpieza de polvo y motas** (`apply_dust_spot_healing`).
+  - **Reducción de ruido digital** (luminancia y crominancia) (`apply_digital_denoise`).
+  - **Eliminación de aberración cromática / halos** (`apply_defringe`).
+  - **Enfoque óptico de laboratorio / escáner** (`apply_optical_sharpen`: `off`, `lab`, `scanner`).
+  - **Dodge & Burn local** (`apply_local_dodge_burn`) con hasta 8 máscaras interactivas de tipo **gradiente lineal** o **radial** con exposición, suavidad/pluma e inversión.
+- **Preservación de Formato Original, Linear DNG 16-bit y Sidecar `.XMP`:** Nuevo formato de exportación `original` (mantiene el formato de entrada o convierte RAW a DNG lineal de 16 bits sin pérdida), exportación directa a **Linear DNG 16-bit** (`dng`) y generación automática de archivo sidecar `.xmp` con metadatos de cámara, emulsión y geometría.
+- **Catálogo ampliado a 80 emulsiones:** Incorporación de nuevas películas de cine, blanco y negro y diapositiva en el catálogo.
+- **Compilación macOS Intel (`x86_64`) y Apple Silicon (`arm64`):** Generación verificada de `Haluro-2.9.0-macOS-arm64.dmg` y `Haluro-2.9.0-macOS-x86_64.dmg`.
+
+### Corregido y Mejorado
+- **QA interactivo en navegador (Playwright):** Acceso directo **Recortar** en la barra superior (`#cropToolBtn` / tecla `C`), encuadre automático completo al editar recortes o máscaras, sincronización de guías de composición, y sugerencia contextual dinámica (`#outputFormatHint`) al seleccionar el formato de salida.
+
+---
+
 ## [2.8.0] — 2026-11-14
 
 ### Nuevo — Flujo completo de laboratorio (P1–P9)

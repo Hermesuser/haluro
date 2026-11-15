@@ -1,4 +1,4 @@
-# Haluro 2.5.0 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
+# Haluro 2.9.0 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
 
 Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfica concebida desde la práctica y los principios de la fotoquímica analógica. Esta guía detalla cada módulo, herramienta, atajo de teclado y proceso de calibración para obtener el máximo rendimiento tanto en la inversión de negativos digitalizados con cámara como en la emulación de emulsiones cinematográficas y fotográficas clásicas.
 
@@ -40,8 +40,8 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 | Arquitectura de Mac | Archivo a Descargar |
 | :--- | :--- |
-| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.5.0-macOS-arm64.dmg` |
-| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.5.0-macOS-x86_64.dmg` |
+| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.9.0-macOS-arm64.dmg` |
+| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.9.0-macOS-x86_64.dmg` |
 
 #### Pasos de Instalación:
 1. Haz doble clic sobre el archivo `.dmg` correspondiente a tu procesador.
@@ -292,6 +292,33 @@ El grano fotográfico surge de cúmulos microscópicos de plata metálica reduci
 
 ---
 
+### Limpieza, Ruido, Aberración Cromática, Enfoque y Dodge & Burn Local (v2.9.0)
+
+Disponible de forma idéntica en **Emulación · 80** y en **Revelar negativo** dentro del bloque **«Limpieza, óptica y reservas locales»**:
+
+![Óptica Compartida, Reducción de Ruido y Dodge & Burn Local](docs/images/09_optica_ruido_dodge_burn.png)
+
+* **Limpieza de polvo y motas:** Activa el pincel puntual sobre el lienzo para clonar imperfecciones y polvo del escaneo sin alterar la textura circundante.
+* **Reducción de ruido digital:** Controles independientes de **Luminancia** y **Crominancia** en luz lineal antes de aplicar el grano químico.
+* **Defringe (halos cromáticos):** Atenúa bordes púrpura o verdes de alto contraste en objetivos vintage o digitalizaciones con macro.
+* **Enfoque óptico:** Modos *Desactivado*, *Laboratorio* (microcontraste suave) y *Escáner* (acutancia de tambor/CCD).
+* **Dodge & Burn local (hasta 8 máscaras):** Crea máscaras de **Gradiente lineal** o **Radial** directamente sobre el visor, ajustando exposición (`EV`), suavidad/pluma e inversión para aclarar (dodge) o quemar (burn) zonas específicas como en la ampliadora tradicional.
+
+---
+
+### Geometría Unificada: Recorte, Nivelación y Perspectiva (v2.9.0)
+
+Pulsa el botón **«Recortar»** en la barra del visor (o la tecla `C`) para abrir el marco interactivo sobre la fotografía completa:
+
+![Geometría Unificada — Recorte y Nivelación](docs/images/08_geometria_corte_nivelar.png)
+
+* **Relaciones de aspecto:** `Libre`, `Original`, `1:1`, `4:3`, `3:2`, `16:9`, `5:4` y `6:7`, con botón `⇄` para alternar entre horizontal y vertical y lectura de dimensiones en píxeles en vivo.
+* **Nivelación y Horizonte:** Deslizador fino de `±15°`, herramienta **«Trazar horizonte»** (haz clic en dos puntos del horizonte para nivelar automáticamente) y **Auto-recorte**.
+* **Perspectiva vertical (Keystone), Rotación y Volteo:** Corrige líneas convergentes en arquitectura, rota en pasos de `90°` (`R` / `⇧R`) o voltea horizontal/verticalmente (`F`).
+* **Guías de composición:** Regla de los *Tercios*, *Proporción áurea*, *Diagonal*, *Centro* o *Ninguna*.
+
+---
+
 ### Virados Químicos de Papel (B&N)
 
 En el modo **«Revelar negativo»** al seleccionar **«Plata B&N»**, la sección **«Medio fotoquímico y acabado»** ofrece 10 procesos y acabados tradicionales:
@@ -320,15 +347,19 @@ El panel desplegable **«Ficha técnica EXIF analógica»** incrusta nativamente
 
 ---
 
-### Formatos de Salida (TIFF 16-bit, PNG y JPEG)
+### Formatos de Salida (Original, Linear DNG 16-bit, TIFF 16-bit, PNG y JPEG)
 
-En la esquina inferior derecha (**Formato maestro**), Haluro ofrece tres opciones sin alterar nunca los originales:
+En la esquina inferior derecha (**Formato maestro**), Haluro ofrece cinco opciones sin alterar nunca los originales (junto con un archivo sidecar **`.XMP`** automático):
 
-1. **TIFF 16b (Recomendado para Archivo y Master):**
+1. **Original (Preservar formato):**
+   - Mantiene el formato de entrada en archivos ráster (TIFF/PNG/JPG) o convierte negativos/capturas **RAW** directamente a **Linear DNG 16-bit** sin pérdida.
+2. **Linear DNG 16-bit:**
+   - Negativo digital lineal de 16 bits por canal listo para archivar o continuar en Lightroom/Capture One, con metadatos y sidecar `.XMP`.
+3. **TIFF 16b (Recomendado para Archivo y Master):**
    - TIFF de 16 bits por canal (48-bit RGB real) sin pérdida a 300 DPI con compresión Adobe Deflate y metadatos EXIF analógicos.
-2. **PNG:**
+4. **PNG:**
    - Salida sin pérdida de alta compatibilidad con metadatos EXIF incrustados.
-3. **JPG 4:4:4:**
+5. **JPG 4:4:4:**
    - JPEG de máxima calidad sin submuestreo cromático, ideal para pantallas Retina, móviles y publicación directa.
 
 ---
@@ -368,4 +399,4 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 2.5.0 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*
+*Haluro 2.9.0 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*

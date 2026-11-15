@@ -28,11 +28,16 @@ import scipy.ndimage
 from PIL import Image
 
 from .pipeline import (
+    apply_defringe,
+    apply_digital_denoise,
+    apply_dust_spot_healing,
     apply_geometry,
+    apply_local_dodge_burn,
     apply_optical_sharpen,
     apply_user_curves,
     linear_to_srgb,
     load_image_linear,
+    normalize_crop_rect,
     shift_hues,
     srgb_to_linear,
 )
@@ -1323,79 +1328,6 @@ def _apply_bw_split_grade_and_preflash(
     return srgb_to_linear(np.clip(y_s, 0.0, 1.0))
 
 
-def apply_dust_spot_healing(pos: np.ndarray, dust_spots=None) -> np.ndarray:
-    """Gentle annular surround healing for pinpoint dust/hairs without IR channels (ideal for B&W)."""
-    if not dust_spots:
-        return pos
-    out = np.asarray(pos, dtype=np.float32).copy()
-    h, w = out.shape[:2]
-    max_dim = max(h, w)
-    if max_dim < 8:
-        return out
-
-    for spot in dust_spots:
-        if isinstance(spot, dict):
-            nx = float(spot.get("x", -1.0))
-            ny = float(spot.get("y", -1.0))
-            nr = float(spot.get("r", 0.008))
-        elif isinstance(spot, (list, tuple)) and len(spot) >= 2:
-            nx = float(spot[0])
-            ny = float(spot[1])
-            nr = float(spot[2]) if len(spot) >= 3 else 0.008
-        else:
-            continue
-
-        if not (0.0 <= nx <= 1.0 and 0.0 <= ny <= 1.0):
-            continue
-        rad = max(2, min(int(round(max(0.002, min(0.045, nr)) * max_dim)), max_dim // 6))
-        cx = int(round(nx * (w - 1)))
-        cy = int(round(ny * (h - 1)))
-        patch_r = rad * 2 + 4
-
-        y0, y1 = max(0, cy - patch_r), min(h, cy + patch_r + 1)
-        x0, x1 = max(0, cx - patch_r), min(w, cx + patch_r + 1)
-        patch = out[y0:y1, x0:x1]
-        if patch.size == 0:
-            continue
-
-        yy, xx = np.ogrid[y0:y1, x0:x1]
-        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2, dtype=np.float32)
-        ring_mask = (dist >= rad * 1.15) & (dist <= rad * 2.25)
-        inner_mask = dist <= rad
-        if not np.any(ring_mask) or not np.any(inner_mask):
-            continue
-
-        # Local plane + median surround color preserves smooth sky gradients while removing specks
-        ring_vals = patch[ring_mask]
-        ring_med = np.median(ring_vals, axis=0)
-        ry, rx = np.nonzero(ring_mask)
-        design = np.column_stack(
-            [
-                np.ones_like(rx, dtype=np.float32),
-                (rx - (cx - x0)).astype(np.float32),
-                (ry - (cy - y0)).astype(np.float32),
-            ]
-        )
-        try:
-            coeffs, _, _, _ = np.linalg.lstsq(design, ring_vals, rcond=None)
-            gy, gx = np.meshgrid(
-                np.arange(y0, y1, dtype=np.float32) - cy,
-                np.arange(x0, x1, dtype=np.float32) - cx,
-                indexing="ij",
-            )
-            fill = coeffs[0] + gy[..., None] * coeffs[1] + gx[..., None] * coeffs[2]
-            fill = 0.65 * fill + 0.35 * ring_med
-        except np.linalg.LinAlgError:
-            fill = np.broadcast_to(ring_med, patch.shape)
-
-        fill = np.clip(fill, 0.0, 1.0)
-        alpha = np.where(inner_mask, 0.5 * (1.0 + np.cos(np.pi * np.clip(dist / max(rad, 1e-4), 0.0, 1.0))), 0.0)
-        alpha = alpha[..., None].astype(np.float32)
-        out[y0:y1, x0:x1] = patch * (1.0 - alpha) + fill * alpha
-
-    return np.clip(out, 0.0, 1.0)
-
-
 def invert_negative(
     lin_img,
     base_color=None,
@@ -1715,6 +1647,12 @@ def process_negative_to_image(
     max_dim=None,
     rotate=0,
     flip_h=False,
+    flip_v=False,
+    straighten=0.0,
+    keystone_v=0.0,
+    keystone_h=0.0,
+    crop_rect=None,
+    auto_crop_straighten=True,
     sharpen_mode="off",
     sharpen_amount=1.0,
     return_float=False,
@@ -1722,6 +1660,10 @@ def process_negative_to_image(
     flat_field_path=None,
     flat_field_file=None,
     flat_field_strength=1.0,
+    denoise_luma=0.0,
+    denoise_chroma=0.0,
+    defringe=0.0,
+    local_masks=None,
     **kwargs,
 ):
     """Process a digitized negative into a positive display-sRGB PIL Image (and optional float32 sRGB)."""
@@ -1732,20 +1674,60 @@ def process_negative_to_image(
         rotate=rotate,
         flip_h=flip_h,
     )
+    has_geom = bool(
+        rotate
+        or flip_h
+        or flip_v
+        or abs(float(straighten or 0.0)) > 0.01
+        or abs(float(keystone_v or 0.0)) > 0.01
+        or abs(float(keystone_h or 0.0)) > 0.01
+        or normalize_crop_rect(crop_rect) is not None
+    )
     if isinstance(image_input, (str, Path)):
-        lin = load_image_linear(image_input, max_dim=max_dim, rotate=rotate, flip_h=flip_h)
+        lin = load_image_linear(
+            image_input,
+            max_dim=max_dim,
+            rotate=rotate,
+            flip_h=flip_h,
+            flip_v=flip_v,
+            straighten=straighten,
+            keystone_v=keystone_v,
+            keystone_h=keystone_h,
+            crop_rect=crop_rect,
+            auto_crop_straighten=auto_crop_straighten,
+        )
     elif isinstance(image_input, Image.Image):
         if max_dim is not None and max(image_input.size) > max_dim:
             scale = max_dim / max(image_input.size)
             new_size = (int(image_input.width * scale), int(image_input.height * scale))
             image_input = image_input.resize(new_size, Image.Resampling.LANCZOS)
         lin = srgb_to_linear(np.asarray(image_input, dtype=np.float32) / 255.0)
-        if rotate or flip_h:
-            lin = apply_geometry(lin, rotate=rotate, flip_h=flip_h)
+        if has_geom:
+            lin = apply_geometry(
+                lin,
+                rotate=rotate,
+                flip_h=flip_h,
+                flip_v=flip_v,
+                straighten=straighten,
+                keystone_v=keystone_v,
+                keystone_h=keystone_h,
+                crop_rect=crop_rect,
+                auto_crop_straighten=auto_crop_straighten,
+            )
     else:
         lin = np.array(image_input, dtype=np.float32)
-        if rotate or flip_h:
-            lin = apply_geometry(lin, rotate=rotate, flip_h=flip_h)
+        if has_geom:
+            lin = apply_geometry(
+                lin,
+                rotate=rotate,
+                flip_h=flip_h,
+                flip_v=flip_v,
+                straighten=straighten,
+                keystone_v=keystone_v,
+                keystone_h=keystone_h,
+                crop_rect=crop_rect,
+                auto_crop_straighten=auto_crop_straighten,
+            )
 
     pos = invert_negative(
         lin,
@@ -1753,6 +1735,16 @@ def process_negative_to_image(
         flat_field_strength=float(flat_field_strength),
         **kwargs,
     )
+    if float(defringe or 0.0) > 0.005:
+        pos = apply_defringe(pos, strength=float(defringe))
+    if float(denoise_luma or 0.0) > 0.005 or float(denoise_chroma or 0.0) > 0.005:
+        pos = apply_digital_denoise(
+            pos,
+            luma_strength=float(denoise_luma or 0.0),
+            chroma_strength=float(denoise_chroma or 0.0),
+        )
+    if local_masks:
+        pos = np.clip(apply_local_dodge_burn(pos, local_masks), 0.0, 1.0)
     srgb = linear_to_srgb(pos)
     if sharpen_mode and sharpen_mode != "off" and float(sharpen_amount) > 0.01:
         srgb = apply_optical_sharpen(srgb, mode=str(sharpen_mode), amount=float(sharpen_amount))

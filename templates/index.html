@@ -573,6 +573,19 @@
               <path d="M12 3v18M8 7l-5 5 5 5M16 7l5 5-5 5"/>
             </svg>
           </button>
+          <button class="tool-icon-btn" id="flipVBtn" aria-label="Girar verticalmente" aria-pressed="false" title="Girar verticalmente (⇧F)">
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M3 12h18M7 8l5-5 5 5M7 16l5 5 5-5"/>
+            </svg>
+          </button>
+          <button class="recipe-pill-btn crop-tool-pill" id="cropToolBtn" aria-label="Corte, nivelar y perspectiva" aria-pressed="false" title="Corte, nivelar y perspectiva (Tecla C)">
+            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M6 2v14a2 2 0 0 0 2 2h14"/>
+              <path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+            </svg>
+            <span class="crop-pill-label">Recortar</span>
+            <span class="crop-active-dot" id="cropActiveDot" aria-hidden="true"></span>
+          </button>
           <span class="toolbar-sep" aria-hidden="true"></span>
           <button class="tool-icon-btn" id="zoomOutBtn" aria-label="Alejar zoom" title="Alejar (-)">−</button>
           <button class="zoom-readout" id="zoomResetBtn" title="Restablecer vista al 100% encajado (Tecla 0)">
@@ -622,6 +635,120 @@
                   <button type="button" class="test-strip-step-btn active" data-step="0.5" aria-pressed="true">1/2 EV</button>
                 </div>
                 <button type="button" class="test-strip-exit-btn" id="exitTestStripBtn" title="Salir de Tira f-stop (Esc o T)">Cerrar</button>
+              </div>
+            </div>
+            <!-- Interactive Crop & Straighten Overlay -->
+            <div id="cropOverlay" class="crop-overlay" style="display: none;" aria-label="Área interactiva de corte y nivelación">
+              <div class="crop-mask crop-mask-top" id="cropMaskTop"></div>
+              <div class="crop-mask crop-mask-bottom" id="cropMaskBottom"></div>
+              <div class="crop-mask crop-mask-left" id="cropMaskLeft"></div>
+              <div class="crop-mask crop-mask-right" id="cropMaskRight"></div>
+              <div class="crop-box" id="cropBox">
+                <div class="crop-grid" id="cropGrid" data-guide="thirds" aria-hidden="true">
+                  <span class="crop-grid-v1"></span>
+                  <span class="crop-grid-v2"></span>
+                  <span class="crop-grid-h1"></span>
+                  <span class="crop-grid-h2"></span>
+                  <span class="crop-grid-cx"></span>
+                  <span class="crop-grid-cy"></span>
+                  <svg class="crop-grid-diag" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <line x1="0" y1="0" x2="100" y2="100"/>
+                    <line x1="100" y1="0" x2="0" y2="100"/>
+                  </svg>
+                </div>
+                <div class="crop-dimensions-badge" id="cropDimensionsBadge" aria-hidden="true">—</div>
+                <div class="crop-handle crop-handle-nw" data-handle="nw" aria-label="Esquina superior izquierda"></div>
+                <div class="crop-handle crop-handle-n" data-handle="n" aria-label="Borde superior"></div>
+                <div class="crop-handle crop-handle-ne" data-handle="ne" aria-label="Esquina superior derecha"></div>
+                <div class="crop-handle crop-handle-e" data-handle="e" aria-label="Borde derecho"></div>
+                <div class="crop-handle crop-handle-se" data-handle="se" aria-label="Esquina inferior derecha"></div>
+                <div class="crop-handle crop-handle-s" data-handle="s" aria-label="Borde inferior"></div>
+                <div class="crop-handle crop-handle-sw" data-handle="sw" aria-label="Esquina inferior izquierda"></div>
+                <div class="crop-handle crop-handle-w" data-handle="w" aria-label="Borde izquierdo"></div>
+              </div>
+              <svg id="horizonLineSvg" class="horizon-line-svg" style="display: none;" aria-hidden="true">
+                <line id="horizonGuideLine" x1="0" y1="0" x2="0" y2="0" />
+                <circle id="horizonPtA" cx="0" cy="0" r="4" />
+                <circle id="horizonPtB" cx="0" cy="0" r="4" />
+              </svg>
+            </div>
+            <svg id="localMaskOverlay" class="local-mask-overlay" style="display: none;" aria-hidden="true"></svg>
+          </div>
+
+          <!-- Floating Geometry & Crop Inspector Drawer -->
+          <div id="geometryPanel" class="geometry-panel" style="display: none;" role="dialog" aria-label="Herramientas de corte, nivelar y perspectiva">
+            <div class="geometry-panel-head">
+              <span class="geometry-panel-title">Corte · Nivelar · Geometría</span>
+              <span class="geom-dim-pill" id="geomDimensionsReadout">—</span>
+              <button type="button" class="tool-icon-btn" id="cropCloseBtn" aria-label="Cerrar panel de geometría" title="Cerrar (Esc)">×</button>
+            </div>
+            <div class="geometry-panel-body">
+              <div class="geom-row geom-row-split">
+                <div>
+                  <label class="geom-label" for="cropAspectSelect">Proporción</label>
+                  <div class="geom-aspect-wrap">
+                    <select id="cropAspectSelect" class="dark-select">
+                      <option value="free">Libre</option>
+                      <option value="original">Original</option>
+                      <option value="3:2">3:2 (35mm)</option>
+                      <option value="4:3">4:3</option>
+                      <option value="1:1">1:1 (6×6)</option>
+                      <option value="5:4">5:4 (4×5)</option>
+                      <option value="7:6">7:6 (6×7)</option>
+                      <option value="16:9">16:9</option>
+                      <option value="65:24">65:24 (XPan)</option>
+                    </select>
+                    <button type="button" class="tool-icon-btn" id="cropSwapAspectBtn" title="Invertir orientación de proporción">⇄</button>
+                  </div>
+                </div>
+                <div>
+                  <label class="geom-label" for="cropGuideSelect">Guía</label>
+                  <select id="cropGuideSelect" class="dark-select">
+                    <option value="thirds" selected>Tercios</option>
+                    <option value="golden">Áurea (Phi)</option>
+                    <option value="diagonal">Diagonales</option>
+                    <option value="center">Cruz central</option>
+                    <option value="none">Sin guía</option>
+                  </select>
+                </div>
+              </div>
+              <div class="geom-row">
+                <div class="geom-label-row">
+                  <label class="geom-label" for="straightenSlider">Nivelar</label>
+                  <span class="geom-val" id="straightenVal">0.0°</span>
+                </div>
+                <input type="range" id="straightenSlider" min="-45" max="45" step="0.1" value="0">
+                <div class="geom-sub-actions">
+                  <button type="button" class="recipe-pill-btn" id="horizonDrawBtn" aria-pressed="false" title="Traza una línea sobre el horizonte o un borde recto para nivelar automáticamente">Trazar horizonte</button>
+                  <label class="geom-check-label" title="Recorta automáticamente las esquinas vacías al nivelar">
+                    <input type="checkbox" id="autoCropStraightenCheck" checked>
+                    <span>Auto-recorte</span>
+                  </label>
+                </div>
+              </div>
+              <div class="geom-row">
+                <div class="geom-label-row">
+                  <label class="geom-label" for="keystoneVSlider">Perspectiva V</label>
+                  <span class="geom-val" id="keystoneVVal">0°</span>
+                </div>
+                <input type="range" id="keystoneVSlider" min="-30" max="30" step="0.5" value="0">
+              </div>
+              <div class="geom-row">
+                <div class="geom-label-row">
+                  <label class="geom-label" for="keystoneHSlider">Perspectiva H</label>
+                  <span class="geom-val" id="keystoneHVal">0°</span>
+                </div>
+                <input type="range" id="keystoneHSlider" min="-30" max="30" step="0.5" value="0">
+              </div>
+              <div class="geom-quick-bar">
+                <button type="button" class="recipe-pill-btn" id="geomRotLeftBtn" title="Rotar 90° izquierda">↺ 90°</button>
+                <button type="button" class="recipe-pill-btn" id="geomRotRightBtn" title="Rotar 90° derecha">↻ 90°</button>
+                <button type="button" class="recipe-pill-btn" id="geomFlipHBtn" title="Girar horizontalmente">⇄ H</button>
+                <button type="button" class="recipe-pill-btn" id="geomFlipVBtn" title="Girar verticalmente">⇅ V</button>
+              </div>
+              <div class="geom-footer">
+                <button type="button" class="btn btn-ghost btn-xs" id="cropResetBtn">Restablecer</button>
+                <button type="button" class="btn btn-primary btn-xs" id="cropApplyBtn">Aplicar</button>
               </div>
             </div>
           </div>
@@ -1184,6 +1311,146 @@
           </details>
         </div>
 
+        <!-- SHARED GEOMETRY & CROP CARD: Always visible in both Emulation & Negative modes -->
+        <details class="panel-card collapsible-panel shared-geom-card" id="sharedGeometryCard">
+          <summary class="section-head collapsible-head">
+            <h3>Encuadre, corte y nivelado</h3>
+            <span class="mono-badge" id="geomStatusBadge">Original</span>
+          </summary>
+          <div class="shared-geom-body">
+            <button type="button" class="btn btn-outline btn-sm btn-block geom-insp-cta" id="openCropFromInspectorBtn" title="Abrir marco interactivo de corte, horizonte y perspectiva (Tecla C)">
+              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M6 2v14a2 2 0 0 0 2 2h14"/>
+                <path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+              </svg>
+              <span id="openCropFromInspectorLabel">Recortar y nivelar en lienzo (C)</span>
+            </button>
+            <div class="geom-quick-bar">
+              <button type="button" class="recipe-pill-btn" id="inspRotLeftBtn" title="Rotar 90° izquierda (⇧R)">↺ 90°</button>
+              <button type="button" class="recipe-pill-btn" id="inspRotRightBtn" title="Rotar 90° derecha (R)">↻ 90°</button>
+              <button type="button" class="recipe-pill-btn" id="inspFlipHBtn" title="Voltear horizontalmente (F)">⇄ H</button>
+              <button type="button" class="recipe-pill-btn" id="inspFlipVBtn" title="Girar verticalmente (⇧F)">⇅ V</button>
+            </div>
+            <div class="control-group">
+              <div class="control-label">
+                <label for="inspStraightenSlider">Nivelar horizonte</label>
+                <span class="control-val" id="inspStraightenVal">0.0°</span>
+              </div>
+              <input type="range" class="bipolar-range" id="inspStraightenSlider" min="-45" max="45" step="0.1" value="0" data-default="0">
+            </div>
+            <div class="geom-insp-footer">
+              <button type="button" class="reset-link" id="inspGeomResetBtn">Restablecer geometría</button>
+            </div>
+          </div>
+        </details>
+
+        <!-- SHARED OPTICS, DENOISE, DUST HEAL & DODGE/BURN CARD: Works in both Emulation & Negative modes -->
+        <details class="panel-card collapsible-panel shared-optics-card" id="sharedDarkroomToolsCard">
+          <summary class="section-head collapsible-head">
+            <h3>Óptica, ruido y reservas (Dodge &amp; Burn)</h3>
+            <span class="mono-badge" id="sharedOpticsBadge">Neutro</span>
+          </summary>
+          <div class="shared-optics-body">
+            <!-- Pinpoint Dust Heal -->
+            <div class="shared-subblock">
+              <div class="dust-heal-head">
+                <span>Limpieza de motas y polvo</span>
+                <span class="mono-badge" id="sharedDustCountBadge">0 motas</span>
+              </div>
+              <div class="dust-heal-actions">
+                <button type="button" class="btn btn-outline btn-xs" id="sharedDustHealBtn" aria-pressed="false" title="Haz clic sobre motas o pelusas en la foto (Emulación y Negativos)">Quitar motas</button>
+                <button type="button" class="btn btn-ghost btn-xs" id="sharedDustUndoBtn" disabled>Deshacer</button>
+                <button type="button" class="btn btn-ghost btn-xs" id="sharedDustClearBtn" disabled>Limpiar</button>
+              </div>
+            </div>
+
+            <!-- Digital Noise Reduction & Defringe -->
+            <div class="shared-subblock">
+              <div class="control-group">
+                <div class="control-label">
+                  <label for="denoiseLumaSlider">Reducción de ruido (Luminancia)</label>
+                  <span class="control-val" id="denoiseLumaVal">0%</span>
+                </div>
+                <input type="range" id="denoiseLumaSlider" min="0" max="100" step="5" value="0" data-default="0">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <label for="denoiseChromaSlider">Reducción de ruido (Color)</label>
+                  <span class="control-val" id="denoiseChromaVal">0%</span>
+                </div>
+                <input type="range" id="denoiseChromaSlider" min="0" max="100" step="5" value="0" data-default="0">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <label for="defringeSlider" title="Elimina halos magenta/verde de aberración cromática en bordes de alto contraste">Antihalos cromáticos (Defringe)</label>
+                  <span class="control-val" id="defringeVal">0%</span>
+                </div>
+                <input type="range" id="defringeSlider" min="0" max="100" step="5" value="0" data-default="0">
+              </div>
+            </div>
+
+            <!-- Output Optical Sharpen -->
+            <div class="shared-subblock">
+              <div class="control-label">
+                <span>Nitidez óptica de salida</span>
+              </div>
+              <div class="segmented-bar segmented-3" id="sharedSharpenModeBar" role="radiogroup" aria-label="Nitidez óptica de salida">
+                <button type="button" class="seg-btn active" data-sharpen="off">Apagada</button>
+                <button type="button" class="seg-btn" data-sharpen="lab">Lab</button>
+                <button type="button" class="seg-btn" data-sharpen="scanner">Escáner</button>
+              </div>
+              <div class="control-group" id="sharedSharpenAmountGroup" style="display: none;">
+                <div class="control-label">
+                  <label for="sharedSharpenAmountSlider">Intensidad</label>
+                  <span class="control-val" id="sharedSharpenAmountVal">100%</span>
+                </div>
+                <input type="range" id="sharedSharpenAmountSlider" min="0" max="200" step="10" value="100" data-default="100">
+              </div>
+            </div>
+
+            <!-- Local Dodge & Burn Masks -->
+            <div class="shared-subblock">
+              <div class="dust-heal-head">
+                <span>Esquivar y quemar (Dodge &amp; Burn)</span>
+                <span class="mono-badge" id="localMasksCountBadge">0</span>
+              </div>
+              <div class="dust-heal-actions">
+                <button type="button" class="btn btn-outline btn-xs" id="addLinearMaskBtn">+ Graduado</button>
+                <button type="button" class="btn btn-outline btn-xs" id="addRadialMaskBtn">+ Radial</button>
+                <button type="button" class="btn btn-ghost btn-xs" id="toggleMaskEditBtn" aria-pressed="false" disabled>Editar en lienzo</button>
+              </div>
+              <div class="local-masks-list" id="localMasksList"></div>
+              <div class="active-mask-editor" id="activeMaskEditor" style="display: none;">
+                <div class="control-group">
+                  <div class="control-label">
+                    <label for="maskEvSlider">Exposición local</label>
+                    <span class="control-val" id="maskEvVal">0.0 EV</span>
+                  </div>
+                  <input type="range" class="bipolar-range" id="maskEvSlider" min="-2.0" max="2.0" step="0.1" value="-0.5">
+                </div>
+                <div class="control-group">
+                  <div class="control-label">
+                    <label for="maskFeatherSlider">Suavizado</label>
+                    <span class="control-val" id="maskFeatherVal">40%</span>
+                  </div>
+                  <input type="range" id="maskFeatherSlider" min="10" max="100" step="5" value="40">
+                </div>
+                <div class="mask-editor-footer">
+                  <label class="geom-check-label">
+                    <input type="checkbox" id="maskInvertCheck">
+                    <span>Invertir</span>
+                  </label>
+                  <button type="button" class="reset-link" id="deleteActiveMaskBtn">Eliminar máscara</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="geom-insp-footer">
+              <button type="button" class="reset-link" id="resetSharedOpticsBtn">Restablecer óptica y reservas</button>
+            </div>
+          </div>
+        </details>
+
         <!-- SHARED TONE CURVE: control points travel as data inside either simulation or negative recipe -->
         <section class="panel-card" id="curveSectionCard">
           <div class="section-head">
@@ -1413,7 +1680,14 @@
             <button class="fmt-pill active" data-format="jpg" role="radio" aria-checked="true" title="JPEG 96% sin submuestreo cromático (4:4:4) con EXIF analógico">JPG 4:4:4</button>
             <button class="fmt-pill" data-format="png" role="radio" aria-checked="false" title="PNG sin pérdida con metadatos EXIF">PNG</button>
             <button class="fmt-pill" data-format="tiff" role="radio" aria-checked="false" title="TIFF Maestro de 16 bits por canal (48-bit RGB) sin pérdida con EXIF analógico">TIFF 16b</button>
+            <button class="fmt-pill" data-format="dng" role="radio" aria-checked="false" title="Linear DNG de 16 bits (RAW estándar compatible con Lightroom/Darktable) con EXIF analógico">DNG 16b</button>
+            <button class="fmt-pill" data-format="original" role="radio" aria-checked="false" title="Mantiene el formato de entrada (JPG/PNG/TIFF) o exporta Linear DNG 16-bit cuando la entrada es RAW">Original</button>
           </div>
+          <div class="format-hint" id="outputFormatHint" aria-live="polite"></div>
+          <label class="geom-check-label xmp-sidecar-toggle" title="Guarda además un archivo .xmp no destructivo con el recorte, nivelado y orientación">
+            <input type="checkbox" id="writeXmpCheck">
+            <span>Guardar sidecar .XMP de geometría</span>
+          </label>
         </div>
         <button class="btn btn-ghost btn-block btn-xs" id="openFolderBtn">
           Abrir carpeta interna de revelados

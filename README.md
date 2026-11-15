@@ -1,4 +1,4 @@
-# Haluro — Laboratorio Analógico Digital (v2.5.0)
+# Haluro — Laboratorio Analógico Digital (v2.9.0)
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2011-blue.svg)](#requisitos-técnicos)
@@ -166,8 +166,8 @@ cambios que más se notan en el uso diario son:
 
 #### Opción 1: Imagen de Disco Oficial (.dmg)
 1. Descarga la versión adecuada para tu procesador desde [Releases de GitHub](https://github.com/Hermesuser/haluro/releases):
-   - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.5.0-macOS-arm64.dmg`
-   - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.5.0-macOS-x86_64.dmg`
+   - **Apple Silicon (M1 / M2 / M3 / M4):** `Haluro-2.9.0-macOS-arm64.dmg`
+   - **Procesadores Intel (Core i5 / i7 / i9 / Xeon):** `Haluro-2.9.0-macOS-x86_64.dmg`
 2. Haz doble clic sobre el archivo `.dmg` montado y arrastra el icono de **Haluro** hacia tu carpeta de **Aplicaciones**.
 3. Abre **Haluro** desde Launchpad, Spotlight o tu carpeta de **Aplicaciones**.
    > **Nota para el primer arranque en macOS Sequoia / Sonoma:**  
@@ -207,6 +207,21 @@ chmod +x run.sh
 :: En una consola de Windows o PowerShell dentro de la carpeta del proyecto
 run_windows.bat
 ```
+
+---
+
+### Módulo 7: Geometría Unificada, Óptica Compartida, Dodge & Burn y Linear DNG 16-bit (v2.9.0)
+
+Disponible de forma idéntica tanto en **Emulación · 80** como en **Revelar negativo**:
+
+- **Recorte y Nivelación sobre Lienzo (`C`):** Marco interactivo con relaciones de aspecto (`Libre`, `Original`, `1:1`, `4:3`, `3:2`, `16:9`, `5:4`, `6:7`), botón `⇄` para invertir orientación, nivelación fina (`±15°`), herramienta **Trazar horizonte** en dos clics, corrección de perspectiva vertical (**Keystone**), rotación `90°`, volteo H/V, auto-recorte y guías de composición (*Tercios, Áurea, Diagonal, Centro*) con lectura de píxeles en vivo.
+- **Limpieza, Ruido, Defringe y Enfoque:** Eliminación puntual de polvo/motas sobre el lienzo, reducción de ruido digital (luminancia y crominancia), supresión de halos cromáticos (**Defringe**) y enfoque de laboratorio o escáner.
+- **Dodge & Burn Local:** Hasta 8 máscaras interactivas de **gradiente lineal** o **radial** con ajuste independiente de exposición, suavidad e inversión.
+- **Formato `Original`, `Linear DNG 16-bit` y Sidecar `.XMP`:** Conserva el formato original (convirtiendo RAW a DNG lineal de 16 bits sin pérdida) y genera automáticamente un archivo `.xmp` con la receta analógica y la geometría.
+
+| Geometría, Recorte y Nivelación | Óptica Compartida y Dodge & Burn Local |
+| :---: | :---: |
+| ![Geometría y Recorte](docs/images/08_geometria_corte_nivelar.png) | ![Óptica, Ruido y Dodge & Burn](docs/images/09_optica_ruido_dodge_burn.png) |
 
 ---
 
@@ -266,7 +281,7 @@ python cli.py invert negativo_01.tif \
                                         ▼
                    ┌─────────────────────────────────────────┐
                    │    Exportación Maestra No Destructiva    │
-                   │  (TIFF 16-bit real · PNG · JPEG 4:4:4)  │
+                   │ (Original · DNG 16b · TIFF 16b · PNG · JPG)│
                    └─────────────────────────────────────────┘
 ```
 
@@ -286,7 +301,7 @@ python cli.py invert negativo_01.tif \
 6. **Servidor de Producción:** El backend se sirve con **Waitress** (WSGI de producción) en lugar del servidor de desarrollo de Flask, sin *debugger* interactivo y con límites de conexión y tiempo de espera.
 7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de ejecución utiliza `Pillow >= 13.0.0`, resolviendo todas las advertencias y CVEs conocidas del ecosistema Python (resultado: **0 vulnerabilidades detectadas**).
 8. **Escrituras Atómicas:** Toda exportación se escribe en un archivo temporal y se mueve a su destino con `os.replace()`, de modo que una interrupción nunca deja un maestro truncado.
-9. **Calidad de Código y Pruebas Automatizadas:** Suite de **70 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la hoja de contactos, el progreso de revelado por lotes, la integridad de 16 bits en TIFF, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
+9. **Calidad de Código y Pruebas Automatizadas:** Suite de **106 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
 
 ---
 
