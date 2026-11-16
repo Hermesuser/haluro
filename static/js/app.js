@@ -3138,6 +3138,11 @@ function applySyncRecipeToRoll(options = {}) {
         target.grain_asa = srcSnap.grain_asa || "auto";
         target.vignette = srcSnap.vignette;
         target.date = srcSnap.date;
+        target.denoise_luma = srcSnap.denoise_luma ?? 0;
+        target.denoise_chroma = srcSnap.denoise_chroma ?? 0;
+        target.defringe = srcSnap.defringe ?? 0;
+        target.sharpen_mode = srcSnap.sharpen_mode || "off";
+        target.sharpen_amount = srcSnap.sharpen_amount ?? 1.0;
       }
       target.rotate = prevRec?.rotate ?? f.simRecipe?.rotate ?? state.rotate;
       target.flip_h = prevRec?.flip_h ?? f.simRecipe?.flip_h ?? state.flip_h;
@@ -6516,6 +6521,10 @@ function initKeyboardShortcuts() {
         document.getElementById("exportMoreBtn")?.setAttribute("aria-expanded", "false");
         return;
       }
+      if (state.maskEditMode) {
+        setLocalMaskEditMode(false);
+        return;
+      }
       if (negativeState.eyedropperActive) {
         setEyedropperMode(null);
         return;
@@ -6527,6 +6536,13 @@ function initKeyboardShortcuts() {
       document
         .querySelectorAll(".modal-backdrop.active:not(#batchProgressModal)")
         .forEach((m) => setModalOpen(m, false));
+      return;
+    }
+
+    // Delete / Backspace removes the active Dodge & Burn mask while editing on canvas
+    if ((e.key === "Delete" || e.key === "Backspace") && state.maskEditMode && !inTextInput && state.activeMaskIndex >= 0) {
+      e.preventDefault();
+      document.getElementById("deleteActiveMaskBtn")?.click();
       return;
     }
 
