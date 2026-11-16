@@ -434,4 +434,4 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 2.10.2 — Desarrollado para fotógrafos que aman la ciencia y el arte de la plata.*
+*Haluro 2.10.2 — Desarrollado para fotógrafos que aman la ciencia y el arte.*
