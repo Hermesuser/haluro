@@ -148,6 +148,7 @@ function saveUserPreferences() {
       ev: state.ev,
       halation: state.halation,
       grain: state.grain,
+      grainAsa: state.grainAsa,
       vignette: state.vignette,
       shadows: state.shadows,
       mids: state.mids,
@@ -259,6 +260,7 @@ const state = {
   ev: 0.0,
   halation: 1.0,
   grain: 1.0,
+  grainAsa: "auto",
   vignette: 1.0,
   // Tonal zones (exposure per zone, in stops)
   shadows: 0.0,
@@ -769,7 +771,7 @@ async function applyStoredPreferences() {
   }
 
   // Restaurar controles de simulación
-  for (const key of ["devProcess", "ev", "halation", "grain", "vignette", "shadows", "mids", "highlights", "date", "rotate", "flip_h", "outputFormat", "easelBorder", "dryDownComp", "viewMode", "splitPercent", "zoom", "panX", "panY"]) {
+  for (const key of ["devProcess", "ev", "halation", "grain", "grainAsa", "vignette", "shadows", "mids", "highlights", "date", "rotate", "flip_h", "outputFormat", "easelBorder", "dryDownComp", "viewMode", "splitPercent", "zoom", "panX", "panY"]) {
     if (key in prefs) state[key] = prefs[key];
   }
   if (state.viewMode === "teststrip") state.viewMode = "split";
@@ -802,6 +804,10 @@ function applyPrefsToUI(prefs) {
   if (prefs.devProcess !== undefined) {
     const el = document.getElementById("simDevProcessSelect");
     if (el) el.value = prefs.devProcess || "standard";
+  }
+  if (prefs.grainAsa !== undefined) {
+    const el = document.getElementById("grainAsaSelect");
+    if (el) el.value = prefs.grainAsa || "auto";
   }
   if (prefs.ev !== undefined) setSlider("evSlider", prefs.ev);
   if (prefs.halation !== undefined) setSlider("halationSlider", prefs.halation);
@@ -1359,6 +1365,7 @@ function isFrameCustomized(frame) {
     Math.abs(r.ev || 0) > 0.01 ||
     Math.abs((r.halation ?? 1.0) - 1.0) > 0.05 ||
     Math.abs((r.grain ?? 1.0) - 1.0) > 0.05 ||
+    (r.grain_asa && r.grain_asa !== "auto") ||
     Math.abs((r.vignette ?? 1.0) - 1.0) > 0.05 ||
     Boolean(r.date) ||
     Boolean(r.rotate) ||
@@ -2459,6 +2466,7 @@ function buildSimulationPayload() {
     ev: state.ev,
     halation: state.halation,
     grain: state.grain,
+    grain_asa: state.grainAsa || "auto",
     vignette: state.vignette,
     shadows: state.shadows,
     mids: state.mids,
@@ -2564,6 +2572,7 @@ function snapshotSimRecipe() {
     ev: state.ev,
     halation: state.halation,
     grain: state.grain,
+    grain_asa: state.grainAsa || "auto",
     vignette: state.vignette,
     shadows: state.shadows,
     mids: state.mids,
@@ -2687,6 +2696,9 @@ function applySimRecipeToUI(rec) {
   state.ev = Number(rec.ev ?? 0);
   state.halation = Number(rec.halation ?? 1.0);
   state.grain = Number(rec.grain ?? 1.0);
+  state.grainAsa = rec.grain_asa || "auto";
+  const grainAsaSel = document.getElementById("grainAsaSelect");
+  if (grainAsaSel) grainAsaSel.value = state.grainAsa;
   state.vignette = Number(rec.vignette ?? 1.0);
   state.shadows = Number(rec.shadows ?? 0.0);
   state.mids = Number(rec.mids ?? 0.0);
@@ -3120,6 +3132,7 @@ function applySyncRecipeToRoll(options = {}) {
         target.ev = srcSnap.ev;
         target.halation = srcSnap.halation;
         target.grain = srcSnap.grain;
+        target.grain_asa = srcSnap.grain_asa || "auto";
         target.vignette = srcSnap.vignette;
         target.date = srcSnap.date;
       }
@@ -6277,6 +6290,11 @@ function resetSimulationControls() {
         devProcSel.value = "standard";
         devProcSel.dispatchEvent(new Event("change", { bubbles: true }));
       }
+      const grainAsaSel = document.getElementById("grainAsaSelect");
+      if (grainAsaSel && grainAsaSel.value !== "auto") {
+        grainAsaSel.value = "auto";
+        grainAsaSel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       const dateToggle = document.getElementById("dateToggle");
       if (dateToggle && dateToggle.checked) {
         dateToggle.checked = false;
@@ -7559,6 +7577,13 @@ function initUIListeners() {
   document.getElementById("simDevProcessSelect")?.addEventListener("change", (e) => {
     pushUndoSnapshotForFrame();
     state.devProcess = e.target.value || "standard";
+    saveActiveFrameRecipe();
+    saveUserPreferences();
+    requestPreview(false);
+  });
+  document.getElementById("grainAsaSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.grainAsa = e.target.value || "auto";
     saveActiveFrameRecipe();
     saveUserPreferences();
     requestPreview(false);

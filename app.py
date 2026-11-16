@@ -29,6 +29,7 @@ from engine import APP_NAME, __version__, about_payload
 from engine.contact_sheet import generate_contact_sheet
 from engine.films import (
     LUT_DIR,
+    VALID_GRAIN_ASAS,
     delete_user_lut,
     get_film,
     get_user_luts_dir,
@@ -1283,6 +1284,11 @@ def _parse_dev_process(value) -> str:
     return s if s in DEV_PROCESSES else "standard"
 
 
+def _parse_grain_asa(value) -> str:
+    s = str(value or "auto").strip().lower()
+    return s if s in VALID_GRAIN_ASAS else "auto"
+
+
 @app.route("/api/preview", methods=["POST"])
 def api_preview():
     data = request.json or {}
@@ -1291,6 +1297,7 @@ def api_preview():
     ev = _num(data, "ev", 0.0, -10.0, 10.0)
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    grain_asa = _parse_grain_asa(data.get("grain_asa"))
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -1313,6 +1320,7 @@ def api_preview():
         ev_adjust=ev,
         halation_mult=halation,
         grain_mult=grain,
+        grain_asa=grain_asa,
         vignette_mult=vignette,
         shadows=shadows,
         mids=mids,
@@ -1415,6 +1423,7 @@ def api_test_strip():
         ev_base = _num(data, "ev", 0.0, -10.0, 10.0)
         halation = _num(data, "halation", 1.0, 0.0, 5.0)
         grain = _num(data, "grain", 1.0, 0.0, 5.0)
+        grain_asa = _parse_grain_asa(data.get("grain_asa"))
         vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
         shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
         mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -1446,6 +1455,7 @@ def api_test_strip():
                 ev_adjust=target_val,
                 halation_mult=halation,
                 grain_mult=grain,
+                grain_asa=grain_asa,
                 vignette_mult=vignette,
                 shadows=shadows,
                 mids=mids,
@@ -1491,6 +1501,7 @@ def api_develop_full():
     ev = _num(data, "ev", 0.0, -10.0, 10.0)
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    grain_asa = _parse_grain_asa(data.get("grain_asa"))
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -1525,6 +1536,7 @@ def api_develop_full():
         f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
         f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
         f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
+        f_asa = _parse_grain_asa(fr.get("grain_asa", grain_asa)) if isinstance(fr, dict) else grain_asa
         f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
         f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
@@ -1546,6 +1558,7 @@ def api_develop_full():
             ev_adjust=f_ev,
             halation_mult=f_hal,
             grain_mult=f_grn,
+            grain_asa=f_asa,
             vignette_mult=f_vig,
             shadows=f_shadows,
             mids=f_mids,
@@ -1627,6 +1640,7 @@ def api_contact_sheet_preview():
     ev = _num(data, "ev", 0.0, -10.0, 10.0)
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    grain_asa = _parse_grain_asa(data.get("grain_asa"))
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -1652,6 +1666,7 @@ def api_contact_sheet_preview():
         f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
         f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
         f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
+        f_asa = _parse_grain_asa(fr.get("grain_asa", grain_asa)) if isinstance(fr, dict) else grain_asa
         f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
         f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
@@ -1668,6 +1683,7 @@ def api_contact_sheet_preview():
             ev_adjust=f_ev,
             halation_mult=f_hal,
             grain_mult=f_grn,
+            grain_asa=f_asa,
             vignette_mult=f_vig,
             shadows=f_shadows,
             mids=f_mids,
@@ -1727,6 +1743,7 @@ def api_save_contact_sheet():
     ev = _num(data, "ev", 0.0, -10.0, 10.0)
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    grain_asa = _parse_grain_asa(data.get("grain_asa"))
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -1768,6 +1785,7 @@ def api_save_contact_sheet():
         f_ev = _num(fr, "ev", ev, -10.0, 10.0) if isinstance(fr, dict) else ev
         f_hal = _num(fr, "halation", halation, 0.0, 5.0) if isinstance(fr, dict) else halation
         f_grn = _num(fr, "grain", grain, 0.0, 5.0) if isinstance(fr, dict) else grain
+        f_asa = _parse_grain_asa(fr.get("grain_asa", grain_asa)) if isinstance(fr, dict) else grain_asa
         f_vig = _num(fr, "vignette", vignette, 0.0, 5.0) if isinstance(fr, dict) else vignette
         f_shadows = _num(fr, "shadows", shadows, -4.0, 4.0) if isinstance(fr, dict) else shadows
         f_mids = _num(fr, "mids", mids, -4.0, 4.0) if isinstance(fr, dict) else mids
@@ -1784,6 +1802,7 @@ def api_save_contact_sheet():
             ev_adjust=f_ev,
             halation_mult=f_hal,
             grain_mult=f_grn,
+            grain_asa=f_asa,
             vignette_mult=f_vig,
             shadows=f_shadows,
             mids=f_mids,
@@ -1845,6 +1864,7 @@ def api_export_single():
     ev = _num(data, "ev", 0.0, -10.0, 10.0)
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    grain_asa = _parse_grain_asa(data.get("grain_asa"))
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -1872,6 +1892,7 @@ def api_export_single():
         ev_adjust=ev,
         halation_mult=halation,
         grain_mult=grain,
+        grain_asa=grain_asa,
         vignette_mult=vignette,
         shadows=shadows,
         mids=mids,
@@ -1941,6 +1962,7 @@ def api_export_and_download():
     ev = float(request.args.get("ev", 0.0))
     halation = float(request.args.get("halation", 1.0))
     grain = float(request.args.get("grain", 1.0))
+    grain_asa = _parse_grain_asa(request.args.get("grain_asa"))
     vignette = float(request.args.get("vignette", 1.0))
     shadows = float(request.args.get("shadows", 0.0))
     mids = float(request.args.get("mids", 0.0))
@@ -1963,6 +1985,7 @@ def api_export_and_download():
         ev_adjust=ev,
         halation_mult=halation,
         grain_mult=grain,
+        grain_asa=grain_asa,
         vignette_mult=vignette,
         shadows=shadows,
         mids=mids,
@@ -1990,6 +2013,7 @@ def api_save_direct_to_downloads():
     ev = _num(data, "ev", 0.0, -10.0, 10.0)
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    grain_asa = _parse_grain_asa(data.get("grain_asa"))
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -2025,6 +2049,7 @@ def api_save_direct_to_downloads():
         ev_adjust=ev,
         halation_mult=halation,
         grain_mult=grain,
+        grain_asa=grain_asa,
         vignette_mult=vignette,
         shadows=shadows,
         mids=mids,
@@ -2135,6 +2160,7 @@ def _save_simulation_to_dest(data, reveal=False):
     ev = _num(data, "ev", 0.0, -10.0, 10.0)
     halation = _num(data, "halation", 1.0, 0.0, 5.0)
     grain = _num(data, "grain", 1.0, 0.0, 5.0)
+    grain_asa = _parse_grain_asa(data.get("grain_asa"))
     vignette = _num(data, "vignette", 1.0, 0.0, 5.0)
     shadows = _num(data, "shadows", 0.0, -4.0, 4.0)
     mids = _num(data, "mids", 0.0, -4.0, 4.0)
@@ -2159,6 +2185,7 @@ def _save_simulation_to_dest(data, reveal=False):
         ev_adjust=ev,
         halation_mult=halation,
         grain_mult=grain,
+        grain_asa=grain_asa,
         vignette_mult=vignette,
         shadows=shadows,
         mids=mids,

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from engine import APP_NAME, __version__, about_payload
 from engine.contact_sheet import generate_contact_sheet
-from engine.films import get_film, list_films
+from engine.films import VALID_GRAIN_ASAS, get_film, list_films
 from engine.negative_inverter import (
     BW_TONING_PROFILES,
     MINILAB_PROFILES,
@@ -61,6 +61,12 @@ def main():
     dev_p.add_argument("--ev", type=float, default=0.0, help="Compensación de exposición en EV")
     dev_p.add_argument("--halation", type=float, default=1.0, help="Multiplicador de halación")
     dev_p.add_argument("--grain", type=float, default=1.0, help="Multiplicador de grano de plata")
+    dev_p.add_argument(
+        "--grain-asa",
+        choices=list(VALID_GRAIN_ASAS),
+        default="auto",
+        help="ASA/ISO del rollo para perfilar el tamaño y densidad del grano (auto, 100..6400)",
+    )
     dev_p.add_argument("--vignette", type=float, default=1.0, help="Multiplicador de viñeteo")
     dev_p.add_argument("--date", action="store_true", help="Estampar fecha en cuarzo ámbar")
     dev_p.add_argument("--sheet", action="store_true", help="Generar hoja de contactos SHEET.jpg")
@@ -205,6 +211,7 @@ def main():
                 ev_adjust=args.ev,
                 halation_mult=args.halation,
                 grain_mult=args.grain,
+                grain_asa=args.grain_asa,
                 vignette_mult=args.vignette,
                 add_date=args.date,
                 max_dim=args.max_dim,

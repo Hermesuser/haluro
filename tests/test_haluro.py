@@ -1784,3 +1784,46 @@ def test_user_tone_curve_reaches_preview_and_export(client, tmp_path: Path) -> N
     )
     assert res_sheet.status_code == 200
     assert res_sheet.get_json().get("sheet")
+
+
+def test_organic_grain_asa_profiles_and_preview_endpoint(client) -> None:
+    from engine.films import GRAIN_ASA_PROFILES, get_film, resolve_grain_profile
+    from engine.pipeline import apply_grain, develop_frame
+
+    asas = ("100", "200", "400", "800", "1600", "3200", "6400")
+    film = get_film("portra400")
+    prev_amt, prev_size = 0.0, 0.0
+    for asa in asas:
+        assert asa in GRAIN_ASA_PROFILES
+        amt, size = resolve_grain_profile(film, grain_asa=asa)
+        assert amt > prev_amt
+        assert size > prev_size
+        prev_amt, prev_size = amt, size
+
+    auto_amt, auto_size = resolve_grain_profile(film, grain_asa="auto")
+    assert auto_amt == pytest.approx(float(film["grain"]))
+    assert auto_size == pytest.approx(float(film["grain_size"]))
+
+    gray = np.full((96, 96, 3), 0.45, dtype=np.float32)
+    bw_grain = apply_grain(gray, amount=0.04, size=1.5, seed=77, chroma=0.0)
+    assert np.allclose(bw_grain[..., 0], bw_grain[..., 1], atol=1e-6)
+    color_grain = apply_grain(gray, amount=0.04, size=1.5, seed=77, chroma=0.22)
+    assert float(np.std(color_grain[..., 0] - color_grain[..., 1])) > 1e-4
+
+    pil_in = Image.new("RGB", (128, 128), (110, 110, 110))
+    out_100 = np.asarray(
+        develop_frame(pil_in, "portra400", grain_asa="100", vignette_mult=0.0, grain_seed=99),
+        dtype=np.float32,
+    )
+    out_6400 = np.asarray(
+        develop_frame(pil_in, "portra400", grain_asa="6400", vignette_mult=0.0, grain_seed=99),
+        dtype=np.float32,
+    )
+    assert float(np.std(out_6400[..., 0])) > float(np.std(out_100[..., 0])) * 3.0
+
+    res = client.post(
+        "/api/preview",
+        json={"filename": "SAMPLE.CR2", "film": "portra400", "grain_asa": "1600", "grain": 1.0},
+    )
+    assert res.status_code == 200
+    assert res.get_json().get("developed", "").startswith("data:image/jpeg;base64,")

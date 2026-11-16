@@ -183,6 +183,27 @@ STOCKS_DATA = [
 ]
 
 
+GRAIN_ASA_PROFILES: dict[str, dict[str, float]] = {
+    "100": {"amount": 0.011, "size": 0.90},
+    "200": {"amount": 0.015, "size": 1.05},
+    "400": {"amount": 0.022, "size": 1.25},
+    "800": {"amount": 0.030, "size": 1.50},
+    "1600": {"amount": 0.042, "size": 1.80},
+    "3200": {"amount": 0.056, "size": 2.15},
+    "6400": {"amount": 0.072, "size": 2.55},
+}
+VALID_GRAIN_ASAS = ("auto", *GRAIN_ASA_PROFILES.keys())
+
+
+def resolve_grain_profile(film: dict, grain_asa: str = "auto") -> tuple[float, float]:
+    """Return ``(amount, size)`` for the selected ASA or fall back to film defaults."""
+    key = str(grain_asa or "auto").strip().lower()
+    prof = GRAIN_ASA_PROFILES.get(key)
+    if prof is not None:
+        return float(prof["amount"]), float(prof["size"])
+    return float(film.get("grain", 0.015)), float(film.get("grain_size", 1.0))
+
+
 def grain_for(iso, kind):
     steps = {25: 0, 50: 1, 64: 1.3, 80: 1.6, 100: 2, 125: 2.3, 160: 2.7, 200: 3,
              400: 4, 800: 5, 1600: 6, 3200: 7}.get(iso, 3)

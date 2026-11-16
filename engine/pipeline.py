@@ -18,7 +18,7 @@ import scipy.ndimage
 from PIL import Image, ImageCms, ImageDraw, ImageOps
 
 from . import __version__
-from .films import LUT_DIR, get_film
+from .films import LUT_DIR, get_film, resolve_grain_profile
 from .lut import load_lut
 from .platform_io import is_macos, load_ui_font
 
@@ -1611,41 +1611,86 @@ def apply_halation(lin, strength=1.0, threshold=0.70, tint=(1.0, 0.28, 0.06)):
     return lin + glow_rgb
 
 
-def apply_grain(rgb, amount=0.02, size=1.0, seed=None):
-    """Adds natural midtone-peaking analog film grain.
+def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280):
+    """Add multi-octave organic silver-halide / dye-cloud film grain.
 
-    The RNG is local and optionally seeded. The previous implementation drew
-    from NumPy's *global* RNG, which meant every re-render produced a different
-    grain pattern: the preview visibly "boiled" while dragging a slider and the
-    exported master never matched the frame the photographer had approved. Worse,
-    under ThreadPoolExecutor the pattern of a given frame depended on thread
-    scheduling, so two exports of the same roll differed from each other.
+    Uses a local deterministic RNG seeded per frame so preview and export carry
+    the same grain structure. Combines three spatial octaves (microcrystal,
+    medium silver clump, and soft macro-clump) with bicubic resampling to avoid
+    rectangular grid artifacts, an asymmetric film tonal envelope (stronger in
+    shadows-to-midtones than dense highlights), and optional subtle chromatic
+    dye-cloud variation for color stocks.
     """
     if amount <= 0.001:
         return rgb
 
     rng = np.random.default_rng(seed)
     h, w = rgb.shape[:2]
-    eff_size = max(1.15, float(size))
-    nh, nw = max(1, int(h / eff_size)), max(1, int(w / eff_size))
-    clump_small = rng.normal(0.0, 1.0, (nh, nw)).astype(np.float32)
-    clump = np.asarray(
-        Image.fromarray(clump_small).resize((w, h), Image.Resampling.BILINEAR),
+    res_scale = max(1.0, max(h, w) / float(ref_dim)) if ref_dim else 1.0
+    base_size = max(0.85, float(size)) * res_scale
+
+    # Octave 1: fine microcrystal texture (slightly softer at high res_scale)
+    if res_scale > 1.35:
+        nfh, nfw = max(1, int(h / (0.85 * res_scale))), max(1, int(w / (0.85 * res_scale)))
+        fine_small = rng.normal(0.0, 1.0, (nfh, nfw)).astype(np.float32)
+        fine = np.asarray(
+            Image.fromarray(fine_small).resize((w, h), Image.Resampling.BICUBIC),
+            dtype=np.float32,
+        )
+    else:
+        fine = rng.normal(0.0, 1.0, (h, w)).astype(np.float32)
+
+    # Octave 2: medium silver-halide / dye clump
+    med_step = max(1.35, base_size * 1.45)
+    nmh, nmw = max(1, int(h / med_step)), max(1, int(w / med_step))
+    med_small = rng.normal(0.0, 1.0, (nmh, nmw)).astype(np.float32)
+    med = np.asarray(
+        Image.fromarray(med_small).resize((w, h), Image.Resampling.BICUBIC),
         dtype=np.float32,
     )
-    fine = rng.normal(0.0, 1.0, (h, w)).astype(np.float32)
-    # Blend organic silver-halide clumps with fine texture so grain remains
-    # visible in downscaled previews and after JPEG compression.
-    noise = 0.72 * clump + 0.28 * fine
-    std = float(np.std(noise))
+
+    # Octave 3: soft organic macro-clump
+    mac_step = max(2.6, base_size * 2.85)
+    nch, ncw = max(1, int(h / mac_step)), max(1, int(w / mac_step))
+    mac_small = rng.normal(0.0, 1.0, (nch, ncw)).astype(np.float32)
+    mac = np.asarray(
+        Image.fromarray(mac_small).resize((w, h), Image.Resampling.BICUBIC),
+        dtype=np.float32,
+    )
+
+    luma_noise = 0.24 * fine + 0.54 * med + 0.22 * mac
+    std = float(np.std(luma_noise))
     if std > 1e-6:
-        noise = noise / std
+        luma_noise = luma_noise / std
+
+    chroma_ratio = float(np.clip(chroma, 0.0, 0.6))
+    if chroma_ratio > 1e-3 and rgb.ndim == 3 and rgb.shape[2] == 3:
+        c_step = max(1.6, base_size * 1.6)
+        ch, cw = max(1, int(h / c_step)), max(1, int(w / c_step))
+        c_small = rng.normal(0.0, 1.0, (ch, cw, 3)).astype(np.float32)
+        c_channels = [
+            np.asarray(
+                Image.fromarray(c_small[..., idx]).resize((w, h), Image.Resampling.BICUBIC),
+                dtype=np.float32,
+            )
+            for idx in range(3)
+        ]
+        chroma_noise = np.stack(c_channels, axis=-1)
+        chroma_noise -= np.mean(chroma_noise, axis=-1, keepdims=True)
+        chroma_noise *= np.array([1.10, 0.75, 1.15], dtype=np.float32)[None, None, :]
+        c_std = float(np.std(chroma_noise))
+        if c_std > 1e-6:
+            chroma_noise = chroma_noise / c_std
+        noise_rgb = luma_noise[..., None] * (1.0 - chroma_ratio) + chroma_noise * chroma_ratio
+    else:
+        noise_rgb = luma_noise[..., None]
 
     luma = np.sum(rgb * LUMA, axis=-1, keepdims=True)
     mid_peak = 4.0 * luma * np.maximum(0.0, 1.0 - luma)
-    weight = 0.25 + 0.75 * mid_peak
+    shadow_bias = np.clip(1.15 - 0.55 * luma, 0.35, 1.15)
+    weight = (0.28 + 0.72 * mid_peak) * shadow_bias
 
-    noisy_rgb = rgb + noise[..., None] * (amount * weight)
+    noisy_rgb = rgb + noise_rgb * (amount * weight)
     return np.clip(noisy_rgb, 0.0, 1.0)
 
 
@@ -1696,6 +1741,7 @@ DEV_PROCESSES = {
         "ev_offset": 0.0,
         "contrast_mult": 1.0,
         "grain_mult": 1.0,
+        "clump_mult": 1.0,
         "acutance": 0.0,
         "compensating": 0.0,
     },
@@ -1704,6 +1750,7 @@ DEV_PROCESSES = {
         "ev_offset": 0.0,
         "contrast_mult": 0.96,
         "grain_mult": 1.15,
+        "clump_mult": 1.10,
         "acutance": 0.45,
         "compensating": 1.0,
     },
@@ -1712,6 +1759,7 @@ DEV_PROCESSES = {
         "ev_offset": 0.35,
         "contrast_mult": 1.12,
         "grain_mult": 1.20,
+        "clump_mult": 1.15,
         "acutance": 0.15,
         "compensating": 0.0,
     },
@@ -1720,6 +1768,7 @@ DEV_PROCESSES = {
         "ev_offset": 0.70,
         "contrast_mult": 1.24,
         "grain_mult": 1.40,
+        "clump_mult": 1.32,
         "acutance": 0.25,
         "compensating": 0.0,
     },
@@ -1728,6 +1777,7 @@ DEV_PROCESSES = {
         "ev_offset": -0.25,
         "contrast_mult": 0.88,
         "grain_mult": 0.85,
+        "clump_mult": 0.90,
         "acutance": 0.0,
         "compensating": 0.35,
     },
@@ -1740,6 +1790,7 @@ def develop_frame(
     ev_adjust=0.0,
     halation_mult=1.0,
     grain_mult=1.0,
+    grain_asa="auto",
     vignette_mult=1.0,
     shadows=0.0,
     mids=0.0,
@@ -1928,11 +1979,23 @@ def develop_frame(
         display = apply_user_curves(display, curve)
 
     # 5. Film Grain
-    grain_amt = film.get("grain", 0.015) * grain_mult * float(proc_spec["grain_mult"])
+    base_grain_amt, base_grain_size = resolve_grain_profile(film, grain_asa=grain_asa)
+    grain_amt = base_grain_amt * grain_mult * float(proc_spec["grain_mult"])
     if grain_amt > 0.001:
         seed = grain_seed if grain_seed is not None else _stable_grain_seed(image_input, film_key)
-        eff_grain_size = float(film.get("grain_size", 1.0)) * (1.0 + 0.15 * max(0.0, float(grain_mult) - 1.0))
-        display = apply_grain(display, amount=grain_amt, size=eff_grain_size, seed=seed)
+        eff_grain_size = (
+            base_grain_size
+            * float(proc_spec.get("clump_mult", 1.0))
+            * (1.0 + 0.12 * max(0.0, float(grain_mult) - 1.0))
+        )
+        grain_chroma = 0.0 if film.get("mono") else 0.22
+        display = apply_grain(
+            display,
+            amount=grain_amt,
+            size=eff_grain_size,
+            seed=seed,
+            chroma=grain_chroma,
+        )
 
     # 6. Optical Softness & Output Sharpening
     soft = film.get("soft", 0.0)
