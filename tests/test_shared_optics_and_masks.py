@@ -106,3 +106,19 @@ def test_preview_endpoint_accepts_shared_optics(tmp_path):
     finally:
         if fpath.exists():
             fpath.unlink()
+
+
+def test_linear_mask_feather_controls_transition_band():
+    from engine.pipeline import apply_local_dodge_burn
+
+    lin = np.full((100, 32, 3), 0.4, dtype=np.float32)
+    hard = apply_local_dodge_burn(
+        lin,
+        [{"type": "linear", "x1": 0.5, "y1": 0.1, "x2": 0.5, "y2": 0.9, "ev": 1.0, "feather": 0.1}],
+    )
+    soft = apply_local_dodge_burn(
+        lin,
+        [{"type": "linear", "x1": 0.5, "y1": 0.1, "x2": 0.5, "y2": 0.9, "ev": 1.0, "feather": 1.0}],
+    )
+    # At y=25% (between y1=10% and midpoint=50%), hard feather stays fully at +1 EV while soft is already tapering
+    assert float(hard[25, 16, 0]) > float(soft[25, 16, 0]) + 0.05

@@ -4323,9 +4323,37 @@ body.ui-essential .ui-adv-only {
   stroke-dasharray: 5 4;
 }
 
+.local-mask-overlay .mask-guide-inner,
+.local-mask-overlay .mask-guide-band {
+  fill: none;
+  stroke: rgba(245, 158, 11, 0.45);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  pointer-events: none;
+}
+
+.local-mask-overlay .mask-handle-hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
 .local-mask-overlay .mask-handle {
   fill: #f59e0b;
   stroke: #141416;
   stroke-width: 1.5;
-  cursor: grab;
+  transition: fill 0.12s ease, stroke 0.12s ease;
+  pointer-events: none;
+}
+
+.local-mask-overlay .mask-handle-center {
+  fill: #fffbeb;
+  stroke: #f59e0b;
+  stroke-width: 2;
+}
+
+.local-mask-overlay .mask-handle-group:hover .mask-handle,
+.local-mask-overlay .mask-handle-group.dragging .mask-handle {
+  fill: #fbbf24;
+  stroke: #ffffff;
 }

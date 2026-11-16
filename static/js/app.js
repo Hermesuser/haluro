@@ -2414,6 +2414,9 @@ function applyPreviewResult(data, origKey, requestedOriginal) {
   if (statTime && data.render_time != null) {
     statTime.textContent = `${Math.round(data.render_time * 1000)} ms`;
   }
+  if (state.maskEditMode) {
+    requestAnimationFrame(() => renderLocalMaskOverlay());
+  }
   updateOutputFormatHint();
 }
 
@@ -5621,7 +5624,7 @@ function initGeometryTool() {
         const badge = document.getElementById("geomStatusBadge");
         if (badge) badge.textContent = edited ? "Editado" : "Original";
       }
-      debouncedPreview(key);
+      triggerDebouncedPreview(key);
     });
     el.addEventListener("dblclick", () => {
       pushUndoSnapshotForFrame();
@@ -5855,35 +5858,90 @@ function renderLocalMaskOverlay() {
 
   svg.innerHTML = "";
   const ns = "http://www.w3.org/2000/svg";
+  const feather = Math.max(0.05, Math.min(1.0, Number(active.feather ?? 0.4)));
+
+  const addGuideLine = (cls, ax, ay, bx, by) => {
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("class", cls);
+    line.setAttribute("x1", String(ax));
+    line.setAttribute("y1", String(ay));
+    line.setAttribute("x2", String(bx));
+    line.setAttribute("y2", String(by));
+    svg.appendChild(line);
+  };
+
+  const addHandle = (ptId, cx, cy, cursor = "grab", isCenter = false) => {
+    const g = document.createElementNS(ns, "g");
+    g.setAttribute("class", "mask-handle-group");
+    g.setAttribute("data-pt", ptId);
+    g.style.cursor = cursor;
+
+    const hit = document.createElementNS(ns, "circle");
+    hit.setAttribute("class", "mask-handle-hit");
+    hit.setAttribute("cx", String(cx));
+    hit.setAttribute("cy", String(cy));
+    hit.setAttribute("r", "14");
+    g.appendChild(hit);
+
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("class", isCenter ? "mask-handle mask-handle-center" : "mask-handle");
+    c.setAttribute("cx", String(cx));
+    c.setAttribute("cy", String(cy));
+    c.setAttribute("r", isCenter ? "6" : "5.5");
+    g.appendChild(c);
+
+    svg.appendChild(g);
+  };
+
   if (active.type === "radial") {
+    const rx = Math.max(12, Math.abs(x2 - x1));
+    const ry = Math.max(12, Math.abs(y2 - y1));
+
     const el = document.createElementNS(ns, "ellipse");
     el.setAttribute("class", "mask-guide-ellipse");
     el.setAttribute("cx", String(x1));
     el.setAttribute("cy", String(y1));
-    el.setAttribute("rx", String(Math.max(12, Math.abs(x2 - x1))));
-    el.setAttribute("ry", String(Math.max(12, Math.abs(y2 - y1))));
+    el.setAttribute("rx", String(rx));
+    el.setAttribute("ry", String(ry));
     svg.appendChild(el);
+
+    const innerScale = Math.max(0.02, 1.0 - feather);
+    const innerEl = document.createElementNS(ns, "ellipse");
+    innerEl.setAttribute("class", "mask-guide-inner");
+    innerEl.setAttribute("cx", String(x1));
+    innerEl.setAttribute("cy", String(y1));
+    innerEl.setAttribute("rx", String(Math.max(4, rx * innerScale)));
+    innerEl.setAttribute("ry", String(Math.max(4, ry * innerScale)));
+    svg.appendChild(innerEl);
+
+    addHandle("center", x1, y1, "move", true);
+    addHandle("rx_pos", x1 + rx, y1, "ew-resize");
+    addHandle("rx_neg", x1 - rx, y1, "ew-resize");
+    addHandle("ry_pos", x1, y1 + ry, "ns-resize");
+    addHandle("ry_neg", x1, y1 - ry, "ns-resize");
   } else {
-    const line = document.createElementNS(ns, "line");
-    line.setAttribute("class", "mask-guide-line");
-    line.setAttribute("x1", String(x1));
-    line.setAttribute("y1", String(y1));
-    line.setAttribute("x2", String(x2));
-    line.setAttribute("y2", String(y2));
-    svg.appendChild(line);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    const mx = (x1 + x2) * 0.5;
+    const my = (y1 + y2) * 0.5;
+
+    if (len > 4) {
+      const nx = -dy / len;
+      const ny = dx / len;
+      const bandLen = Math.max(w, h) * 0.45;
+      const halfSpan = Math.max(0.02, 0.5 * feather);
+      for (const frac of [0.5 - halfSpan, 0.5 + halfSpan]) {
+        const bx = x1 + dx * frac;
+        const by = y1 + dy * frac;
+        addGuideLine("mask-guide-band", bx - nx * bandLen, by - ny * bandLen, bx + nx * bandLen, by + ny * bandLen);
+      }
+    }
+    addGuideLine("mask-guide-line", x1, y1, x2, y2);
+    addHandle("p1", x1, y1, "grab");
+    addHandle("p2", x2, y2, "grab");
+    addHandle("center", mx, my, "move", true);
   }
-  [
-    { id: "p1", cx: x1, cy: y1 },
-    { id: "p2", cx: x2, cy: y2 },
-  ].forEach((pt) => {
-    const c = document.createElementNS(ns, "circle");
-    c.setAttribute("class", "mask-handle");
-    c.setAttribute("data-pt", pt.id);
-    c.setAttribute("cx", String(pt.cx));
-    c.setAttribute("cy", String(pt.cy));
-    c.setAttribute("r", "6");
-    svg.appendChild(c);
-  });
 }
 
 function initSharedDarkroomTools() {
@@ -5902,7 +5960,7 @@ function initSharedDarkroomTools() {
       state[stateKey] = pct / 100.0;
       if (valEl) valEl.textContent = `${pct}%`;
       updateSharedOpticsBadge();
-      debouncedPreview(stateKey);
+      triggerDebouncedPreview(stateKey);
     });
     el.addEventListener("dblclick", () => {
       pushUndoSnapshotForFrame();
@@ -5930,7 +5988,7 @@ function initSharedDarkroomTools() {
     const pct = Math.max(0, Math.min(200, Number(e.target.value) || 100));
     negativeState.sharpenAmount = pct / 100.0;
     syncSharedOpticsUI();
-    debouncedPreview("sharpen_amount");
+    triggerDebouncedPreview("sharpen_amount");
   });
 
   const addMask = (type) => {
@@ -5962,14 +6020,15 @@ function initSharedDarkroomTools() {
     if (!active) return;
     active.ev = Number(e.target.value) || 0;
     renderLocalMasksUI();
-    debouncedPreview("local_masks");
+    triggerDebouncedPreview("local_masks");
   });
   document.getElementById("maskFeatherSlider")?.addEventListener("input", (e) => {
     const active = state.localMasks?.[state.activeMaskIndex];
     if (!active) return;
     active.feather = Math.max(0.05, Math.min(1.0, (Number(e.target.value) || 40) / 100.0));
     renderLocalMasksUI();
-    debouncedPreview("local_masks");
+    renderLocalMaskOverlay();
+    triggerDebouncedPreview("local_masks");
   });
   document.getElementById("maskInvertCheck")?.addEventListener("change", (e) => {
     const active = state.localMasks?.[state.activeMaskIndex];
@@ -6006,25 +6065,59 @@ function initSharedDarkroomTools() {
 
   const svg = document.getElementById("localMaskOverlay");
   if (svg) {
-    let draggingPt = null;
+    let dragState = null;
     svg.addEventListener("pointerdown", (e) => {
-      const hEl = e.target.closest(".mask-handle");
+      const hEl = e.target.closest(".mask-handle-group, .mask-handle");
       if (!hEl || !state.maskEditMode) return;
+      const active = state.localMasks?.[state.activeMaskIndex];
+      if (!active) return;
+      const rect = svg.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return;
       e.preventDefault();
       e.stopPropagation();
-      draggingPt = hEl.dataset.pt;
+      dragState = {
+        pt: hEl.dataset.pt,
+        startNx: (e.clientX - rect.left) / rect.width,
+        startNy: (e.clientY - rect.top) / rect.height,
+        x1: active.x1,
+        y1: active.y1,
+        x2: active.x2,
+        y2: active.y2,
+      };
       pushUndoSnapshotForFrame();
       svg.setPointerCapture?.(e.pointerId);
     });
     svg.addEventListener("pointermove", (e) => {
-      if (!draggingPt || !state.maskEditMode) return;
+      if (!dragState || !state.maskEditMode) return;
       const active = state.localMasks?.[state.activeMaskIndex];
       if (!active) return;
       const rect = svg.getBoundingClientRect();
       if (rect.width < 10 || rect.height < 10) return;
       const nx = Math.max(-0.2, Math.min(1.2, (e.clientX - rect.left) / rect.width));
       const ny = Math.max(-0.2, Math.min(1.2, (e.clientY - rect.top) / rect.height));
-      if (draggingPt === "p1") {
+      const dnx = nx - dragState.startNx;
+      const dny = ny - dragState.startNy;
+
+      if (dragState.pt === "center") {
+        active.x1 = Number((dragState.x1 + dnx).toFixed(4));
+        active.y1 = Number((dragState.y1 + dny).toFixed(4));
+        active.x2 = Number((dragState.x2 + dnx).toFixed(4));
+        active.y2 = Number((dragState.y2 + dny).toFixed(4));
+      } else if (dragState.pt === "rx_pos" || dragState.pt === "rx_neg") {
+        const rx = Math.max(0.03, Math.min(1.2, Math.abs(nx - active.x1)));
+        active.x2 = Number((active.x1 + rx).toFixed(4));
+        if (e.shiftKey) {
+          const aspect = rect.width / Math.max(1, rect.height);
+          active.y2 = Number((active.y1 + rx * aspect).toFixed(4));
+        }
+      } else if (dragState.pt === "ry_pos" || dragState.pt === "ry_neg") {
+        const ry = Math.max(0.03, Math.min(1.2, Math.abs(ny - active.y1)));
+        active.y2 = Number((active.y1 + ry).toFixed(4));
+        if (e.shiftKey) {
+          const aspect = rect.height / Math.max(1, rect.width);
+          active.x2 = Number((active.x1 + ry * aspect).toFixed(4));
+        }
+      } else if (dragState.pt === "p1") {
         active.x1 = Number(nx.toFixed(4));
         active.y1 = Number(ny.toFixed(4));
       } else {
@@ -6032,15 +6125,19 @@ function initSharedDarkroomTools() {
         active.y2 = Number(ny.toFixed(4));
       }
       renderLocalMaskOverlay();
-      debouncedPreview("local_masks");
+      triggerDebouncedPreview("local_masks");
     });
     const endDrag = () => {
-      if (!draggingPt) return;
-      draggingPt = null;
+      if (!dragState) return;
+      dragState = null;
       saveActiveFrameRecipe();
+      requestPreview(false);
     };
     svg.addEventListener("pointerup", endDrag);
     svg.addEventListener("pointercancel", endDrag);
+    window.addEventListener("resize", () => {
+      if (state.maskEditMode) renderLocalMaskOverlay();
+    });
   }
 }
 
@@ -8058,9 +8155,15 @@ function initUIListeners() {
     pill.addEventListener("click", () => {
       setToggleGroupActive("#outputFormatPills .fmt-pill", pill, "aria-checked");
       state.outputFormat = pill.dataset.format || "jpg";
-      updateOutputFormatHint();
+      if (state.maskEditMode) {
+    requestAnimationFrame(() => renderLocalMaskOverlay());
+  }
+  updateOutputFormatHint();
     });
   });
+  if (state.maskEditMode) {
+    requestAnimationFrame(() => renderLocalMaskOverlay());
+  }
   updateOutputFormatHint();
 
   document.getElementById("openFolderBtn")?.addEventListener("click", async () => {

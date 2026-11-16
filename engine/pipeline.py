@@ -1523,7 +1523,8 @@ def apply_local_dodge_burn(lin: np.ndarray, local_masks=None) -> np.ndarray:
             if len_sq < 1e-6:
                 continue
             proj = ((xx - x1) * dx + (yy - y1) * dy) / len_sq
-            t = np.clip(proj, 0.0, 1.0)
+            half_span = max(0.02, 0.5 * feather)
+            t = np.clip((proj - (0.5 - half_span)) / (2.0 * half_span), 0.0, 1.0)
             alpha = 1.0 - (t * t * (3.0 - 2.0 * t))
 
         if invert:
