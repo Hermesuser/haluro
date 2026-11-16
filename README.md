@@ -354,7 +354,5 @@ GitHub Actions ejecuta la **puerta de calidad** (`ruff`, `pip-audit`, `pytest`, 
 
 ---
 
-<p align="center">
-  <strong>Haluro — Fotografía analógica y revelado digital local-first.</strong><br>
-  Hecho en Chile · 2026
-</p>
+**Haluro — Fotografía analógica y revelado digital local-first.**  
+Hecho en Chile · 2026
