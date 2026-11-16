@@ -1,24 +1,24 @@
 {
-  "version": "2.10.1",
+  "version": "2.10.2",
   "release_date": "2026-11-16",
-  "name": "Haluro v2.10.1",
-  "title": "Grano Químico Orgánico por ASA (100–6400) y Calibración de Halación",
-  "description": "Haluro 2.10.1: motor de grano orgánico multiescala de 3 octavas con selector por ASA del rollo (Auto, 100, 200, 400, 800, 1600, 3200 y 6400), separación física B&N/Color, calibración de halación en altas luces y documentación actualizada.",
+  "name": "Haluro v2.10.2",
+  "title": "Dodge & Burn en Lienzo, Grano Orgánico por ASA y Documentación v2.10.2",
+  "description": "Haluro 2.10.2: reparación de sincronización en vivo de Dodge & Burn, suavizado real en máscaras graduadas, tiradores de 28 px con traslado central y asas cardinales, atajos Esc/Supr, grano orgánico multiescala por ASA (100-6400) y propagación de óptica compartida en Sincronizar rollo.",
   "highlights": [
-    "Grano orgánico multiescala de 3 octavas (microcristal, cúmulo medio y macrocúmulo) con remuestreo bicúbico",
-    "Nuevo selector ASA del rollo (grano): Auto, 100, 200, 400, 800, 1600, 3200 y 6400 en Química y óptica y CLI (--grain-asa)",
-    "Separación física entre grano acromático B&N y nubes de colorante C-41, con envolvente tonal asimétrica",
-    "Calibración de halación en altas luces y valores base de grano/halación en LUTs de usuario (.cube)"
+    "Dodge & Burn: exposición local y suavizado en tiempo real, suavizado real en graduado, punto central y asas cardinales",
+    "Atajos Esc (salir de edición de máscara) y Supr/Backspace (eliminar máscara activa)",
+    "Grano orgánico multiescala de 3 octavas por ASA (Auto, 100-6400) y calibración de halación",
+    "Sincronizar rollo propaga óptica compartida (reducción de ruido, defringe y nitidez)"
   ],
   "download_urls": {
-    "macos_arm64": "dist/Haluro-2.10.1-macOS-arm64.dmg",
-    "macos_x86_64": "dist/Haluro-2.10.1-macOS-x86_64.dmg",
-    "windows_x86_64": "",
-    "windows_portable": ""
+    "macos_arm64": "dist/Haluro-2.10.2-macOS-arm64.dmg",
+    "macos_x86_64": "dist/Haluro-2.10.2-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.10.2/Haluro-Setup-2.10.2-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.10.2/Haluro-Portable-2.10.2-Win11-x64.zip"
   },
   "checksums": {
-    "macos_arm64": "4cb2c20aa4bbb2bee9c0a9d0cd25ea09fd14206143bf329309019f5b638b7992",
-    "macos_x86_64": "f5efffd3aff36d3866070f932871d81db1bd85d55b946f07a96a9e680a2b56ad",
+    "macos_arm64": "",
+    "macos_x86_64": "",
     "windows_x86_64": "",
     "windows_portable": ""
   },

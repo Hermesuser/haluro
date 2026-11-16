@@ -9,6 +9,13 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.10.2] — 2026-11-16
+
+### Corregido y Mejorado
+- **Release unificado macOS + Windows 11:** Consolida las correcciones de **Dodge & Burn** (sincronización en vivo, suavizado real en graduado, tirador central, asas cardinales y atajos `Esc`/`Supr`), propagación de óptica compartida en `Sincronizar rollo`, las 10 capturas actualizadas y los últimos ajustes de documentación.
+
+---
+
 ## [2.10.1] — 2026-11-16
 
 ### Añadido y Mejorado
