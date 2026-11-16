@@ -17,8 +17,8 @@
     "windows_portable": ""
   },
   "checksums": {
-    "macos_arm64": "",
-    "macos_x86_64": "",
+    "macos_arm64": "4cb2c20aa4bbb2bee9c0a9d0cd25ea09fd14206143bf329309019f5b638b7992",
+    "macos_x86_64": "f5efffd3aff36d3866070f932871d81db1bd85d55b946f07a96a9e680a2b56ad",
     "windows_x86_64": "",
     "windows_portable": ""
   },

@@ -2,7 +2,7 @@
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2010%2F11-blue.svg)](#requisitos-técnicos)
-[![Tests](https://img.shields.io/badge/Tests-111%20Passing-emerald.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-112%20Passing-emerald.svg)](tests/)
 [![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades%20(v2.10.1)-brightgreen.svg)](#seguridad-y-privacidad)
 [![Privacidad](https://img.shields.io/badge/Privacidad-Local--First-success.svg)](#seguridad-y-privacidad)
 [![Edición](https://img.shields.io/badge/Edición-No%20Destructiva-blueviolet.svg)](#principios-de-diseño-y-calidad)
@@ -135,7 +135,7 @@ Disponible de forma idéntica tanto en **Emulación · 80** como en **Revelar ne
 
 - **Recorte y Nivelación sobre Lienzo (`C`):** Marco interactivo con relaciones de aspecto (`Libre`, `Original`, `1:1`, `4:3`, `3:2`, `16:9`, `5:4`, `6:7`), botón `⇄` para invertir orientación, nivelación fina (`±15°`) y herramienta **Trazar horizonte** en dos clics. También incluye corrección de perspectiva vertical (**Keystone**), rotación `90°`, volteo H/V, auto-recorte y guías de composición (*Tercios, Áurea, Diagonal, Centro*) con lectura de píxeles en vivo.
 - **Limpieza, Ruido, Defringe y Enfoque:** Eliminación puntual de polvo/motas sobre el lienzo, reducción de ruido digital (luminancia y crominancia), supresión de halos cromáticos (**Defringe**) y enfoque de laboratorio o escáner.
-- **Dodge & Burn Local:** Hasta 8 máscaras interactivas de **gradiente lineal** o **radial** con ajuste independiente de exposición, suavidad e inversión.
+- **Dodge & Burn Local:** Hasta 8 máscaras interactivas de **gradiente lineal** o **radial** con ajuste independiente de exposición, suavidad (real en ambos modos) e inversión; incluye tirador central para trasladar la máscara, asas cardinales en el perímetro (`Shift` circular), guías visuales de suavizado y atajos `Esc` (salir) / `Supr` (eliminar).
 - **Formato `Original`, `Linear DNG 16-bit` y Sidecar `.XMP`:** Conserva el formato original en imágenes raster, mientras que los archivos RAW se exportan como DNG lineal de 16 bits sin pérdida; además genera automáticamente un archivo `.xmp` con la receta analógica y la geometría.
 
 | Geometría, Recorte y Nivelación | Óptica Compartida y Dodge & Burn Local |
@@ -307,7 +307,7 @@ python cli.py invert negativo_01.tif \
 6. **Servidor de Producción:** El backend se sirve con **Waitress** (WSGI de producción) en lugar del servidor de desarrollo de Flask, sin *debugger* interactivo y con límites de conexión y tiempo de espera.
 7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de compilación fijado al publicar la `v2.10.1` utiliza `Pillow >= 13.0.0`, con **0 vulnerabilidades conocidas** en las dependencias declaradas según `pip-audit`.
 8. **Escrituras Atómicas:** Toda exportación se escribe en un archivo temporal y se mueve a su destino con `os.replace()`, para evitar archivos truncados ante interrupciones del proceso dentro del mismo sistema de archivos.
-9. **Calidad de Código y Pruebas Automatizadas:** Suite de **111 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), el grano orgánico multiescala por ASA (`100`–`6400`), los LUTs de usuario (`.cube`), la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
+9. **Calidad de Código y Pruebas Automatizadas:** Suite de **112 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), el grano orgánico multiescala por ASA (`100`–`6400`), los LUTs de usuario (`.cube`), la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
 
 ---
 

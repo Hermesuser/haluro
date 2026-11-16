@@ -14,7 +14,8 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 ### Añadido y Mejorado
 - **Grano orgánico multiescala y selector por ASA (`Auto`, `100`–`6400`):** Nuevo motor `apply_grain` de 3 octavas (microcristal, cúmulo medio y macrocúmulo suave) con remuestreo bicúbico, separación física entre grano acromático B&N y nubes de colorante C-41, envolvente tonal asimétrica e invariancia de escala entre vista previa y exportación. Nuevo selector **ASA del rollo (grano)** (`100`, `200`, `400`, `800`, `1600`, `3200`, `6400`) en **Química y óptica** y flag `--grain-asa` en CLI.
 - **Calibración de halación y LUTs de usuario:** Umbral suave de altas luces y halo dual en `apply_halation`, además de valores base calibrados para `.cube` de usuario.
-- **Documentación:** Actualización de `README.md`, `MANUAL_DE_USO.md` y `manual.html` (incluyendo corrección `MD033`).
+- **Dodge & Burn y ergonomía de cuarto oscuro:** Reparada la sincronización en vivo (`triggerDebouncedPreview`), añadido **Suavizado** real en máscaras graduadas, áreas de agarre de `28 px`, tirador central para trasladar máscaras radiales/graduadas, asas cardinales en el perímetro (`Shift` circular), guías visuales de suavizado, atajos `Esc` / `Supr` y propagación de óptica compartida en `Sincronizar rollo`.
+- **Documentación:** Actualización de `README.md`, `MANUAL_DE_USO.md` y `manual.html` con las 10 capturas en vivo de la `v2.10.1` (incluyendo corrección `MD033`).
 
 ---
 

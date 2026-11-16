@@ -313,7 +313,7 @@ Disponible de forma idéntica en **Emulación · 80** y en **Revelar negativo** 
 * **Reducción de ruido digital:** Controles independientes de **Luminancia** y **Crominancia** en luz lineal antes de aplicar el grano químico.
 * **Defringe (halos cromáticos):** Atenúa bordes púrpura o verdes de alto contraste en objetivos vintage o digitalizaciones con macro.
 * **Enfoque óptico:** Modos *Desactivado*, *Laboratorio* (microcontraste suave) y *Escáner* (acutancia de tambor/CCD).
-* **Dodge & Burn local (hasta 8 máscaras):** Crea máscaras de **Gradiente lineal** o **Radial** directamente sobre el visor, ajustando exposición (`EV`), suavidad/pluma e inversión para aclarar (dodge) o quemar (burn) zonas específicas como en la ampliadora tradicional.
+* **Dodge & Burn local (hasta 8 máscaras):** Crea máscaras de **Gradiente lineal** o **Radial** directamente sobre el visor, ajustando exposición (`EV`), suavizado real en ambos modos e inversión para aclarar (dodge) o quemar (burn) zonas específicas como en la ampliadora tradicional. Arrastra el **punto central** para mover la máscara completa, las **asas cardinales del perímetro** (`Shift` para proporción circular) o los extremos del gradiente con guías visuales de suavizado; pulsa `Esc` para salir de edición o `Supr` para eliminar la máscara activa.
 
 ---
 
