@@ -21,6 +21,15 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 playwright = pytest.importorskip("playwright.sync_api")  # noqa: F401
+pytest.importorskip("pytest_playwright")
+
+try:
+    with playwright.sync_playwright() as _pw:
+        _chromium_exe = Path(_pw.chromium.executable_path)
+    if not _chromium_exe.exists():
+        pytest.skip("Chromium de Playwright no instalado (`playwright install chromium`)", allow_module_level=True)
+except Exception as _exc:
+    pytest.skip(f"Playwright Chromium no disponible: {_exc}", allow_module_level=True)
 
 
 @pytest.fixture(scope="session")
