@@ -9,6 +9,14 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.10.0] — 2026-11-15
+
+### Añadido
+- **LUTs 3D de usuario (`.cube`):** Nueva pestaña **Mis LUTs** con importación directa (`+ LUT`) de archivos `.cube` (1D shaper y/o grilla 3D), validación previa de tablas, normalización de extensiones duplicadas (`.cube.cube`), selector de 6 espacios de color de entrada (`sRGB`, `Rec.709`, `S-Log3`, `ARRI LogC3`, `Cineon`, `Linear`) y gestión local en `user_luts/` (apertura de carpeta y eliminación individual).
+- **Documentación actualizada:** Actualización de `README.md`, `MANUAL_DE_USO.md`, `manual.html` y `docs/manual.html` con captura en vivo (`docs/images/10_mis_luts_usuario.png`).
+
+---
+
 ## [2.9.1] — 2026-11-15
 
 ### Accesibilidad (WCAG 2.2 AA) y UX/UI

@@ -1,9 +1,9 @@
-# Haluro — Laboratorio Analógico Digital (v2.9.1)
+# Haluro — Laboratorio Analógico Digital (v2.10.0)
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2010%2F11-blue.svg)](#requisitos-técnicos)
 [![Tests](https://img.shields.io/badge/Tests-110%20Passing-emerald.svg)](tests/)
-[![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades%20(v2.9.1)-brightgreen.svg)](#seguridad-y-privacidad)
+[![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades%20(v2.10.0)-brightgreen.svg)](#seguridad-y-privacidad)
 [![Privacidad](https://img.shields.io/badge/Privacidad-Local--First-success.svg)](#seguridad-y-privacidad)
 [![Edición](https://img.shields.io/badge/Edición-No%20Destructiva-blueviolet.svg)](#principios-de-diseño-y-calidad)
 
@@ -305,7 +305,7 @@ python cli.py invert negativo_01.tif \
 4. **Validación de Rutas Seguras:** Las claves de película y de perfil negativo se canonicalizan contra el catálogo, nunca se interpolan sin verificar, y toda ruta de salida se comprueba contra su directorio permitido para impedir saltos de directorio (*path traversal*).
 5. **Validación de Entrada:** Todos los parámetros numéricos se acotan a rangos válidos y se rechazan con **HTTP 400** los valores no numéricos, no finitos o fuera de rango. Las subidas se validan por contenido real, no solo por extensión.
 6. **Servidor de Producción:** El backend se sirve con **Waitress** (WSGI de producción) en lugar del servidor de desarrollo de Flask, sin *debugger* interactivo y con límites de conexión y tiempo de espera.
-7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de compilación fijado al publicar la `v2.9.1` utiliza `Pillow >= 13.0.0`, con **0 vulnerabilidades conocidas** en las dependencias declaradas según `pip-audit`.
+7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de compilación fijado al publicar la `v2.10.0` utiliza `Pillow >= 13.0.0`, con **0 vulnerabilidades conocidas** en las dependencias declaradas según `pip-audit`.
 8. **Escrituras Atómicas:** Toda exportación se escribe en un archivo temporal y se mueve a su destino con `os.replace()`, para evitar archivos truncados ante interrupciones del proceso dentro del mismo sistema de archivos.
 9. **Calidad de Código y Pruebas Automatizadas:** Suite de **110 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), los LUTs de usuario (`.cube`), la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
 

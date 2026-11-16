@@ -1,25 +1,24 @@
 {
-  "version": "2.9.1",
+  "version": "2.10.0",
   "release_date": "2026-11-15",
-  "name": "Haluro v2.9.1",
-  "title": "Accesibilidad WCAG 2.2 AA, Navegación por Teclado y Pulido UX/UI",
-  "description": "Haluro 2.9.1: auditoría y mejoras integrales de accesibilidad WCAG 2.2 AA (contraste no textual ≥ 3:1, objetivos táctiles ≥ 24×24 px, eliminación de controles anidados, jerarquía semántica y soporte completo de teclado en recorte, curva tonal y edición numérica).",
+  "name": "Haluro v2.10.0",
+  "title": "LUTs 3D de Usuario (.cube) y Documentación Actualizada",
+  "description": "Haluro 2.10.0: soporte completo para importación y gestión de LUTs 3D de usuario (.cube) con 6 espacios de color de entrada, validación previa, carpeta dedicada user_luts/ y actualización integral del manual y README.",
   "highlights": [
-    "Contraste WCAG 2.2 AA reforzado en bordes de controles (--border-control ≥ 3:1) y alertas (--crimson-alert)",
-    "Objetivos táctiles y de puntero ≥ 24×24 px en nudges CMY, botones de limpieza, favoritos, interruptores y asas de recorte",
-    "Operabilidad completa por teclado en asas de recorte, editor de curva tonal, hoja de contactos y edición numérica inline",
-    "Semántica ARIA corregida sin controles anidados en catálogo de películas y tira de fotogramas",
-    "Unificación de diseño en selector de proceso (.dark-select), etiquetas nativas <label> y jerarquía de encabezados"
+    "Pestaña Mis LUTs con importación directa (+ LUT) de archivos .cube (1D shaper y/o grilla 3D)",
+    "Soporte para 6 espacios de color de entrada: sRGB, Rec.709, S-Log3, ARRI LogC3, Cineon y Linear",
+    "Gestión local de user_luts/ con apertura directa de carpeta y eliminación individual",
+    "Actualización integral de README.md, MANUAL_DE_USO.md y manual.html con capturas en vivo"
   ],
   "download_urls": {
-    "macos_arm64": "dist/Haluro-2.9.1-macOS-arm64.dmg",
-    "macos_x86_64": "dist/Haluro-2.9.1-macOS-x86_64.dmg",
+    "macos_arm64": "dist/Haluro-2.10.0-macOS-arm64.dmg",
+    "macos_x86_64": "dist/Haluro-2.10.0-macOS-x86_64.dmg",
     "windows_x86_64": "",
     "windows_portable": ""
   },
   "checksums": {
-    "macos_arm64": "5b74b0467addc486252eb132966303201a822f23fdd9f15b90212ce226b6d5a9",
-    "macos_x86_64": "cc38ed7a3c27474823b4817e93a43789d2c7374b583fcfe18c09aa3b8353f838",
+    "macos_arm64": "",
+    "macos_x86_64": "",
     "windows_x86_64": "",
     "windows_portable": ""
   },
