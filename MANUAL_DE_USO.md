@@ -298,7 +298,8 @@ El grano fotográfico surge de cúmulos microscópicos de plata metálica reduci
 
 * **Grano Cúbico Clásico:** Propio de emulsiones como Tri-X, HP5 Plus o Kodak Gold; aporta textura orgánica y tridimensional.
 * **Grano Tabular (T-Grain):** Característico de T-Max y Delta; ofrece microestructura fina y gran acutancia óptica.
-* **Grano de haluro de plata (`0.0x` a `3.0x`):** Escala proporcionalmente la densidad del grano físico calibrado para cada emulsión seleccionada, junto con **Viñeteo óptico (`0.0x` a `2.0x`)** y el interruptor **Sello de fecha en cuarzo ámbar**.
+* **ASA del rollo (grano) (`Auto`, `100`, `200`, `400`, `800`, `1600`, `3200`, `6400`):** Permite seleccionar el tamaño y densidad de cúmulo orgánico según la sensibilidad ASA deseada (o dejar `Auto` para usar la calibración nativa de la película). El motor combina 3 octavas espaciales con separación acromática en B&N y nubes de colorante en color C-41.
+* **Grano de haluro de plata (`0.0x` a `3.0x`):** Escala proporcionalmente la intensidad del grano sobre el perfil ASA elegido, junto con **Halación en altas luces (`0.0x` a `3.0x`)**, **Viñeteo óptico (`0.0x` a `2.0x`)** y el interruptor **Sello de fecha en cuarzo ámbar**.
 
 ---
 

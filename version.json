@@ -1,18 +1,18 @@
 {
-  "version": "2.10.0",
-  "release_date": "2026-11-15",
-  "name": "Haluro v2.10.0",
-  "title": "LUTs 3D de Usuario (.cube) y Documentación Actualizada",
-  "description": "Haluro 2.10.0: soporte completo para importación y gestión de LUTs 3D de usuario (.cube) con 6 espacios de color de entrada, validación previa, carpeta dedicada user_luts/ y actualización integral del manual y README.",
+  "version": "2.10.1",
+  "release_date": "2026-11-16",
+  "name": "Haluro v2.10.1",
+  "title": "Grano Químico Orgánico por ASA (100–6400) y Calibración de Halación",
+  "description": "Haluro 2.10.1: motor de grano orgánico multiescala de 3 octavas con selector por ASA del rollo (Auto, 100, 200, 400, 800, 1600, 3200 y 6400), separación física B&N/Color, calibración de halación en altas luces y documentación actualizada.",
   "highlights": [
-    "Pestaña Mis LUTs con importación directa (+ LUT) de archivos .cube (1D shaper y/o grilla 3D)",
-    "Soporte para 6 espacios de color de entrada: sRGB, Rec.709, S-Log3, ARRI LogC3, Cineon y Linear",
-    "Gestión local de user_luts/ con apertura directa de carpeta y eliminación individual",
-    "Actualización integral de README.md, MANUAL_DE_USO.md y manual.html con capturas en vivo"
+    "Grano orgánico multiescala de 3 octavas (microcristal, cúmulo medio y macrocúmulo) con remuestreo bicúbico",
+    "Nuevo selector ASA del rollo (grano): Auto, 100, 200, 400, 800, 1600, 3200 y 6400 en Química y óptica y CLI (--grain-asa)",
+    "Separación física entre grano acromático B&N y nubes de colorante C-41, con envolvente tonal asimétrica",
+    "Calibración de halación en altas luces y valores base de grano/halación en LUTs de usuario (.cube)"
   ],
   "download_urls": {
-    "macos_arm64": "dist/Haluro-2.10.0-macOS-arm64.dmg",
-    "macos_x86_64": "dist/Haluro-2.10.0-macOS-x86_64.dmg",
+    "macos_arm64": "dist/Haluro-2.10.1-macOS-arm64.dmg",
+    "macos_x86_64": "dist/Haluro-2.10.1-macOS-x86_64.dmg",
     "windows_x86_64": "",
     "windows_portable": ""
   },

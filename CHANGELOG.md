@@ -9,6 +9,15 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.10.1] — 2026-11-16
+
+### Añadido y Mejorado
+- **Grano orgánico multiescala y selector por ASA (`Auto`, `100`–`6400`):** Nuevo motor `apply_grain` de 3 octavas (microcristal, cúmulo medio y macrocúmulo suave) con remuestreo bicúbico, separación física entre grano acromático B&N y nubes de colorante C-41, envolvente tonal asimétrica e invariancia de escala entre vista previa y exportación. Nuevo selector **ASA del rollo (grano)** (`100`, `200`, `400`, `800`, `1600`, `3200`, `6400`) en **Química y óptica** y flag `--grain-asa` en CLI.
+- **Calibración de halación y LUTs de usuario:** Umbral suave de altas luces y halo dual en `apply_halation`, además de valores base calibrados para `.cube` de usuario.
+- **Documentación:** Actualización de `README.md`, `MANUAL_DE_USO.md` y `manual.html` (incluyendo corrección `MD033`).
+
+---
+
 ## [2.10.0] — 2026-11-15
 
 ### Añadido

@@ -15,7 +15,7 @@
       --accent-secondary: #06b6d4;
       --text-main: #f3f4f6;
       --text-muted: #9ca3af;
-      --text-dim: #6b7280;
+      --text-dim: #8e96a4;
       --code-bg: #090a0c;
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -23,6 +23,15 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    [id] {
+      scroll-margin-top: 72px;
+    }
     
     body {
       background-color: var(--bg);
@@ -408,9 +417,9 @@
 <body>
 
   <header class="hero">
-    <span class="badge-tag">Manual Oficial 2.9.0</span>
+    <span class="badge-tag">Manual Oficial 2.5.0</span>
     <h1 class="hero-title">Haluro — Laboratorio Analógico Digital</h1>
-    <p class="hero-sub">Guía maestra de inversión fotoquímica, neutralización de soporte base (D-min), ampliadora dicroica CMY, geometría sobre lienzo y catálogo de 80 emulsiones clásicas.</p>
+    <p class="hero-sub">Guía maestra de inversión fotoquímica, neutralización de soporte base (D-min), ampliadora dicroica CMY y catálogo de 72 emulsiones clásicas.</p>
     <div class="meta-bar">
       <span>Edición: Noviembre 2026</span>
       <span>•</span>
@@ -444,8 +453,8 @@
           <div class="card-title">🍎 macOS (Apple Silicon e Intel)</div>
           <p>Dispones de dos archivos instaladores optimizados:</p>
           <ul style="padding-left: 1.25rem; margin-bottom: 1rem; color: #d1d5db; font-size: 0.95rem;">
-            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> <code>Haluro-2.9.0-macOS-arm64.dmg</code></li>
-            <li><strong>Intel (Core i5/i7/i9/Xeon):</strong> <code>Haluro-2.9.0-macOS-x86_64.dmg</code></li>
+            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> <code>Haluro-2.5.0-macOS-arm64.dmg</code></li>
+            <li><strong>Intel (Core i5/i7/i9/Xeon):</strong> <code>Haluro-2.5.0-macOS-x86_64.dmg</code></li>
           </ul>
           <p style="font-size: 0.9rem; color: var(--text-muted);">Monta el DMG y arrastra Haluro a tu carpeta <strong>Aplicaciones</strong>.</p>
         </div>
@@ -665,13 +674,13 @@
 
     <!-- 5. CATÁLOGO DE PELÍCULAS -->
     <section id="catalogo">
-      <h2 class="section-heading"><span class="num">05</span> Catálogo de 80 Emulsiones Clásicas</h2>
-      <p>En el modo <strong>Emulación · 80</strong>, Haluro pone a tu disposición un catálogo de 80 emulsiones icónicas en español, organizado por familias químicas y curvas características sensitométricas.</p>
+      <h2 class="section-heading"><span class="num">05</span> Catálogo de 72 Emulsiones Clásicas</h2>
+      <p>En el modo <strong>Emulación · 72</strong>, Haluro pone a tu disposición un catálogo de 72 emulsiones icónicas en español, organizado por familias químicas y curvas características sensitométricas.</p>
 
       <div class="figure-card">
-        <img src="docs/images/06_catalogo_peliculas_cinestill.png" alt="Catálogo de 80 emulsiones con filtro Cine y CineStill 800T activo">
+        <img src="docs/images/06_catalogo_peliculas_cinestill.png" alt="Catálogo de 72 emulsiones con filtro Cine y CineStill 800T activo">
         <div class="figure-caption">
-          <span>Figura 5:</span> Selector de familias en español dentro de <em>Emulación · 80</em> mostrando el filtro <em>Cine</em> con CineStill 800T.
+          <span>Figura 5:</span> Selector de familias en español dentro de <em>Emulación · 72</em> mostrando el filtro <em>Cine</em> con CineStill 800T.
         </div>
       </div>
 
@@ -735,39 +744,8 @@
         </div>
 
         <div class="card">
-          <div class="card-title">🎞️ Zonas Tonales</div>
-          <p>En <strong>Zonas tonales</strong> repartes la exposición entre <em>Sombras</em>, <em>Tonos medios</em> y <em>Luces</em>: es luz real en la emulsión (no un filtro de color) y las tres zonas suman el 100 %, así que nunca se apilan ni enturbian.</p>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title">🧂 Grano de Haluro de Plata</div>
-          <p>Ajusta el <em>Grano de haluro de plata</em> para emular textura orgánica de película de 35mm o formato medio, complementado en negativo por los controles de <em>Intensidad de acutancia</em> en el bloque óptico.</p>
-        </div>
-
-        <div class="card">
-          <div class="card-title">🖨️ Ajustes No Destructivos</div>
-          <p>Las zonas tonales se guardan por fotograma, viajan con <em>Copiar/Pegar receta</em> y <em>Sincronizar rollo</em> y se deshacen con <kbd>Z</kbd>: el archivo original nunca se toca.</p>
-        </div>
-
-        <div class="card">
-          <div class="card-title">📈 Curva Tonal de Usuario</div>
-          <p>En <strong>Curva tonal</strong> dibujas la respuesta tonal punto a punto sobre el histograma, por canal (<em>RGB</em>, <em>Luz</em>, <em>R</em>, <em>G</em>, <em>B</em>). Se guarda como puntos de control, no como imagen: pesa unos bytes y se aplica igual en la vista previa y en la exportación.</p>
-        </div>
-      </div>
-
-      <div class="figure-card">
-        <img src="docs/images/08_geometria_corte_nivelar.png" alt="Geometría unificada: recorte interactivo, nivelación, guías de composición y keystone">
-        <div class="figure-caption">
-          <span>Figura 6B:</span> Herramienta <em>Recortar</em> (<kbd>C</kbd>) sobre el lienzo completo con guías de tercios, panel flotante de proporciones, lectura de píxeles en vivo, trazar horizonte y keystone.
-        </div>
-      </div>
-
-      <div class="figure-card">
-        <img src="docs/images/09_optica_ruido_dodge_burn.png" alt="Limpieza de polvo, reducción de ruido, defringe y Dodge & Burn local">
-        <div class="figure-caption">
-          <span>Figura 6C:</span> Bloque compartido <em>Limpieza, óptica y reservas locales</em> (disponible en Emulación y Revelado de Negativos) con máscara radial de Dodge &amp; Burn activa sobre el visor.
+          <div class="card-title">🧂 Grano Orgánico por ASA (100–6400)</div>
+          <p>En <strong>Química y óptica</strong> elige <em>ASA del rollo (grano)</em> (<strong>Auto</strong>, <strong>100</strong>, <strong>200</strong>, <strong>400</strong>, <strong>800</strong>, <strong>1600</strong>, <strong>3200</strong> o <strong>6400</strong>) y ajusta el multiplicador <em>Grano de haluro de plata</em> para emular cúmulos orgánicos multiescala (acromáticos en B&amp;N o nubes de tinte en color C-41).</p>
         </div>
       </div>
 
@@ -802,8 +780,8 @@
 
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">🗂️ Formato maestro: Original, Linear DNG 16-bit, TIFF 16b y PNG</div>
-          <p>Elige <strong>Original</strong> para preservar el formato de entrada (convirtiendo RAW a <strong>Linear DNG 16-bit</strong> sin pérdida), <strong>DNG 16b</strong> o <strong>TIFF 16b</strong> para archivo maestro de 16 bits por canal con sidecar <code>.xmp</code> automático, o <strong>PNG</strong> para salida sin pérdidas.</p>
+          <div class="card-title">🗂️ Formato maestro: TIFF 16b y PNG</div>
+          <p>Elige <strong>TIFF 16b</strong> en la barra inferior para conservar 16 bits por canal ideales para impresión de bellas artes y archivo, o <strong>PNG</strong> para salida sin pérdidas lista para edición digital.</p>
         </div>
         <div class="card">
           <div class="card-title">📱 Formato maestro: JPG 4:4:4</div>
@@ -857,7 +835,7 @@
   </div>
 
   <footer>
-    <p><strong>Haluro 2.9.0 — Laboratorio Analógico Digital</strong></p>
+    <p><strong>Haluro 2.5.0 — Laboratorio Analógico Digital</strong></p>
     <p style="margin-top: 0.25rem;">Desarrollado para fotógrafos que aprecian la ciencia y el alma de la fotografía química.</p>
   </footer>
 
