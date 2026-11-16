@@ -1594,14 +1594,20 @@ def apply_halation(lin, strength=1.0, threshold=0.70, tint=(1.0, 0.28, 0.06)):
         return lin
 
     luma = np.sum(lin * LUMA, axis=-1)
-    over = np.maximum(0.0, luma - threshold)
+    # Use a softer highlight knee so normal bright highlights (not only clipped
+    # >0.80 linear peaks) respond clearly when the user increases halation.
+    eff_thr = max(0.35, float(threshold) - 0.18)
+    over = np.maximum(0.0, luma - eff_thr)
 
-    # 0.6% - 1.0% of frame width blur radius
-    sigma = max(2.0, lin.shape[1] * 0.008)
-    glow = scipy.ndimage.gaussian_filter(over, sigma=sigma)
+    # Combine a tight inner rim with a wider 0.8% frame-width bloom
+    sigma_wide = max(2.0, lin.shape[1] * 0.008)
+    sigma_inner = max(1.0, sigma_wide * 0.35)
+    glow_wide = scipy.ndimage.gaussian_filter(over, sigma=sigma_wide)
+    glow_inner = scipy.ndimage.gaussian_filter(over, sigma=sigma_inner)
+    glow = 0.65 * glow_wide + 0.35 * glow_inner
 
     tint_arr = np.array(tint, dtype=np.float32)[None, None, :]
-    glow_rgb = glow[..., None] * tint_arr * (strength * 0.35)
+    glow_rgb = glow[..., None] * tint_arr * (strength * 0.55)
     return lin + glow_rgb
 
 
@@ -1620,16 +1626,24 @@ def apply_grain(rgb, amount=0.02, size=1.0, seed=None):
 
     rng = np.random.default_rng(seed)
     h, w = rgb.shape[:2]
-    if size > 1.05:
-        nh, nw = max(1, int(h / size)), max(1, int(w / size))
-        small_noise = rng.normal(0.0, 1.0, (nh, nw)).astype(np.float32)
-        noise_img = Image.fromarray(small_noise)
-        noise = np.asarray(noise_img.resize((w, h), Image.Resampling.BILINEAR), dtype=np.float32)
-    else:
-        noise = rng.normal(0.0, 1.0, (h, w)).astype(np.float32)
+    eff_size = max(1.15, float(size))
+    nh, nw = max(1, int(h / eff_size)), max(1, int(w / eff_size))
+    clump_small = rng.normal(0.0, 1.0, (nh, nw)).astype(np.float32)
+    clump = np.asarray(
+        Image.fromarray(clump_small).resize((w, h), Image.Resampling.BILINEAR),
+        dtype=np.float32,
+    )
+    fine = rng.normal(0.0, 1.0, (h, w)).astype(np.float32)
+    # Blend organic silver-halide clumps with fine texture so grain remains
+    # visible in downscaled previews and after JPEG compression.
+    noise = 0.72 * clump + 0.28 * fine
+    std = float(np.std(noise))
+    if std > 1e-6:
+        noise = noise / std
 
     luma = np.sum(rgb * LUMA, axis=-1, keepdims=True)
-    weight = 4.0 * luma * np.maximum(0.0, 1.0 - luma)  # Mid-tone peaking
+    mid_peak = 4.0 * luma * np.maximum(0.0, 1.0 - luma)
+    weight = 0.25 + 0.75 * mid_peak
 
     noisy_rgb = rgb + noise[..., None] * (amount * weight)
     return np.clip(noisy_rgb, 0.0, 1.0)
@@ -1917,7 +1931,8 @@ def develop_frame(
     grain_amt = film.get("grain", 0.015) * grain_mult * float(proc_spec["grain_mult"])
     if grain_amt > 0.001:
         seed = grain_seed if grain_seed is not None else _stable_grain_seed(image_input, film_key)
-        display = apply_grain(display, amount=grain_amt, size=film.get("grain_size", 1.0), seed=seed)
+        eff_grain_size = float(film.get("grain_size", 1.0)) * (1.0 + 0.15 * max(0.0, float(grain_mult) - 1.0))
+        display = apply_grain(display, amount=grain_amt, size=eff_grain_size, seed=seed)
 
     # 6. Optical Softness & Output Sharpening
     soft = film.get("soft", 0.0)
