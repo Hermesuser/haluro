@@ -412,6 +412,12 @@ Haluro incluye herramientas interactivas y optimizadas para trabajar con rollos 
 3. **Revelar Rollo Completo con Progreso en Vivo (Motor Multinúcleo):**
    - El botón **«Revelar rollo»** procesa todos los fotogramas del carrete en paralelo a máxima resolución nativa (JPG 4:4:4, PNG o TIFF 16-bit), mostrando una barra de progreso en tiempo real por fotograma, archivo actual, cronómetro y opción de cancelar limpiamente en cualquier momento, añadiendo automáticamente la hoja de contactos a la carpeta del rollo.
 
+4. **Guardar y Retomar Proyectos de Rollo Digital (`.haluro`):**
+   - Pulsa **«Proyectos»** en la barra superior (o el atajo `⌥⌘S` en macOS / `Ctrl+Alt+S` en Windows y Linux) para guardar el estado completo del carrete digital con nombre y notas.
+   - Haluro conserva las imágenes originales en una copia protegida, el orden exacto de la tira, tus marcas de selección (**elegidas / descartadas**), la emulsión y ajustes individuales de cada fotograma, la calibración de rollo negativo, los ajustes de la hoja de contactos y los metadatos EXIF analógicos.
+   - Cuando un proyecto está abierto, el botón **Proyectos** muestra su nombre y un punto ámbar si existen cambios sin guardar; al volver a abrir la aplicación, Haluro te ofrece retomar tu último proyecto con un clic.
+   - También puedes pulsar **«Exportar»** en cualquier proyecto guardado para descargar un paquete portable **`.haluro`** (para respaldo externo o traslado a otro equipo) e importarlo mediante **«Importar .haluro»** o arrastrando el archivo directamente a la ventana de Haluro.
+
 ---
 
 ## 7. Preguntas Frecuentes y Resolución de Problemas

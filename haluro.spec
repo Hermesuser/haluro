@@ -48,6 +48,7 @@ hidden_imports = [
     "engine.roll_processor",
     "engine.contact_sheet",
     "engine.platform_io",
+    "engine.projects",
     "scipy.ndimage",
     "PIL._tkinter_finder",
 ]

@@ -85,6 +85,19 @@ from engine.platform_io import (
     open_directory,
     reveal_in_file_manager,
 )
+from engine.projects import (
+    ProjectError,
+    collect_protected_filenames,
+    delete_project,
+    export_project_archive,
+    import_project_archive,
+    list_projects,
+    load_project,
+    rename_project,
+    resolve_project_media_file,
+    save_project,
+    validate_project_id,
+)
 from engine.updater import check_for_updates, open_external_url
 
 logger = logging.getLogger(__name__)
@@ -94,8 +107,10 @@ USER_DATA_ROOT = get_user_data_root()
 SAMPLES_DIR = (RESOURCE_ROOT / "samples").resolve()
 UPLOAD_DIR = (USER_DATA_ROOT / "uploads").resolve()
 DEVELOPED_DIR = (USER_DATA_ROOT / "developed").resolve()
+PROJECTS_DIR = (USER_DATA_ROOT / "projects").resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 DEVELOPED_DIR.mkdir(parents=True, exist_ok=True)
+PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_OUTPUT_EXTS = {
     "jpg": ".jpg",
@@ -125,6 +140,7 @@ def _prune_workspace() -> None:
     every export added another preview to the developed archive.
     """
     cutoff = time.time() - (UPLOAD_RETENTION_DAYS * 86400)
+    protected = collect_protected_filenames(PROJECTS_DIR)
     try:
         entries = sorted(UPLOAD_DIR.glob("*"), key=lambda p: p.stat().st_mtime)
     except OSError:
@@ -136,6 +152,8 @@ def _prune_workspace() -> None:
         try:
             st = item.stat()
         except OSError:
+            continue
+        if item.name in protected:
             continue
         if item.is_file() and st.st_mtime < cutoff:
             try:
@@ -2317,6 +2335,152 @@ def api_reveal_in_finder():
     target = Path(path) if (path and Path(path).exists()) else DEVELOPED_DIR
     reveal_in_file_manager(target)
     return jsonify({"success": True, "revealed": str(target)})
+
+
+# -------------------------------------------------------------
+# SAVED ROLL PROJECTS (Persistent Non-Destructive Sessions)
+# -------------------------------------------------------------
+
+@app.route("/api/projects", methods=["GET"])
+def api_list_projects():
+    """List all saved digital roll projects sorted by last update."""
+    return jsonify({"projects": list_projects(PROJECTS_DIR)})
+
+
+@app.route("/api/projects", methods=["POST"])
+def api_save_project():
+    """Create or update a saved roll project with all per-frame recipes and media."""
+    data = request.json or {}
+    try:
+        result = save_project(
+            PROJECTS_DIR,
+            data,
+            upload_dir=UPLOAD_DIR,
+            samples_dir=SAMPLES_DIR,
+            app_version=__version__,
+            resolve_source_file=_resolve_source_file,
+        )
+    except ProjectError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"success": True, **result})
+
+
+@app.route("/api/projects/<project_id>", methods=["GET"])
+def api_load_project(project_id):
+    """Load a saved roll project and restore its media files into the active workspace."""
+    try:
+        result = load_project(
+            PROJECTS_DIR,
+            project_id,
+            upload_dir=UPLOAD_DIR,
+            samples_dir=SAMPLES_DIR,
+        )
+    except ProjectError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "Proyecto no encontrado."}), 404
+    return jsonify({"success": True, **result})
+
+
+@app.route("/api/projects/<project_id>", methods=["PATCH"])
+def api_rename_project(project_id):
+    """Rename a saved roll project or update its notes."""
+    data = request.json or {}
+    try:
+        summary = rename_project(
+            PROJECTS_DIR,
+            project_id,
+            new_name=data.get("name", ""),
+            notes=data.get("notes") if "notes" in data else None,
+        )
+    except ProjectError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "Proyecto no encontrado."}), 404
+    return jsonify({"success": True, "project": summary})
+
+
+@app.route("/api/projects/<project_id>", methods=["DELETE"])
+def api_delete_project(project_id):
+    """Delete a saved roll project and its protected media copies."""
+    try:
+        deleted = delete_project(PROJECTS_DIR, project_id)
+    except ProjectError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not deleted:
+        return jsonify({"error": "Proyecto no encontrado."}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/projects/<project_id>/thumb", methods=["GET"])
+def api_project_thumb(project_id):
+    """Serve the cover thumbnail of a saved roll project."""
+    try:
+        pid = validate_project_id(project_id)
+    except ProjectError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    manifest_path = (PROJECTS_DIR / pid / "project.json").resolve()
+    if not _is_within(manifest_path, PROJECTS_DIR) or not manifest_path.is_file():
+        return jsonify({"error": "Miniatura de proyecto no encontrada."}), 404
+
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return jsonify({"error": "Proyecto ilegible."}), 404
+
+    frames = data.get("frames") if isinstance(data.get("frames"), list) else []
+    cover_name = None
+    active_idx = data.get("active_frame_index", 0)
+    if isinstance(active_idx, int) and 0 <= active_idx < len(frames):
+        cover_name = frames[active_idx].get("filename")
+    if not cover_name and frames:
+        cover_name = frames[0].get("filename")
+    if not cover_name:
+        return jsonify({"error": "Proyecto sin fotogramas."}), 404
+
+    fpath = resolve_project_media_file(PROJECTS_DIR, pid, cover_name) or _resolve_source_file(cover_name)
+    if not fpath or not fpath.is_file():
+        return jsonify({"error": "Archivo de miniatura no encontrado."}), 404
+
+    jpeg_bytes = _cached_thumb_bytes(str(fpath), fpath.stat().st_mtime_ns)
+    return send_file(io.BytesIO(jpeg_bytes), mimetype="image/jpeg", max_age=3600)
+
+
+@app.route("/api/projects/<project_id>/export", methods=["GET"])
+def api_export_project(project_id):
+    """Download a portable `.haluro` archive containing the roll project and its media."""
+    try:
+        buf, download_name = export_project_archive(PROJECTS_DIR, project_id)
+    except ProjectError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "Proyecto no encontrado."}), 404
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=download_name,
+    )
+
+
+@app.route("/api/projects/import", methods=["POST"])
+def api_import_project():
+    """Import a portable `.haluro` (ZIP) roll project into the local library."""
+    if "file" not in request.files:
+        return jsonify({"error": "No se recibió ningún archivo de proyecto."}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Nombre de archivo vacío."}), 400
+    try:
+        summary = import_project_archive(
+            PROJECTS_DIR,
+            f.stream,
+            allowed_media_exts=ALLOWED_INPUT_EXTS,
+        )
+    except ProjectError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"success": True, "project": summary})
 
 
 # -------------------------------------------------------------

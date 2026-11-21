@@ -75,6 +75,14 @@
         <span>Importar</span>
       </label>
 
+      <button class="btn btn-secondary btn-sm projects-header-btn" id="projectsBtn" title="Guardar o abrir proyectos de rollo digital (⌥⌘S)">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span id="projectsBtnLabel">Proyectos</span>
+        <span class="project-dirty-dot" id="projectDirtyDot" hidden title="Cambios sin guardar en el proyecto activo"></span>
+      </button>
+
       <div class="header-divider" aria-hidden="true"></div>
 
       <button class="btn btn-ghost btn-sm btn-complexity-pill" id="uiComplexityBtn" aria-pressed="false" aria-label="Alternar Vista Esencial Minilab y Vista Completa (V)" title="Cambiar entre Vista Completa y Vista Esencial estilo Minilab (Tecla V)">
@@ -150,6 +158,10 @@
             <button type="button" class="export-menu-item" id="saveSheetBtn" role="menuitem" title="Guardar únicamente la hoja de contactos analógica en alta resolución">
               <strong>Guardar solo contactos</strong>
               <span>Exportar hoja de contactos en alta resolución</span>
+            </button>
+            <button type="button" class="export-menu-item" id="saveProjectMenuBtn" role="menuitem" title="Guardar el rollo completo y sus emulaciones para retomarlo más tarde (⌥⌘S)">
+              <strong>Guardar proyecto de rollo…</strong>
+              <span>Conserva fotogramas, selección y recetas</span>
             </button>
           </div>
         </div>
@@ -837,7 +849,8 @@
           <p>Arrastra archivos RAW (.CR2, .DNG, .NEF, .ARW) o escaneos (.TIFF, .JPG) aquí para comenzar tu tirada.</p>
           <div class="empty-state-actions">
             <button type="button" class="btn btn-primary btn-sm" id="emptyImportBtn">Importar fotografías</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="emptySampleBtn">Cargar foto de prueba</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="emptyProjectsBtn">Abrir proyecto guardado</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="emptySampleBtn">Cargar foto de prueba</button>
           </div>
         </div>
 
@@ -1779,6 +1792,57 @@
     </div>
   </div>
 
+  <!-- Modal: Saved Roll Projects (Save & Resume Digital Rolls) -->
+  <div class="modal-backdrop" id="projectsModal" role="dialog" aria-modal="true" aria-labelledby="projectsModalTitle">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h2 id="projectsModalTitle">Proyectos de rollo digital</h2>
+        <button class="modal-close" id="closeProjectsBtn" aria-label="Cerrar proyectos">&times;</button>
+      </div>
+      <div class="modal-body modal-body-left">
+        <p class="helper-copy">
+          Guarda el carrete completo con sus imágenes originales, orden, selección (elegidas/descartadas) y la emulsión y ajustes de cada fotograma para volver exactamente donde lo dejaste.
+        </p>
+
+        <section class="projects-save-card" aria-label="Guardar rollo actual">
+          <div class="projects-save-head">
+            <strong id="projectSaveCardTitle">Guardar rollo actual</strong>
+            <span class="mono-badge" id="projectCurrentSummary">0 fotogramas</span>
+          </div>
+          <div class="projects-form-grid">
+            <div class="projects-field">
+              <label for="projectNameInput">Nombre del proyecto</label>
+              <input type="text" id="projectNameInput" class="dark-input" maxlength="120" placeholder="Ej. Sesión Valparaíso · Portra 400">
+            </div>
+            <div class="projects-field">
+              <label for="projectNotesInput">Notas del rollo (opcional)</label>
+              <input type="text" id="projectNotesInput" class="dark-input" maxlength="500" placeholder="Cámara, cliente, lugar o pendientes…">
+            </div>
+          </div>
+          <div class="projects-save-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btnSaveProject">Guardar proyecto</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnSaveProjectAsNew" style="display: none;">Guardar como copia nueva</button>
+            <span class="projects-active-hint" id="projectActiveHint"></span>
+          </div>
+        </section>
+
+        <div class="projects-list-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h3>Proyectos guardados</h3>
+            <span class="mono-badge" id="projectsCountBadge">0</span>
+          </div>
+          <div>
+            <button type="button" class="btn btn-secondary btn-xs" id="btnImportProjectArchive" title="Importar un paquete portable de proyecto (.haluro)">Importar .haluro</button>
+            <input type="file" id="projectArchiveInput" accept=".haluro,.zip" hidden>
+          </div>
+        </div>
+        <div class="projects-list" id="projectsList">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Non-Destructive History & Recipe Restoration -->
   <div class="modal-backdrop" id="historyModal" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
     <div class="modal-box modal-wide">
@@ -1808,6 +1872,7 @@
         <div class="shortcuts-grid">
           <div class="shortcut-row"><span>Guardar en Descargas</span><kbd id="kbdSave">⌘ S</kbd></div>
           <div class="shortcut-row"><span>Guardar como…</span><kbd id="kbdSaveAs">⇧ ⌘ S</kbd></div>
+          <div class="shortcut-row"><span>Proyectos de rollo (guardar / abrir)</span><kbd id="kbdProjects">⌥ ⌘ S</kbd></div>
           <div class="shortcut-row"><span>Importar fotografía o escaneo</span><kbd id="kbdOpen">⌘ O</kbd></div>
           <div class="shortcut-row"><span>Deshacer / Rehacer ajuste</span><kbd id="kbdUndoRedo">⌘ Z / ⇧ ⌘ Z</kbd></div>
           <div class="shortcut-row"><span>Fotograma anterior / siguiente</span><kbd>←</kbd> <kbd>→</kbd></div>

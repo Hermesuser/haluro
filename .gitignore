@@ -25,6 +25,7 @@ uploads/*
 !uploads/.gitkeep
 developed/*
 !developed/.gitkeep
+projects/
 user_luts/
 logs/
 

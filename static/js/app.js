@@ -10,6 +10,7 @@ const FAVORITES_KEY = "haluro_favorites_v2";
 const ANALOG_EXIF_STORAGE_KEY = "haluro_analog_exif_v23";
 const USER_PREFS_KEY = "haluro_user_prefs_v1";
 const FRAME_RECIPES_KEY = "haluro_frame_recipes_v1";
+const LAST_PROJECT_ID_KEY = "haluro_last_project_id_v1";
 const MAX_STORED_FRAMES = 50;
 
 /**
@@ -320,6 +321,12 @@ const state = {
   copiedRecipe: null,
   analogMeta: loadAnalogExifStorage(),
   updateInfo: null,
+
+  // Active Saved Roll Project state
+  currentProjectId: null,
+  currentProjectName: "",
+  currentProjectNotes: "",
+  projectDirty: false,
 };
 
 const negativeState = {
@@ -693,11 +700,13 @@ function applyPlatformUI() {
 
   const kbdSave = document.getElementById("kbdSave");
   const kbdSaveAs = document.getElementById("kbdSaveAs");
+  const kbdProjects = document.getElementById("kbdProjects");
   const kbdOpen = document.getElementById("kbdOpen");
   const kbdCopyPaste = document.getElementById("kbdCopyPaste");
   const kbdUndoRedo = document.getElementById("kbdUndoRedo");
   if (kbdSave) kbdSave.textContent = copy.saveKbd;
   if (kbdSaveAs) kbdSaveAs.textContent = copy.saveAsKbd;
+  if (kbdProjects) kbdProjects.textContent = state.platform === "macos" ? "⌥ ⌘ S" : "Ctrl + Alt + S";
   if (kbdOpen) kbdOpen.textContent = copy.openKbd;
   if (kbdCopyPaste) kbdCopyPaste.textContent = copy.copyPasteKbd;
   if (kbdUndoRedo) kbdUndoRedo.textContent = copy.undoRedoKbd;
@@ -745,6 +754,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   await fetchFilms();
   await applyStoredPreferences();
   await loadSamplePhoto(false);
+  offerResumeLastProject();
+
+  // Warn before closing if the active saved project has unsaved changes
+  window.addEventListener("beforeunload", (e) => {
+    if (state.currentProjectId && state.projectDirty) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
 
   // Smart update checker: silently query remote version manifest after 2.5s
   setTimeout(() => {
@@ -1293,6 +1311,7 @@ async function importFiles(fileList) {
       resetZoom();
       syncEmptyRollButtons(false);
       renderFilmStrip();
+      markProjectDirty();
       if (state.appMode === "negative") {
         await autoDetectBaseColor(false);
       }
@@ -1558,6 +1577,7 @@ function setFramePickStatus(idx, nextStatus, { silent = false } = {}) {
   if ((frame.pickStatus || null) === normalized) return;
   frame.pickStatus = normalized;
   state.contactSheetCache = null;
+  markProjectDirty();
   renderFilmStrip();
   if (state.viewMode === "sheet" && state.hideRejectedInSheet) {
     if (getSheetFrames().length === 0) {
@@ -1666,6 +1686,7 @@ function reorderFrame(fromIdx, toIdx) {
   if (newActiveIdx >= 0) state.activeFrameIndex = newActiveIdx;
   state.contactSheetCache = null;
   state.sheetLayout = [];
+  markProjectDirty();
   renderFilmStrip();
   if (state.viewMode === "sheet") {
     generateContactSheetPreview();
@@ -1964,8 +1985,9 @@ function renderFilmStrip() {
 // MODE SWITCHING (SIMULATION <-> NEGATIVE LAB)
 // =============================================================
 
-async function switchStudioMode(mode) {
+async function switchStudioMode(mode, options = {}) {
   if (mode !== "simulation" && mode !== "negative") return;
+  const { skipSampleSwap = false, skipPreview = false } = options;
   state.appMode = mode;
   saveUserPreferences();
 
@@ -2017,7 +2039,7 @@ async function switchStudioMode(mode) {
   drawCurveEditor();
 
   // Swap demo sample cleanly per mode when the roll only holds built-in demo frames
-  const onlySamples = state.frames.length > 0 && state.frames.every((f) => f.is_sample);
+  const onlySamples = !skipSampleSwap && state.frames.length > 0 && state.frames.every((f) => f.is_sample);
   if (onlySamples) {
     state.frames = [];
     state.activeFrameIndex = 0;
@@ -2039,6 +2061,9 @@ async function switchStudioMode(mode) {
   updateUndoRedoButtons();
   if (state.frames.length === 0) {
     renderEmptyRollUI();
+    return;
+  }
+  if (skipPreview) {
     return;
   }
   if (isNeg && negativeState.baseColor === null) {
@@ -2680,6 +2705,7 @@ function saveActiveFrameRecipe() {
   }
   updateActiveThumbEditedIndicator();
   saveStoredFrameRecipes();
+  markProjectDirty();
 }
 
 function setSliderSilent(sliderId, labelId, val, textVal) {
@@ -3151,6 +3177,7 @@ function applySyncRecipeToRoll(options = {}) {
   });
 
   renderFilmStrip();
+  markProjectDirty();
   if (state.viewMode === "sheet") {
     generateContactSheetPreview();
   }
@@ -6182,7 +6209,15 @@ function initDragAndDrop() {
     if (!types.includes("Files")) return;
     e.preventDefault();
     if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      await importFiles(e.dataTransfer.files);
+      const dropped = Array.from(e.dataTransfer.files);
+      const haluroProjects = dropped.filter((f) => f.name.toLowerCase().endsWith(".haluro"));
+      const mediaFiles = dropped.filter((f) => !f.name.toLowerCase().endsWith(".haluro"));
+      for (const projFile of haluroProjects) {
+        await importProjectArchiveFile(projFile);
+      }
+      if (mediaFiles.length > 0) {
+        await importFiles(mediaFiles);
+      }
     }
   });
 }
@@ -6560,9 +6595,10 @@ function initKeyboardShortcuts() {
         performRedo();
         return;
       }
-      if (k === "s") {
+      if (k === "s" || (e.altKey && e.code === "KeyS")) {
         e.preventDefault();
-        if (e.shiftKey) saveAsWithDialog();
+        if (e.altKey) openProjectsModal();
+        else if (e.shiftKey) saveAsWithDialog();
         else saveDirectToDownloads();
         return;
       }
@@ -7290,6 +7326,621 @@ async function saveContactSheetOnly(withDialog = false) {
   }
 }
 
+// =============================================================
+// SAVED ROLL PROJECTS (Save & Resume Digital Rolls)
+// =============================================================
+
+function updateProjectHeaderIndicator() {
+  const labelEl = document.getElementById("projectsBtnLabel");
+  const dotEl = document.getElementById("projectDirtyDot");
+  const btnEl = document.getElementById("projectsBtn");
+  if (labelEl) {
+    labelEl.textContent = state.currentProjectName ? state.currentProjectName : "Proyectos";
+  }
+  if (dotEl) {
+    dotEl.hidden = !(state.currentProjectId && state.projectDirty);
+  }
+  if (btnEl) {
+    const shortcut = state.platform === "macos" ? "⌥⌘S" : "Ctrl+Alt+S";
+    btnEl.title = state.currentProjectName
+      ? `Proyecto activo: ${state.currentProjectName}${state.projectDirty ? " (cambios sin guardar)" : ""} (${shortcut})`
+      : `Guardar o abrir proyectos de rollo digital (${shortcut})`;
+  }
+}
+
+function markProjectDirty() {
+  if (!state.currentProjectId) return;
+  if (!state.projectDirty) {
+    state.projectDirty = true;
+    updateProjectHeaderIndicator();
+  }
+}
+
+function formatProjectTimestamp(isoStr) {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return isoStr;
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch (_) {
+    return isoStr;
+  }
+}
+
+function summarizeCurrentRollForProject() {
+  const count = state.frames.length;
+  if (count === 0) return "Rollo vacío";
+  const { picks } = getCullCounts();
+  const modeTxt = state.appMode === "negative" ? "Negativo" : "Emulación";
+  const edited = state.frames.filter((f) => isFrameCustomized(f)).length;
+  const parts = [`${count} ${count === 1 ? "fotograma" : "fotogramas"}`, modeTxt];
+  if (picks > 0) parts.push(`${picks} ${picks === 1 ? "elegida" : "elegidas"}`);
+  if (edited > 0) parts.push(`${edited} con ajustes`);
+  return parts.join(" · ");
+}
+
+function resolveRecipeSummaryText(project) {
+  const keys = Array.isArray(project.recipe_keys) ? project.recipe_keys : [];
+  if (!keys.length) return "";
+  const labels = keys.map((k) => {
+    if (project.app_mode === "negative") {
+      return PROFILE_LABELS[k] || k;
+    }
+    const found = state.films.find((f) => f.key === k);
+    return found ? found.name : k;
+  });
+  if (labels.length === 1) return labels[0];
+  return `${labels[0]} +${labels.length - 1}`;
+}
+
+function buildCurrentProjectPayload(name, notes, projectId = null) {
+  saveActiveFrameRecipe();
+  const framesPayload = state.frames.map((f) => ({
+    filename: f.filename,
+    name: f.name || f.filename,
+    is_raw: Boolean(f.is_raw),
+    is_heif: Boolean(f.is_heif),
+    is_sample: Boolean(f.is_sample),
+    pickStatus: f.pickStatus || null,
+    simRecipe: f.simRecipe ? clonePlain(f.simRecipe) : null,
+    negRecipe: f.negRecipe ? clonePlain(f.negRecipe) : null,
+  }));
+
+  const payload = {
+    name: (name || "").trim(),
+    notes: (notes || "").trim(),
+    app_mode: state.appMode,
+    active_frame_index: state.activeFrameIndex,
+    view_mode: state.viewMode === "teststrip" ? "split" : state.viewMode,
+    sheet: {
+      roll_name: state.sheetRollName || "",
+      columns: state.sheetColumns || 4,
+      hide_rejected: Boolean(state.hideRejectedInSheet),
+    },
+    export: {
+      output_format: state.outputFormat || "jpg",
+      easel_border: state.easelBorder || "none",
+      dry_down_comp: Number(state.dryDownComp || 0),
+    },
+    analog_meta: clonePlain(state.analogMeta || {}),
+    negative_roll: {
+      roll_bounds: negativeState.rollBounds ? clonePlain(negativeState.rollBounds) : null,
+      roll_frames_count: Number(negativeState.rollFramesCount || 0),
+      flat_field_file: negativeState.flatFieldFile || null,
+      flat_field_label: negativeState.flatFieldLabel || "",
+      flat_field_strength: Number(negativeState.flatFieldStrength ?? 1.0),
+    },
+    frames: framesPayload,
+  };
+  if (projectId) {
+    payload.project_id = projectId;
+  }
+  return payload;
+}
+
+function refreshProjectModalSaveCard() {
+  const titleEl = document.getElementById("projectSaveCardTitle");
+  const summaryEl = document.getElementById("projectCurrentSummary");
+  const nameInput = document.getElementById("projectNameInput");
+  const notesInput = document.getElementById("projectNotesInput");
+  const saveBtn = document.getElementById("btnSaveProject");
+  const saveAsNewBtn = document.getElementById("btnSaveProjectAsNew");
+  const hintEl = document.getElementById("projectActiveHint");
+
+  if (summaryEl) summaryEl.textContent = summarizeCurrentRollForProject();
+  const hasFrames = state.frames.length > 0;
+  if (saveBtn) saveBtn.disabled = !hasFrames;
+  if (saveAsNewBtn) saveAsNewBtn.disabled = !hasFrames;
+
+  if (state.currentProjectId) {
+    if (titleEl) titleEl.textContent = `Proyecto activo: ${state.currentProjectName}`;
+    if (saveBtn) saveBtn.textContent = "Actualizar proyecto";
+    if (saveAsNewBtn) saveAsNewBtn.style.display = "inline-flex";
+    if (hintEl) {
+      hintEl.textContent = state.projectDirty ? "Hay cambios sin guardar" : "Todo guardado";
+    }
+    if (nameInput && !nameInput.value.trim()) nameInput.value = state.currentProjectName || "";
+    if (notesInput && !notesInput.value.trim()) notesInput.value = state.currentProjectNotes || "";
+  } else {
+    if (titleEl) titleEl.textContent = "Guardar rollo actual";
+    if (saveBtn) saveBtn.textContent = "Guardar proyecto";
+    if (saveAsNewBtn) saveAsNewBtn.style.display = "none";
+    if (hintEl) {
+      hintEl.textContent = hasFrames ? "Se guardarán todas las imágenes y recetas" : "Importa fotos primero para guardar un proyecto";
+    }
+    if (nameInput && !nameInput.value.trim()) {
+      const suggested = (state.sheetRollName || "").trim();
+      if (suggested) {
+        nameInput.value = suggested;
+      } else {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        nameInput.value = `Rollo ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      }
+    }
+  }
+}
+
+async function fetchAndRenderProjectsList() {
+  const listEl = document.getElementById("projectsList");
+  const badgeEl = document.getElementById("projectsCountBadge");
+  if (!listEl) return;
+
+  listEl.innerHTML = `<div class="film-empty">Consultando proyectos guardados…</div>`;
+  try {
+    const res = await fetch("/api/projects");
+    const data = await res.json();
+    const projects = Array.isArray(data.projects) ? data.projects : [];
+    if (badgeEl) badgeEl.textContent = String(projects.length);
+
+    listEl.innerHTML = "";
+    if (projects.length === 0) {
+      listEl.innerHTML = `<div class="film-empty">Aún no tienes proyectos guardados. Usa <strong>Guardar proyecto</strong> arriba para conservar este rollo y volver cuando quieras.</div>`;
+      return;
+    }
+
+    projects.forEach((proj) => {
+      const isActive = proj.id === state.currentProjectId;
+      const row = document.createElement("div");
+      row.className = isActive ? "project-item is-active" : "project-item";
+
+      const thumb = document.createElement("img");
+      thumb.className = "project-thumb";
+      thumb.alt = proj.name;
+      if (proj.cover_url) {
+        thumb.src = `${proj.cover_url}?t=${Date.now()}`;
+      }
+
+      const info = document.createElement("div");
+      info.className = "project-info";
+
+      const titleRow = document.createElement("div");
+      titleRow.className = "project-title-row";
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "project-name";
+      nameEl.textContent = proj.name;
+      nameEl.title = proj.name;
+      titleRow.appendChild(nameEl);
+
+      const modePill = document.createElement("span");
+      modePill.className = "project-mode-pill";
+      modePill.textContent = proj.app_mode === "negative" ? "Negativo" : "Emulación";
+      titleRow.appendChild(modePill);
+
+      if (isActive) {
+        const openPill = document.createElement("span");
+        openPill.className = "project-mode-pill is-open";
+        openPill.textContent = "Abierto";
+        titleRow.appendChild(openPill);
+      }
+
+      const metaEl = document.createElement("div");
+      metaEl.className = "history-meta";
+      const metaParts = [`${proj.frame_count} ${proj.frame_count === 1 ? "foto" : "fotos"}`];
+      if (proj.picked_count > 0) metaParts.push(`${proj.picked_count} eleg.`);
+      const recSummary = resolveRecipeSummaryText(proj);
+      if (recSummary) metaParts.push(recSummary);
+      const leadSpan = document.createElement("span");
+      leadSpan.textContent = `${metaParts.join(" · ")} · `;
+      const dateSpan = document.createElement("span");
+      dateSpan.className = "history-meta-date";
+      dateSpan.textContent = formatProjectTimestamp(proj.updated_at || proj.created_at);
+      metaEl.appendChild(leadSpan);
+      metaEl.appendChild(dateSpan);
+
+      info.appendChild(titleRow);
+      info.appendChild(metaEl);
+
+      if (proj.notes) {
+        const notesEl = document.createElement("div");
+        notesEl.className = "project-notes";
+        notesEl.textContent = proj.notes;
+        notesEl.title = proj.notes;
+        info.appendChild(notesEl);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "project-actions";
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "btn btn-primary btn-xs";
+      openBtn.textContent = isActive ? "Recargar" : "Abrir";
+      openBtn.addEventListener("click", () => openSavedProject(proj.id));
+      actions.appendChild(openBtn);
+
+      const exportBtn = document.createElement("button");
+      exportBtn.type = "button";
+      exportBtn.className = "btn btn-secondary btn-xs";
+      exportBtn.textContent = "Exportar";
+      exportBtn.title = "Descargar copia portable (.haluro) para respaldo o traslado a otro equipo";
+      exportBtn.addEventListener("click", () => exportSavedProjectArchive(proj.id));
+      actions.appendChild(exportBtn);
+
+      const finderBtn = document.createElement("button");
+      finderBtn.type = "button";
+      finderBtn.className = "btn btn-secondary btn-xs";
+      finderBtn.textContent = getOsCopy().fileManagerShort;
+      finderBtn.title = `Mostrar carpeta del proyecto en ${getOsCopy().fileManager}`;
+      finderBtn.addEventListener("click", () => revealFileInFinder(proj.project_dir));
+      actions.appendChild(finderBtn);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn btn-ghost btn-xs btn-danger-ghost";
+      deleteBtn.textContent = "Eliminar";
+      deleteBtn.addEventListener("click", () => deleteSavedProject(proj.id, proj.name));
+      actions.appendChild(deleteBtn);
+
+      row.appendChild(thumb);
+      row.appendChild(info);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    console.error("Error cargando lista de proyectos:", err);
+    listEl.innerHTML = `<div class="film-empty">No se pudo leer la biblioteca de proyectos.</div>`;
+  }
+}
+
+async function openProjectsModal() {
+  const modal = document.getElementById("projectsModal");
+  if (!modal) return;
+
+  const nameInput = document.getElementById("projectNameInput");
+  const notesInput = document.getElementById("projectNotesInput");
+  if (nameInput) nameInput.value = state.currentProjectName || "";
+  if (notesInput) notesInput.value = state.currentProjectNotes || "";
+
+  refreshProjectModalSaveCard();
+  setModalOpen(modal, true);
+  await fetchAndRenderProjectsList();
+}
+
+async function saveCurrentProject({ saveAsNew = false } = {}) {
+  if (state.frames.length === 0) {
+    showToast("Rollo vacío", "Importa al menos una fotografía antes de guardar el proyecto.");
+    return;
+  }
+
+  const nameInput = document.getElementById("projectNameInput");
+  const notesInput = document.getElementById("projectNotesInput");
+  const saveBtn = document.getElementById("btnSaveProject");
+  const saveAsNewBtn = document.getElementById("btnSaveProjectAsNew");
+
+  const name = (nameInput?.value || state.currentProjectName || state.sheetRollName || "").trim();
+  const notes = (notesInput?.value || "").trim();
+  const targetId = saveAsNew ? null : state.currentProjectId;
+  const payload = buildCurrentProjectPayload(name, notes, targetId);
+
+  if (saveBtn) saveBtn.disabled = true;
+  if (saveAsNewBtn) saveAsNewBtn.disabled = true;
+
+  try {
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al guardar proyecto", data.error || `HTTP ${res.status}`);
+      return;
+    }
+
+    const saved = data.project;
+    state.currentProjectId = saved.id;
+    state.currentProjectName = saved.name;
+    state.currentProjectNotes = saved.notes || "";
+    state.projectDirty = false;
+    try {
+      localStorage.setItem(LAST_PROJECT_ID_KEY, saved.id);
+    } catch (_) {}
+    updateProjectHeaderIndicator();
+    refreshProjectModalSaveCard();
+    await fetchAndRenderProjectsList();
+
+    const missingNote =
+      data.missing_files && data.missing_files.length > 0
+        ? ` (${data.missing_files.length} archivo(s) no se encontraron en disco)`
+        : "";
+    showToast(
+      targetId ? "Proyecto actualizado" : "Proyecto guardado",
+      `«${saved.name}» · ${saved.frame_count} fotograma(s) y sus emulaciones preservados${missingNote}.`
+    );
+  } catch (err) {
+    console.error("Error guardando proyecto:", err);
+    showToast("Error de conexión", "No se pudo guardar el proyecto del rollo.");
+  } finally {
+    if (saveBtn) saveBtn.disabled = state.frames.length === 0;
+    if (saveAsNewBtn) saveAsNewBtn.disabled = state.frames.length === 0;
+  }
+}
+
+async function openSavedProject(projectId) {
+  if (!projectId) return;
+  showLoading(true, "Recuperando proyecto y fotogramas del rollo…");
+  try {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`);
+    const data = await res.json();
+    if (!res.ok || !data.success || !data.project) {
+      showToast("No se pudo abrir el proyecto", data.error || `HTTP ${res.status}`);
+      return;
+    }
+
+    const proj = data.project;
+    const restoredFrames = (proj.frames || []).map((f) => {
+      const entry = {
+        filename: f.filename,
+        name: f.name || f.filename,
+        is_raw: Boolean(f.is_raw),
+        is_heif: Boolean(f.is_heif),
+        is_sample: Boolean(f.is_sample),
+        thumb_url: f.thumb_url || `/api/thumbnail/${encodeURIComponent(f.filename)}?t=${Date.now()}`,
+        pickStatus: f.pickStatus === "pick" || f.pickStatus === "reject" ? f.pickStatus : null,
+      };
+      if (f.simRecipe && typeof f.simRecipe === "object") {
+        entry.simRecipe = clonePlain(f.simRecipe);
+      }
+      if (f.negRecipe && typeof f.negRecipe === "object") {
+        entry.negRecipe = clonePlain(f.negRecipe);
+      }
+      ensureFrameHistory(entry);
+      return entry;
+    });
+
+    if (restoredFrames.length === 0) {
+      showToast("Proyecto sin imágenes disponibles", "No se encontraron los archivos originales de este proyecto.");
+      return;
+    }
+
+    // Restore frames & active index
+    state.frames = restoredFrames;
+    state.activeFrameIndex = Math.max(0, Math.min(Number(proj.active_frame_index || 0), restoredFrames.length - 1));
+    state.lastOriginalKey = "";
+    state.contactSheetCache = null;
+
+    // Restore contact sheet settings
+    const sheet = proj.sheet || {};
+    state.sheetRollName = sheet.roll_name || "";
+    state.sheetColumns = Number(sheet.columns || 4);
+    state.hideRejectedInSheet = Boolean(sheet.hide_rejected);
+    const rollNameInput = document.getElementById("sheetRollNameInput");
+    if (rollNameInput) rollNameInput.value = state.sheetRollName;
+    document.querySelectorAll(".sheet-col-btn").forEach((btn) => {
+      const match = Number(btn.dataset.cols) === state.sheetColumns;
+      btn.classList.toggle("active", match);
+      btn.setAttribute("aria-checked", match ? "true" : "false");
+    });
+
+    // Restore export settings
+    const exp = proj.export || {};
+    if (exp.output_format) {
+      state.outputFormat = exp.output_format;
+      document.querySelectorAll("#outputFormatPills .fmt-pill").forEach((pill) => {
+        const match = pill.dataset.format === state.outputFormat;
+        pill.classList.toggle("active", match);
+        pill.setAttribute("aria-checked", match ? "true" : "false");
+      });
+    }
+    if (exp.easel_border !== undefined) {
+      state.easelBorder = exp.easel_border || "none";
+      const easelEl = document.getElementById("easelBorderSelect");
+      if (easelEl) easelEl.value = state.easelBorder;
+    }
+    if (exp.dry_down_comp !== undefined) {
+      state.dryDownComp = Number(exp.dry_down_comp || 0);
+      const ddEl = document.getElementById("dryDownSelect");
+      if (ddEl) ddEl.value = Number(state.dryDownComp).toFixed(2).replace(/0$/, "");
+    }
+
+    // Restore Analog EXIF metadata
+    if (proj.analog_meta && typeof proj.analog_meta === "object") {
+      state.analogMeta = clonePlain(proj.analog_meta);
+      saveAnalogExifStorage(state.analogMeta);
+      const mapFields = {
+        exifCameraInput: "camera",
+        exifLensInput: "lens",
+        exifStockInput: "film_stock",
+        exifIsoInput: "iso",
+        exifNotesInput: "notes",
+      };
+      Object.entries(mapFields).forEach(([id, key]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = state.analogMeta[key] || "";
+      });
+    }
+
+    // Restore Negative roll-level calibration
+    const negRoll = proj.negative_roll || {};
+    negativeState.rollBounds = negRoll.roll_bounds ? clonePlain(negRoll.roll_bounds) : null;
+    negativeState.rollFramesCount = Number(negRoll.roll_frames_count || 0);
+    negativeState.flatFieldFile = negRoll.flat_field_file || null;
+    negativeState.flatFieldLabel = negRoll.flat_field_label || "";
+    negativeState.flatFieldStrength = Number(negRoll.flat_field_strength ?? 1.0);
+    const calBadge = document.getElementById("rollCalBadge");
+    if (calBadge) {
+      calBadge.style.display = negativeState.rollBounds ? "inline-flex" : "none";
+    }
+
+    // Switch studio mode without wiping restored frames
+    const targetMode = proj.app_mode === "negative" ? "negative" : "simulation";
+    await switchStudioMode(targetMode, { skipSampleSwap: true, skipPreview: true });
+
+    // Load active frame's recipe into UI controls
+    loadFrameRecipe(state.activeFrameIndex);
+    resetZoom();
+    syncEmptyRollButtons(false);
+    renderFilmStrip();
+    updateCullSummaryUI();
+    updateActiveRecipeBanner();
+    saveStoredFrameRecipes();
+
+    // Mark active project cleanly
+    state.currentProjectId = proj.id;
+    state.currentProjectName = proj.name || "";
+    state.currentProjectNotes = proj.notes || "";
+    state.projectDirty = false;
+    try {
+      localStorage.setItem(LAST_PROJECT_ID_KEY, proj.id);
+    } catch (_) {}
+    updateProjectHeaderIndicator();
+
+    setModalOpen("projectsModal", false);
+
+    // Restore view mode and trigger render
+    const targetView = proj.view_mode || "split";
+    if (targetView === "sheet") {
+      setViewMode("sheet");
+    } else {
+      if (state.viewMode !== targetView) {
+        setViewMode(targetView);
+      }
+      await requestPreview(true);
+    }
+
+    const missing = data.missing_files || [];
+    const desc =
+      missing.length > 0
+        ? `Se cargaron ${restoredFrames.length} fotograma(s). ${missing.length} archivo(s) no estaban disponibles.`
+        : `Se recuperaron ${restoredFrames.length} fotograma(s) con todas sus emulaciones y ajustes.`;
+    showToast(`Proyecto abierto: ${proj.name}`, desc);
+  } catch (err) {
+    console.error("Error abriendo proyecto:", err);
+    showToast("Error al abrir proyecto", "No se pudo recuperar el proyecto guardado.");
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function deleteSavedProject(projectId, projectName) {
+  if (!projectId) return;
+  const confirmed = window.confirm(
+    `¿Eliminar el proyecto «${projectName}»?\n\nSe borrarán su configuración guardada y las copias protegidas del proyecto (tus archivos originales fuera de Haluro no se tocan).`
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+      method: "DELETE",
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al eliminar", data.error || `HTTP ${res.status}`);
+      return;
+    }
+    if (state.currentProjectId === projectId) {
+      state.currentProjectId = null;
+      state.currentProjectName = "";
+      state.currentProjectNotes = "";
+      state.projectDirty = false;
+      updateProjectHeaderIndicator();
+      refreshProjectModalSaveCard();
+    }
+    try {
+      if (localStorage.getItem(LAST_PROJECT_ID_KEY) === projectId) {
+        localStorage.removeItem(LAST_PROJECT_ID_KEY);
+      }
+    } catch (_) {}
+    await fetchAndRenderProjectsList();
+    showToast("Proyecto eliminado", `Se eliminó «${projectName}» de la biblioteca.`);
+  } catch (err) {
+    console.error("Error eliminando proyecto:", err);
+    showToast("Error de conexión", "No se pudo eliminar el proyecto.");
+  }
+}
+
+async function exportSavedProjectArchive(projectId) {
+  if (!projectId) return;
+  const url = `/api/projects/${encodeURIComponent(projectId)}/export`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  showToast("Exportando proyecto", "Se inició la descarga del paquete portable .haluro.");
+}
+
+async function importProjectArchiveFile(file) {
+  if (!file) return;
+  showLoading(true, "Importando paquete de proyecto .haluro…");
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/projects/import", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok || !data.success || !data.project) {
+      showToast("Error al importar proyecto", data.error || `HTTP ${res.status}`);
+      return;
+    }
+    await fetchAndRenderProjectsList();
+    showToast(
+      "Proyecto importado",
+      `«${data.project.name}» (${data.project.frame_count} fotograma(s)) añadido a tu biblioteca.`,
+      "Abrir ahora",
+      () => openSavedProject(data.project.id)
+    );
+  } catch (err) {
+    console.error("Error importando archivo .haluro:", err);
+    showToast("Error de importación", "No se pudo leer el paquete .haluro seleccionado.");
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function offerResumeLastProject() {
+  let lastId = null;
+  try {
+    lastId = localStorage.getItem(LAST_PROJECT_ID_KEY);
+  } catch (_) {
+    return;
+  }
+  if (!lastId) return;
+  try {
+    const res = await fetch("/api/projects");
+    if (!res.ok) return;
+    const data = await res.json();
+    const match = (data.projects || []).find((p) => p.id === lastId);
+    if (!match) {
+      try {
+        localStorage.removeItem(LAST_PROJECT_ID_KEY);
+      } catch (_) {}
+      return;
+    }
+    showToast(
+      "Retomar proyecto anterior",
+      `«${match.name}» (${match.frame_count} ${match.frame_count === 1 ? "fotograma" : "fotogramas"}) está listo para continuar.`,
+      "Continuar",
+      () => openSavedProject(match.id)
+    );
+  } catch (_) {
+    // Ignore silent resume errors
+  }
+}
+
 async function openHistoryModal() {
   const modal = document.getElementById("historyModal");
   const list = document.getElementById("historyList");
@@ -7454,7 +8105,9 @@ function initUIListeners() {
   document.getElementById("emptyImportBtn")?.addEventListener("click", () => {
     document.getElementById("fileInput")?.click();
   });
+  document.getElementById("emptyProjectsBtn")?.addEventListener("click", openProjectsModal);
   document.getElementById("emptySampleBtn")?.addEventListener("click", () => loadSamplePhoto());
+  document.getElementById("projectsBtn")?.addEventListener("click", openProjectsModal);
   document.getElementById("fileInput")?.addEventListener("change", (e) => {
     importFiles(e.target.files);
     e.target.value = "";
@@ -7520,6 +8173,10 @@ function initUIListeners() {
   document.getElementById("saveSheetBtn")?.addEventListener("click", () => {
     closeExportMenu();
     saveContactSheetOnly(false);
+  });
+  document.getElementById("saveProjectMenuBtn")?.addEventListener("click", () => {
+    closeExportMenu();
+    openProjectsModal();
   });
   document.getElementById("developFullBtn")?.addEventListener("click", () => {
     closeExportMenu();
@@ -8197,6 +8854,31 @@ function initUIListeners() {
   });
 
   // Modal actions & backdrop dismissal
+  document.getElementById("closeProjectsBtn")?.addEventListener("click", () => {
+    setModalOpen("projectsModal", false);
+  });
+  document.getElementById("btnSaveProject")?.addEventListener("click", () => {
+    saveCurrentProject({ saveAsNew: false });
+  });
+  document.getElementById("btnSaveProjectAsNew")?.addEventListener("click", () => {
+    saveCurrentProject({ saveAsNew: true });
+  });
+  document.getElementById("btnImportProjectArchive")?.addEventListener("click", () => {
+    document.getElementById("projectArchiveInput")?.click();
+  });
+  document.getElementById("projectArchiveInput")?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) importProjectArchiveFile(file);
+    e.target.value = "";
+  });
+  ["projectNameInput", "projectNotesInput"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveCurrentProject({ saveAsNew: false });
+      }
+    });
+  });
   document.getElementById("closeModalBtn")?.addEventListener("click", () => {
     setModalOpen("resultModal", false);
   });
