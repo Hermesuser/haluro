@@ -151,6 +151,9 @@ Disponible de forma idéntica tanto en **Emulación · 80** como en **Revelar ne
 
 ### Módulo 9 — Proyectos de Rollo Digital (`.haluro`)
 
+![Modal de Proyectos de rollo digital con guardado, exportación .haluro y recuperación de sesiones](docs/images/11_proyectos_rollo_digital.png)
+*Modal **Proyectos de rollo digital** (`⌥⌘S` / `Ctrl+Alt+S`) con guardado completo de fotogramas, selección y emulaciones, exportación/importación `.haluro` y acceso directo en Finder/Explorador.*
+
 - **Guardar y retomar carretes (`⌥⌘S` / `Ctrl+Alt+S`):** Conserva el rollo completo en `projects/<id>/` con copias protegidas (`os.link` / `copy2`) de cada imagen original, orden de fotogramas, selección (`elegidas`/`descartadas`), emulaciones y ajustes individuales, calibración de rollo negativo, configuración de hoja de contactos y ficha EXIF analógica.
 - **Protección contra pérdidas:** Indicador ámbar de cambios sin guardar en la barra superior, confirmación al cerrar con cambios pendientes y sugerencia de un clic para retomar el último proyecto al abrir Haluro.
 - **Paquetes portables `.haluro`:** Exporta cualquier proyecto guardado como archivo `.haluro` para respaldo externo o traslado a otro equipo, e impórtalo desde el modal **Proyectos** o arrastrándolo directamente a la ventana.
