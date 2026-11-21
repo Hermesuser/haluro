@@ -1,9 +1,9 @@
-# Haluro — Laboratorio Analógico Digital (v2.10.2)
+# Haluro — Laboratorio Analógico Digital (v2.11.1)
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2010%2F11-blue.svg)](#requisitos-técnicos)
-[![Tests](https://img.shields.io/badge/Tests-112%20Passing-emerald.svg)](tests/)
-[![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades%20(v2.10.2)-brightgreen.svg)](#seguridad-y-privacidad)
+[![Tests](https://img.shields.io/badge/Tests-118%20Passing-emerald.svg)](tests/)
+[![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades%20(v2.11.1)-brightgreen.svg)](#seguridad-y-privacidad)
 [![Privacidad](https://img.shields.io/badge/Privacidad-Local--First-success.svg)](#seguridad-y-privacidad)
 [![Edición](https://img.shields.io/badge/Edición-No%20Destructiva-blueviolet.svg)](#principios-de-diseño-y-calidad)
 
@@ -34,7 +34,8 @@
 
 El historial completo de versiones está en [CHANGELOG.md](CHANGELOG.md). Las mejoras estructurales recientes del motor incluyen:
 
-- **LUTs 3D de usuario (`.cube`):** importación directa desde la pestaña **Mis LUTs** con validación previa, soporte para 6 espacios de color de entrada y carpeta dedicada `user_luts/`.
+- **Proyectos de rollo digital (`.haluro`):** guarda, actualiza y retoma carretes completos (`⌥⌘S` / `Ctrl+Alt+S`) conservando copias protegidas de las imágenes originales, el orden exacto de la tira, marcas de selección (`P`/`X`), recetas por fotograma, calibración negativa, hoja de contactos y EXIF analógico; incluye exportación e importación de paquetes portables `.haluro` (con *drag & drop* y protección *zip-slip*).
+- **Gestión completa del catálogo de películas y LUTs de usuario (`.cube`):** importación directa (`+ LUT`) en la pestaña **Mis LUTs** (6 espacios de entrada, empaquetada vacía para el usuario), icono de papelera siempre visible en cada tarjeta para eliminar LUTs de usuario u ocultar emulsiones base (con restauración en un clic) y botón **Vaciar** para limpiar todos los LUTs personalizados.
 - **Grano orgánico multiescala y control por ASA (`100`–`6400`):** el motor de grano combina tres octavas espaciales con remuestreo bicúbico, separación entre grano acromático B&N y nubes de colorante C-41, selector **ASA del rollo (grano)** (`Auto`, `100`, `200`, `400`, `800`, `1600`, `3200`, `6400`) y semilla determinista por fotograma entre vista previa y exportación.
 - **Preservación de escaneos de 16 bits:** la normalización respeta el rango de 16 bits (`65535`) evitando pérdidas de precisión en negativos subexpuestos.
 - **Inversión sensitométrica Hurter–Driffield:** la transferencia densitométrica respeta el contraste real del negativo y elimina el roll-off que comprimía el blanco sRGB en las 80 películas del catálogo.
@@ -142,11 +143,17 @@ Disponible de forma idéntica tanto en **Emulación · 80** como en **Revelar ne
 | :---: | :---: |
 | ![Geometría y Recorte](docs/images/08_geometria_corte_nivelar.png) | ![Óptica, Ruido y Dodge & Burn](docs/images/09_optica_ruido_dodge_burn.png) |
 
-### Módulo 8 — LUTs 3D de Usuario (`.cube`)
+### Módulo 8 — LUTs 3D de Usuario (`.cube`) y Gestión del Catálogo
 
 - **Importación directa (`+ LUT`):** Carga uno o varios archivos `.cube` (1D shaper y/o grilla 3D) desde la pestaña **Mis LUTs**, con validación previa de tablas y normalización de extensiones duplicadas (`.cube.cube`).
 - **Espacios de entrada:** Soporta `sRGB`, `Rec.709`, `S-Log3`, `ARRI LogC3`, `Cineon` y `Linear`.
-- **Gestión local:** Acceso directo a `user_luts/` mediante el botón **Carpeta** y eliminación individual desde cada tarjeta (`×`).
+- **Gestión local y limpieza:** Acceso directo a `user_luts/` mediante **Carpeta**, icono de papelera siempre visible en cada tarjeta del catálogo (elimina `.cube` de usuario u oculta emulsiones base con restauración en un clic) y botón **Vaciar** para limpiar todos los LUTs personalizados.
+
+### Módulo 9 — Proyectos de Rollo Digital (`.haluro`)
+
+- **Guardar y retomar carretes (`⌥⌘S` / `Ctrl+Alt+S`):** Conserva el rollo completo en `projects/<id>/` con copias protegidas (`os.link` / `copy2`) de cada imagen original, orden de fotogramas, selección (`elegidas`/`descartadas`), emulaciones y ajustes individuales, calibración de rollo negativo, configuración de hoja de contactos y ficha EXIF analógica.
+- **Protección contra pérdidas:** Indicador ámbar de cambios sin guardar en la barra superior, confirmación al cerrar con cambios pendientes y sugerencia de un clic para retomar el último proyecto al abrir Haluro.
+- **Paquetes portables `.haluro`:** Exporta cualquier proyecto guardado como archivo `.haluro` para respaldo externo o traslado a otro equipo, e impórtalo desde el modal **Proyectos** o arrastrándolo directamente a la ventana.
 
 ---
 
@@ -305,9 +312,9 @@ python cli.py invert negativo_01.tif \
 4. **Validación de Rutas Seguras:** Las claves de película y de perfil negativo se canonicalizan contra el catálogo, nunca se interpolan sin verificar, y toda ruta de salida se comprueba contra su directorio permitido para impedir saltos de directorio (*path traversal*).
 5. **Validación de Entrada:** Todos los parámetros numéricos se acotan a rangos válidos y se rechazan con **HTTP 400** los valores no numéricos, no finitos o fuera de rango. Las subidas se validan por contenido real, no solo por extensión.
 6. **Servidor de Producción:** El backend se sirve con **Waitress** (WSGI de producción) en lugar del servidor de desarrollo de Flask, sin *debugger* interactivo y con límites de conexión y tiempo de espera.
-7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de compilación fijado al publicar la `v2.10.2` utiliza `Pillow >= 13.0.0`, con **0 vulnerabilidades conocidas** en las dependencias declaradas según `pip-audit`.
-8. **Escrituras Atómicas:** Toda exportación se escribe en un archivo temporal y se mueve a su destino con `os.replace()`, para evitar archivos truncados ante interrupciones del proceso dentro del mismo sistema de archivos.
-9. **Calidad de Código y Pruebas Automatizadas:** Suite de **112 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), el grano orgánico multiescala por ASA (`100`–`6400`), los LUTs de usuario (`.cube`), la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
+7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de compilación fijado al publicar la `v2.11.1` utiliza `Pillow >= 13.0.0`, con **0 vulnerabilidades conocidas** en las dependencias declaradas según `pip-audit`.
+8. **Escrituras Atómicas y Paquetes Seguros:** Toda exportación y manifiesto de proyecto (`project.json`) se escribe en un archivo temporal y se mueve con `os.replace()`, y la importación de paquetes `.haluro` valida rutas contra *zip-slip*, enlaces simbólicos y límites de tamaño.
+9. **Calidad de Código y Pruebas Automatizadas:** Suite de **118 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), el grano orgánico multiescala por ASA (`100`–`6400`), los LUTs de usuario (`.cube`) y la gestión del catálogo, los **proyectos de rollo digital (`.haluro`)**, la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
 
 ---
 

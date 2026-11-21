@@ -417,9 +417,9 @@
 <body>
 
   <header class="hero">
-    <span class="badge-tag">Manual Oficial 2.5.0</span>
+    <span class="badge-tag">Manual Oficial 2.11.1</span>
     <h1 class="hero-title">Haluro — Laboratorio Analógico Digital</h1>
-    <p class="hero-sub">Guía maestra de inversión fotoquímica, neutralización de soporte base (D-min), ampliadora dicroica CMY y catálogo de 80 emulsiones clásicas.</p>
+    <p class="hero-sub">Guía maestra de inversión fotoquímica, neutralización de soporte base (D-min), ampliadora dicroica CMY, proyectos de rollo digital (.haluro) y catálogo de 80 emulsiones clásicas.</p>
     <div class="meta-bar">
       <span>Edición: Noviembre 2026</span>
       <span>•</span>
@@ -434,7 +434,7 @@
     <a href="#interfaz">2. Interfaz y Mesa</a>
     <a href="#modo-negativo">3. Inversión y D-min</a>
     <a href="#ampliadora-cmy">4. Ampliadora CMY</a>
-    <a href="#catalogo">5. 72 Emulsiones</a>
+    <a href="#catalogo">5. 80 Emulsiones</a>
     <a href="#optica-grano">6. Grano y Halación</a>
     <a href="#exif-export">7. EXIF y Export</a>
     <a href="#faq">8. FAQ</a>
@@ -453,8 +453,8 @@
           <div class="card-title">🍎 macOS (Apple Silicon e Intel)</div>
           <p>Dispones de dos archivos instaladores optimizados:</p>
           <ul style="padding-left: 1.25rem; margin-bottom: 1rem; color: #d1d5db; font-size: 0.95rem;">
-            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> <code>Haluro-2.5.0-macOS-arm64.dmg</code></li>
-            <li><strong>Intel (Core i5/i7/i9/Xeon):</strong> <code>Haluro-2.5.0-macOS-x86_64.dmg</code></li>
+            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> <code>Haluro-2.11.1-macOS-arm64.dmg</code></li>
+            <li><strong>Intel (Core i5/i7/i9/Xeon):</strong> <code>Haluro-2.11.1-macOS-x86_64.dmg</code></li>
           </ul>
           <p style="font-size: 0.9rem; color: var(--text-muted);">Monta el DMG y arrastra Haluro a tu carpeta <strong>Aplicaciones</strong>.</p>
         </div>
@@ -463,8 +463,8 @@
           <div class="card-title">🪟 Windows 11 (64-bit)</div>
           <p>Instalador oficial disponible:</p>
           <ul style="padding-left: 1.25rem; margin-bottom: 1rem; color: #d1d5db; font-size: 0.95rem;">
-            <li><strong>Instalador Setup:</strong> <code>Haluro-Setup-2.5.0-Win11-x64.exe</code></li>
-            <li><strong>Edición Portátil:</strong> <code>Haluro-Portable-2.5.0-Win11-x64.zip</code></li>
+            <li><strong>Instalador Setup:</strong> <code>Haluro-Setup-2.11.1-Win11-x64.exe</code></li>
+            <li><strong>Edición Portátil:</strong> <code>Haluro-Portable-2.11.1-Win11-x64.zip</code></li>
           </ul>
           <p style="font-size: 0.9rem; color: var(--text-muted);">Se integra automáticamente con Microsoft Edge WebView2 y el modo oscuro de Windows 11.</p>
         </div>
@@ -720,7 +720,7 @@
       <div class="figure-card" style="margin-top: 24px;">
         <img src="docs/images/10_mis_luts_usuario.png" alt="Pestaña Mis LUTs con archivos .cube de usuario cargados en Haluro">
         <div class="figure-caption">
-          <span>Figura 5B — Mis LUTs (.cube):</span> Importa tus propios LUTs 3D con <strong>+ LUT</strong>, elige el espacio de entrada (<em>sRGB, Rec.709, S-Log3, LogC3, Cineon, Linear</em>) y gestiona tu carpeta <code>user_luts/</code>.
+          <span>Figura 5B — Mis LUTs (.cube) y Gestión del Catálogo:</span> Importa tus propios LUTs 3D con <strong>+ LUT</strong>, elige el espacio de entrada (<em>sRGB, Rec.709, S-Log3, LogC3, Cineon, Linear</em>), elimina emulsiones o LUTs con el icono de papelera siempre visible (con restauración de emulsiones base) o limpia todo con <strong>Vaciar</strong>.
         </div>
       </div>
     </section>
@@ -803,6 +803,7 @@
           <li><strong>Mesa de Luz Viva (Pestaña Contactos, tecla <kbd>3</kbd>):</strong> Compone la cuadrícula analógica mediante hilos concurrentes en memoria. Puedes hacer clic sobre cualquier foto de la hoja para editarla al instante, usar la rueda del ratón para hacer zoom panorámico, personalizar el nombre del rollo y elegir entre 3, 4, 5 o 6 columnas. La tira inferior marca con un punto ámbar los fotogramas con ajustes propios.</li>
           <li><strong>Guardar Solo la Hoja de Contactos:</strong> En la pestaña <em>«Contactos»</em>, el botón principal superior cambia contextualmente a <em>«Guardar contactos»</em> para exportar directamente la hoja en alta resolución de archivo (también disponible desde el desplegable como <em>«Guardar solo contactos»</em> o con <em>«Guardar como…»</em> para elegir carpeta y nombre).</li>
           <li><strong>Revelar Rollo Completo con Progreso en Vivo:</strong> Pulsa <strong>Revelar rollo</strong> en la cabecera para procesar todo el carrete en paralelo aprovechando todos los núcleos de tu procesador, con barra de avance fotograma a fotograma, opción para cancelar e inclusión automática de la hoja de contactos.</li>
+          <li><strong>Proyectos de Rollo Digital (<code>.haluro</code>, <kbd>⌥</kbd> + <kbd>⌘</kbd> + <kbd>S</kbd>):</strong> Pulsa <strong>Proyectos</strong> en la barra superior para guardar el carrete completo con copias protegidas de las imágenes originales, orden, selección (<em>elegidas / descartadas</em>), emulsiones y ajustes individuales de cada fotograma, calibración negativa y EXIF. Puedes retomar tu último proyecto en un clic, exportar paquetes portables <code>.haluro</code> e importarlos arrastrándolos sobre la ventana.</li>
         </ul>
       </div>
     </section>
@@ -835,7 +836,7 @@
   </div>
 
   <footer>
-    <p><strong>Haluro 2.5.0 — Laboratorio Analógico Digital</strong></p>
+    <p><strong>Haluro 2.11.1 — Laboratorio Analógico Digital</strong></p>
     <p style="margin-top: 0.25rem;">Desarrollado para fotógrafos que aprecian la ciencia y el alma de la fotografía química.</p>
   </footer>
 

@@ -1,4 +1,4 @@
-# Haluro 2.10.2 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
+# Haluro 2.11.1 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
 
 Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfica concebida desde la práctica y los principios de la fotoquímica analógica. Esta guía detalla cada módulo, herramienta, atajo de teclado y proceso de calibración para obtener el máximo rendimiento tanto en la inversión de negativos digitalizados con cámara como en la emulación de emulsiones cinematográficas y fotográficas clásicas.
 
@@ -45,8 +45,8 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 | Arquitectura de Mac | Archivo a Descargar |
 | :--- | :--- |
-| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.10.2-macOS-arm64.dmg` |
-| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.10.2-macOS-x86_64.dmg` |
+| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.11.1-macOS-arm64.dmg` |
+| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.11.1-macOS-x86_64.dmg` |
 
 #### Pasos de Instalación
 
@@ -70,7 +70,7 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 ### Windows 11
 
-- **Archivo requerido:** `Haluro-Setup-2.10.2-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.10.2-Win11-x64.zip`).
+- **Archivo requerido:** `Haluro-Setup-2.11.1-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.11.1-Win11-x64.zip`).
 - **Instalación:** Ejecuta el instalador. No requiere permisos de administrador forzados (instalación limpia por usuario) y se integra automáticamente con el motor **Microsoft Edge WebView2** preinstalado en Windows 11.
 
 ---
@@ -131,6 +131,7 @@ Para importar, basta con **arrastrar y soltar** uno o varios archivos directamen
 | `⇧ + ⌘ + C` / `V` | `Ctrl + Shift + C` / `V` | Copiar y pegar la receta óptica al fotograma activo |
 | `⌘ + S` | `Ctrl + S` | Guardar copia maestra (o contactos) en Descargas |
 | `⇧ + ⌘ + S` | `Ctrl + Shift + S` | Abrir diálogo **Guardar como…** |
+| `⌥ + ⌘ + S` | `Ctrl + Alt + S` | Abrir **Proyectos de rollo digital** (guardar, retomar o exportar `.haluro`) |
 | `L` | `L` | Alternar **Luz roja** ambiental de cuarto oscuro |
 | `⌘ + ⌥ + Z` | `Ctrl + Alt + Z` | Modo mesa limpia: ocultar o mostrar los paneles laterales |
 | `Esc` | `Esc` | Salir de **Recorte**, **Editar en lienzo** (Dodge & Burn), cuentagotas o modales |
@@ -224,7 +225,7 @@ Además de las 80 emulsiones incluidas, puedes cargar tus propios archivos **`.c
 
 1. **Importar desde la interfaz (`+ LUT`):** Pulsa **+ LUT** en la cabecera del catálogo para seleccionar uno o varios archivos `.cube`. Haluro valida cada archivo antes de guardarlo (rechazando archivos corruptos o sin tabla válida) y normaliza automáticamente extensiones dobles como `.cube.cube`.
 2. **Espacio de color de entrada:** En la barra de **Mis LUTs** puedes elegir el espacio esperado por el LUT antes de importar: `sRGB (Estándar)`, `Rec.709`, `S-Log3`, `ARRI LogC3`, `Cineon` o `Linear`.
-3. **Gestión directa (`Carpeta` y `×`):** Pulsa **Carpeta** para abrir el directorio `user_luts/` (`~/Library/Application Support/Haluro/user_luts` en la `.app` de macOS o `%LOCALAPPDATA%\Haluro\user_luts` en Windows) y copiar archivos manualmente, o usa el botón **×** de cada tarjeta para eliminarlo.
+3. **Gestión directa (`Carpeta`, papelera y `Vaciar`):** Pulsa **Carpeta** para abrir el directorio `user_luts/` (`~/Library/Application Support/Haluro/user_luts` en la `.app` de macOS o `%LOCALAPPDATA%\Haluro\user_luts` en Windows) y copiar archivos manualmente, usa el **icono de papelera** siempre visible en cada tarjeta para eliminar cualquier LUT personalizado (o quitar una emulsión base del catálogo con opción de **Restaurar** al pie), o pulsa **Vaciar** en **Mis LUTs** para borrar todos los `.cube` personalizados de una vez.
 
 ### Las 80 Emulsiones Clásicas
 
@@ -440,4 +441,4 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 2.10.2 — Desarrollado para fotógrafos que aman la ciencia y el arte.*
+*Haluro 2.11.1 — Desarrollado para fotógrafos que aman la ciencia y el arte.*
