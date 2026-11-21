@@ -9,6 +9,14 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.11.1] — 2026-11-21
+
+### Corregido y Mejorado
+- **Cabecera del catálogo de películas:** Se eliminó el solapamiento y salto de línea en `+ LUT` y el recorte del contador con 3 dígitos (`199`) en paneles estrechos.
+- **Eliminar emulsiones y Mis LUTs siempre visible:** El botón de eliminar usa ahora un icono de papelera siempre visible junto a la estrella sin solaparse sobre el badge `ISO`, y se añadió el botón **Vaciar** (`DELETE /api/user_luts`) en la barra de **Mis LUTs** para eliminar todos los `.cube` personalizados en un clic.
+
+---
+
 ## [2.11.0] — 2026-11-21
 
 ### Añadido

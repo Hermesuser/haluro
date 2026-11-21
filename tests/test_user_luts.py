@@ -149,3 +149,20 @@ def test_delete_and_restore_catalog_emulsions(monkeypatch, tmp_path):
     assert del_u.status_code == 200
     assert del_u.get_json()["removed_type"] == "user_lut"
     assert ukey not in {f["key"] for f in del_u.get_json()["films"]}
+
+    # 4. Upload two LUTs and clear all via DELETE /api/user_luts
+    for fname in ("One.cube", "Two.cube"):
+        r = client.post(
+            "/api/user_luts",
+            data={"lut_space": "srgb", "files": (io.BytesIO(_identity_2x2x2_cube()), fname)},
+            content_type="multipart/form-data",
+            headers=headers,
+        )
+        assert r.status_code == 200
+
+    clear_resp = client.delete("/api/user_luts", headers=headers)
+    assert clear_resp.status_code == 200
+    clear_data = clear_resp.get_json()
+    assert clear_data["success"] is True
+    assert clear_data["removed"] == 2
+    assert not any(f.get("is_user_lut") for f in clear_data["films"])

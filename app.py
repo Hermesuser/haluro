@@ -30,6 +30,7 @@ from engine.contact_sheet import generate_contact_sheet
 from engine.films import (
     LUT_DIR,
     VALID_GRAIN_ASAS,
+    clear_user_luts,
     delete_user_lut,
     get_film,
     get_hidden_films,
@@ -1208,7 +1209,19 @@ def api_upload_user_luts():
 def api_delete_user_lut(key):
     if not delete_user_lut(key):
         return jsonify({"error": "LUT de usuario no encontrado"}), 404
-    return jsonify({"success": True, "films": list_films()})
+    return jsonify({"success": True, "films": list_films(), "hidden_count": len(get_hidden_films())})
+
+
+@app.route("/api/user_luts", methods=["DELETE"])
+def api_clear_user_luts():
+    """Remove all custom `.cube` LUTs from `user_luts/`."""
+    removed = clear_user_luts()
+    return jsonify({
+        "success": True,
+        "removed": removed,
+        "films": list_films(),
+        "hidden_count": len(get_hidden_films()),
+    })
 
 
 @app.route("/api/user_luts/open_folder", methods=["POST"])

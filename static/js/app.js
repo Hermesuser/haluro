@@ -41,6 +41,7 @@ const MAX_STORED_FRAMES = 50;
 const ICON_STAR_FILL = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.58 1.1 6.47L12 17.44 6.2 20.5l1.1-6.47L2.6 9.45l6.5-.95z"/></svg>';
 const ICON_STAR_OUTLINE = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.58 1.1 6.47L12 17.44 6.2 20.5l1.1-6.47L2.6 9.45l6.5-.95z"/></svg>';
 const ICON_X_MARK = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const ICON_TRASH = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 
 function loadAnalogExifStorage() {
   try {
@@ -1065,7 +1066,7 @@ function renderFilmShelf() {
       ? "Eliminar LUT de usuario (.cube)"
       : "Eliminar emulsión del catálogo";
     delBtn.setAttribute("aria-label", `Eliminar ${film.name}`);
-    delBtn.textContent = "×";
+    delBtn.innerHTML = ICON_TRASH;
     delBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       removeFilmFromCatalog(film);
@@ -1219,6 +1220,47 @@ async function restoreHiddenFilms(singleKey = null) {
 
 async function deleteUserLut(film) {
   return removeFilmFromCatalog(film);
+}
+
+async function clearAllUserLuts() {
+  const userLuts = state.films.filter((f) => f.is_user_lut);
+  if (userLuts.length === 0) {
+    showToast("Mis LUTs ya está vacío", "No hay archivos .cube personalizados para eliminar.");
+    return;
+  }
+  const confirmed = window.confirm(
+    `¿Eliminar todos los LUTs personalizados de «Mis LUTs» (${userLuts.length} archivos .cube)?\n\nEsta acción borra los archivos de tu carpeta user_luts/ y no se puede deshacer.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch("/api/user_luts", { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al vaciar Mis LUTs", data.error || "No se pudieron eliminar los LUTs.");
+      return;
+    }
+    if (Array.isArray(data.films)) {
+      state.films = data.films;
+    } else {
+      await fetchFilms();
+    }
+    state.hiddenFilmsCount = Number(data.hidden_count || 0);
+    updateHiddenFilmsBar();
+
+    const wasUserSelected = state.selectedFilm && state.selectedFilm.startsWith("user:");
+    if (wasUserSelected) {
+      const fallback = state.films.find((f) => f.key === "portra400") || state.films[0];
+      if (fallback) selectFilm(fallback.key);
+      else applyFilters();
+    } else {
+      applyFilters();
+    }
+    showToast("Mis LUTs vaciado", `Se eliminaron ${data.removed ?? userLuts.length} LUT(s) personalizado(s).`);
+  } catch (err) {
+    console.error("Error vaciando Mis LUTs:", err);
+    showToast("Error de red", "No se pudieron eliminar los LUTs personalizados.");
+  }
 }
 
 function toggleFavoriteFilm(filmKey) {
@@ -8373,6 +8415,7 @@ function initUIListeners() {
       console.error("Error abriendo carpeta de LUTs:", err);
     }
   });
+  document.getElementById("userLutClearAllBtn")?.addEventListener("click", clearAllUserLuts);
   document.getElementById("restoreHiddenFilmsBtn")?.addEventListener("click", () => {
     restoreHiddenFilms(null);
   });

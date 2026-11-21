@@ -584,6 +584,22 @@ def delete_user_lut(key: str) -> bool:
     return False
 
 
+def clear_user_luts() -> int:
+    """Delete all user `.cube` files and metadata in `user_luts/`. Returns count deleted."""
+    user_dir = get_user_luts_dir()
+    removed = 0
+    for path in list(user_dir.glob("*.cube")):
+        try:
+            path.unlink(missing_ok=True)
+            removed += 1
+        except OSError:
+            continue
+    meta_file = user_dir / "meta.json"
+    meta_file.unlink(missing_ok=True)
+    load_lut.cache_clear()
+    return removed
+
+
 def _hidden_films_file() -> Path:
     return get_user_data_root() / "hidden_films.json"
 

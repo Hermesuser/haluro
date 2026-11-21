@@ -1,20 +1,19 @@
 {
-  "version": "2.11.0",
+  "version": "2.11.1",
   "release_date": "2026-11-21",
-  "name": "Haluro v2.11.0",
-  "title": "Proyectos de Rollo Digital (.haluro) y Gestión Completa del Catálogo de Emulsiones",
-  "description": "Haluro 2.11.0: guarda y retoma carretes digitales completos con todas sus imágenes protegidas, selección y emulaciones por fotograma, exporta/importa paquetes portables .haluro, elimina o restaura emulsiones desde el catálogo y empaqueta Mis LUTs limpio para el usuario.",
+  "name": "Haluro v2.11.1",
+  "title": "Corrección visual del catálogo de películas y gestión directa de Mis LUTs",
+  "description": "Haluro 2.11.1: corrige el solapamiento en la cabecera del catálogo de películas (+ LUT y contador de 3 dígitos), hace siempre visible el icono de eliminar en cada emulsión sin tapar el badge ISO y añade el botón Vaciar en Mis LUTs.",
   "highlights": [
-    "Proyectos de rollo digital (⌥⌘S): guarda, actualiza y retoma carretes completos con recetas individuales, orden, selección, calibración y EXIF",
-    "Paquetes portables .haluro: exporta e importa proyectos completos (incluyendo arrastrar y soltar) con protección contra zip-slip",
-    "Gestión de catálogo: elimina LUTs de usuario o quita emulsiones del catálogo con restauración en un clic",
-    "Empaquetado limpio: la pestaña Mis LUTs (user_luts/) se entrega vacía y dedicada exclusivamente a LUTs del usuario"
+    "Cabecera del catálogo sin solapamientos: título compacto, botón + LUT en una línea y contador siempre visible",
+    "Icono de papelera siempre visible en cada tarjeta de película/LUT sin tapar el badge ISO",
+    "Botón Vaciar en Mis LUTs (DELETE /api/user_luts) para limpiar todos los LUTs personalizados en un clic"
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-2.11.0-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-2.11.0-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-Setup-2.11.0-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-Portable-2.11.0-Win11-x64.zip"
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-2.11.1-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-2.11.1-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-Setup-2.11.1-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-Portable-2.11.1-Win11-x64.zip"
   },
   "checksums": {
     "macos_arm64": "",
