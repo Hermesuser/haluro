@@ -20,6 +20,8 @@ dist/
 *.icns
 uploads/
 developed/
+projects/
+user_luts/
 logs/
 *.log
 .md

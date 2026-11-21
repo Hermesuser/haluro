@@ -247,6 +247,7 @@ const state = {
   appMode: "simulation", // 'simulation' | 'negative'
   films: [],
   filteredFilms: [],
+  hiddenFilmsCount: 0,
   favorites: loadFavorites(),
   selectedFilm: "portra400",
   category: "all",
@@ -925,10 +926,24 @@ async function fetchFilms() {
     const res = await fetch("/api/films");
     const data = await res.json();
     state.films = data.films || [];
+    state.hiddenFilmsCount = Number(data.hidden_count || 0);
+    updateHiddenFilmsBar();
     applyFilters();
   } catch (err) {
     console.error("Error cargando catálogo de películas:", err);
     showToast("Error de catálogo", "No se pudo cargar la lista de películas.");
+  }
+}
+
+function updateHiddenFilmsBar() {
+  const bar = document.getElementById("hiddenFilmsRestoreBar");
+  const lbl = document.getElementById("hiddenFilmsCountLabel");
+  if (!bar) return;
+  const count = Number(state.hiddenFilmsCount || 0);
+  bar.hidden = count <= 0;
+  if (lbl) {
+    lbl.textContent =
+      count === 1 ? "1 emulsión eliminada del catálogo" : `${count} emulsiones eliminadas del catálogo`;
   }
 }
 
@@ -1043,19 +1058,19 @@ function renderFilmShelf() {
     });
 
     card.appendChild(selectBtn);
-    if (film.is_user_lut) {
-      const delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "user-lut-delete-btn";
-      delBtn.title = "Eliminar LUT de usuario";
-      delBtn.setAttribute("aria-label", `Eliminar LUT: ${film.name}`);
-      delBtn.textContent = "×";
-      delBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        deleteUserLut(film);
-      });
-      card.appendChild(delBtn);
-    }
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "user-lut-delete-btn";
+    delBtn.title = film.is_user_lut
+      ? "Eliminar LUT de usuario (.cube)"
+      : "Eliminar emulsión del catálogo";
+    delBtn.setAttribute("aria-label", `Eliminar ${film.name}`);
+    delBtn.textContent = "×";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeFilmFromCatalog(film);
+    });
+    card.appendChild(delBtn);
     card.appendChild(favBtn);
 
     frag.appendChild(card);
@@ -1116,12 +1131,19 @@ async function uploadUserLuts(fileList) {
   }
 }
 
-async function deleteUserLut(film) {
+async function removeFilmFromCatalog(film) {
+  if (!film || !film.key) return;
+  const isUser = Boolean(film.is_user_lut);
+  const msg = isUser
+    ? `¿Eliminar el LUT «${film.name}»?\n\nSe borrará el archivo .cube de tu carpeta Mis LUTs.`
+    : `¿Eliminar la emulsión «${film.name}» del catálogo?\n\nPuedes restaurarla en cualquier momento desde el botón «Restaurar» al pie del catálogo.`;
+  if (!window.confirm(msg)) return;
+
   try {
-    const res = await fetch(`/api/user_luts/${encodeURIComponent(film.key)}`, { method: "DELETE" });
+    const res = await fetch(`/api/films/${encodeURIComponent(film.key)}`, { method: "DELETE" });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      showToast("Error al eliminar", data.error || "No se pudo eliminar el LUT.");
+      showToast("No se pudo eliminar", data.error || "Error al eliminar la emulsión del catálogo.");
       return;
     }
     if (Array.isArray(data.films)) {
@@ -1129,16 +1151,74 @@ async function deleteUserLut(film) {
     } else {
       await fetchFilms();
     }
+    state.hiddenFilmsCount = Number(data.hidden_count || 0);
+    updateHiddenFilmsBar();
+
+    if (state.favorites.has(film.key)) {
+      state.favorites.delete(film.key);
+      saveFavorites(state.favorites);
+    }
+
     if (state.selectedFilm === film.key) {
-      selectFilm("portra400");
+      const fallback = state.films.find((f) => f.key === "portra400") || state.films[0];
+      if (fallback) {
+        selectFilm(fallback.key);
+      } else {
+        applyFilters();
+      }
     } else {
       applyFilters();
     }
-    showToast("LUT eliminado", `Se eliminó «${film.name}».`);
+
+    if (isUser) {
+      showToast("LUT eliminado", `Se eliminó «${film.name}» de Mis LUTs.`);
+    } else {
+      showToast(
+        "Emulsión eliminada del catálogo",
+        `«${film.name}» ya no aparecerá en tu lista.`,
+        "Deshacer",
+        () => restoreHiddenFilms(film.key)
+      );
+    }
   } catch (err) {
-    console.error("Error eliminando LUT de usuario:", err);
-    showToast("Error de red", "No se pudo eliminar el LUT.");
+    console.error("Error eliminando emulsión del catálogo:", err);
+    showToast("Error de red", "No se pudo eliminar la emulsión.");
   }
+}
+
+async function restoreHiddenFilms(singleKey = null) {
+  try {
+    const res = await fetch("/api/films/restore_hidden", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(singleKey ? { key: singleKey } : {}),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al restaurar", data.error || "No se pudieron restaurar las emulsiones.");
+      return;
+    }
+    if (Array.isArray(data.films)) {
+      state.films = data.films;
+    } else {
+      await fetchFilms();
+    }
+    state.hiddenFilmsCount = Number(data.hidden_count || 0);
+    updateHiddenFilmsBar();
+    applyFilters();
+    const count = Number(data.restored || 0);
+    showToast(
+      "Catálogo restaurado",
+      count === 1 ? "Se restauró 1 emulsión en el catálogo." : `Se restauraron ${count} emulsiones en el catálogo.`
+    );
+  } catch (err) {
+    console.error("Error restaurando emulsiones:", err);
+    showToast("Error de red", "No se pudieron restaurar las emulsiones.");
+  }
+}
+
+async function deleteUserLut(film) {
+  return removeFilmFromCatalog(film);
 }
 
 function toggleFavoriteFilm(filmKey) {
@@ -8292,6 +8372,9 @@ function initUIListeners() {
     } catch (err) {
       console.error("Error abriendo carpeta de LUTs:", err);
     }
+  });
+  document.getElementById("restoreHiddenFilmsBtn")?.addEventListener("click", () => {
+    restoreHiddenFilms(null);
   });
 
   // Viewport modes & geometry

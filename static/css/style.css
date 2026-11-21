@@ -813,10 +813,22 @@ html, body {
 .user-lut-delete-btn:hover {
   color: #e06c75;
 }
-  padding: 28px 14px;
-  text-align: center;
+
+.hidden-films-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--hairline-rule);
+  background: var(--slate-well);
+  font-size: 11px;
   color: var(--pewter-muted);
-  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.hidden-films-bar[hidden] {
+  display: none;
 }
 
 /* =============================================================

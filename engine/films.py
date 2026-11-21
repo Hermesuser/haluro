@@ -584,6 +584,67 @@ def delete_user_lut(key: str) -> bool:
     return False
 
 
+def _hidden_films_file() -> Path:
+    return get_user_data_root() / "hidden_films.json"
+
+
+def get_hidden_films() -> set[str]:
+    """Return the set of built-in film keys hidden/removed by the user."""
+    path = _hidden_films_file()
+    if not path.is_file():
+        return set()
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(raw, list):
+            return {str(k) for k in raw if str(k) in FILMS}
+    except Exception:
+        return set()
+    return set()
+
+
+def _save_hidden_films(keys: set[str]) -> None:
+    path = _hidden_films_file()
+    valid = sorted(k for k in keys if k in FILMS)
+    if not valid:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(valid, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def hide_builtin_film(key: str) -> bool:
+    """Hide/remove a built-in emulsion from the catalog (persisted in user data)."""
+    resolved = FILM_ALIASES.get(key, key)
+    if resolved not in FILMS:
+        return False
+    hidden = get_hidden_films()
+    if resolved in hidden:
+        return True
+    # Always keep at least 1 built-in emulsion available in the catalog
+    if len(FILMS) - len(hidden) <= 1:
+        raise ValueError("Debe permanecer al menos una emulsión activa en el catálogo.")
+    hidden.add(resolved)
+    _save_hidden_films(hidden)
+    return True
+
+
+def restore_hidden_films(key: str | None = None) -> int:
+    """Restore one hidden built-in emulsion or all of them. Returns count restored."""
+    hidden = get_hidden_films()
+    if not hidden:
+        return 0
+    if key is not None:
+        resolved = FILM_ALIASES.get(key, key)
+        if resolved in hidden:
+            hidden.remove(resolved)
+            _save_hidden_films(hidden)
+            return 1
+        return 0
+    count = len(hidden)
+    _save_hidden_films(set())
+    return count
+
+
 def get_film(key):
     resolved = FILM_ALIASES.get(key, key)
     if resolved in FILMS:
@@ -595,8 +656,10 @@ def get_film(key):
     return FILMS["portra400"]
 
 
-def list_films():
-    all_films = list(FILMS.values()) + _iter_user_films()
+def list_films(include_hidden: bool = False):
+    hidden = set() if include_hidden else get_hidden_films()
+    builtin_films = [f for f in FILMS.values() if f["key"] not in hidden]
+    all_films = builtin_films + _iter_user_films()
     return [
         {
             "key": f["key"],

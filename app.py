@@ -32,8 +32,11 @@ from engine.films import (
     VALID_GRAIN_ASAS,
     delete_user_lut,
     get_film,
+    get_hidden_films,
     get_user_luts_dir,
+    hide_builtin_film,
     list_films,
+    restore_hidden_films,
     save_user_lut,
 )
 from engine.negative_inverter import (
@@ -1113,7 +1116,49 @@ def api_health():
 def api_films():
     return jsonify({
         "films": list_films(),
+        "hidden_count": len(get_hidden_films()),
         "dev_processes": [{"key": k, "name": v["name"]} for k, v in DEV_PROCESSES.items()],
+    })
+
+
+@app.route("/api/films/<path:key>", methods=["DELETE"])
+def api_delete_film(key):
+    """Remove a user LUT from disk or hide a built-in emulsion from the catalog."""
+    if key.startswith("user:"):
+        if not delete_user_lut(key):
+            return jsonify({"error": "LUT de usuario no encontrado."}), 404
+        return jsonify({
+            "success": True,
+            "removed_type": "user_lut",
+            "films": list_films(),
+            "hidden_count": len(get_hidden_films()),
+        })
+
+    try:
+        removed = hide_builtin_film(key)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not removed:
+        return jsonify({"error": "Emulsión no encontrada en el catálogo."}), 404
+    return jsonify({
+        "success": True,
+        "removed_type": "builtin",
+        "films": list_films(),
+        "hidden_count": len(get_hidden_films()),
+    })
+
+
+@app.route("/api/films/restore_hidden", methods=["POST"])
+def api_restore_hidden_films():
+    """Restore one or all hidden built-in emulsions back into the catalog."""
+    data = request.json or {}
+    key = data.get("key")
+    restored = restore_hidden_films(key=str(key) if key else None)
+    return jsonify({
+        "success": True,
+        "restored": restored,
+        "films": list_films(),
+        "hidden_count": len(get_hidden_films()),
     })
 
 

@@ -103,3 +103,49 @@ def test_user_luts_api_endpoints(monkeypatch, tmp_path):
     # Deleting again returns 404
     del_again = client.delete(f"/api/user_luts/{key}", headers=headers)
     assert del_again.status_code == 404
+
+
+def test_delete_and_restore_catalog_emulsions(monkeypatch, tmp_path):
+    """Any catalog emulsion (user LUT or built-in) can be removed and built-ins restored."""
+    monkeypatch.setenv("HALURO_DATA_DIR", str(tmp_path))
+
+    import app as haluro_app
+
+    client = haluro_app.app.test_client()
+    headers = {"X-Haluro-Token": haluro_app.API_TOKEN}
+
+    # 1. Remove a built-in emulsion via DELETE /api/films/<key>
+    del_resp = client.delete("/api/films/redscale100", headers=headers)
+    assert del_resp.status_code == 200
+    payload = del_resp.get_json()
+    assert payload["success"] is True
+    assert payload["removed_type"] == "builtin"
+    assert payload["hidden_count"] == 1
+    assert "redscale100" not in {f["key"] for f in payload["films"]}
+
+    # get_film still resolves hidden built-in emulsions so old saved projects keep working
+    assert get_film("redscale100")["key"] == "redscale100"
+
+    # 2. Restore hidden built-in emulsions via POST /api/films/restore_hidden
+    rest_resp = client.post("/api/films/restore_hidden", json={}, headers=headers)
+    assert rest_resp.status_code == 200
+    rest_data = rest_resp.get_json()
+    assert rest_data["success"] is True
+    assert rest_data["restored"] == 1
+    assert rest_data["hidden_count"] == 0
+    assert "redscale100" in {f["key"] for f in rest_data["films"]}
+
+    # 3. Upload & delete a user LUT via unified DELETE /api/films/<key>
+    up = client.post(
+        "/api/user_luts",
+        data={"lut_space": "srgb", "files": (io.BytesIO(_identity_2x2x2_cube()), "Broken Test.cube")},
+        content_type="multipart/form-data",
+        headers=headers,
+    )
+    assert up.status_code == 200
+    ukey = up.get_json()["added"][0]["key"]
+
+    del_u = client.delete(f"/api/films/{ukey}", headers=headers)
+    assert del_u.status_code == 200
+    assert del_u.get_json()["removed_type"] == "user_lut"
+    assert ukey not in {f["key"] for f in del_u.get_json()["films"]}
