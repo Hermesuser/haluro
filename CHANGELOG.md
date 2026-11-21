@@ -9,6 +9,18 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.11.0] — 2026-11-21
+
+### Añadido
+- **Proyectos de rollo digital (`.haluro`):** Nuevo módulo `engine/projects.py`, endpoints `/api/projects` y modal **Proyectos** (`⌥⌘S` en macOS / `Ctrl+Alt+S` en Windows y Linux) para guardar, actualizar y retomar carretes digitales completos con copias protegidas de las imágenes originales, orden exacto de la tira, selección (`P`/`X`), emulaciones y ajustes individuales por fotograma, calibración de rollo negativo, hoja de contactos y metadatos EXIF analógicos. Incluye indicador de cambios sin guardar, aviso antes de cerrar, retomar el último proyecto en un clic, y exportación/importación de paquetes portables `.haluro` (con soporte *drag & drop* y protección *zip-slip*).
+- **Gestión completa del catálogo de emulsiones:** Botón de eliminación (`×`) con confirmación en todas las emulsiones del catálogo (`DELETE /api/films/<key>`): borra archivos `.cube` para LUTs de usuario y oculta de forma persistente (`hidden_films.json`) emulsiones base con opción de deshacer y barra de restauración (`POST /api/films/restore_hidden`) sin romper proyectos guardados.
+
+### Corregido y Mejorado
+- **Empaquetado limpio de «Mis LUTs»:** Se vació `user_luts/` y se añadieron `user_luts/` y `projects/` a `.dockerignore` (y `hidden_films.json` a `.gitignore`) para garantizar que el espacio de LUTs personalizados llegue vacío al usuario final al empaquetar.
+- **Pruebas automatizadas:** Nuevas suites en `tests/test_roll_projects.py` y ampliación de `tests/test_user_luts.py` (118 pruebas en total).
+
+---
+
 ## [2.10.2] — 2026-11-16
 
 ### Corregido y Mejorado

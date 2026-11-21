@@ -1,20 +1,20 @@
 {
-  "version": "2.10.2",
-  "release_date": "2026-11-16",
-  "name": "Haluro v2.10.2",
-  "title": "Dodge & Burn en Lienzo, Grano Orgánico por ASA y Documentación v2.10.2",
-  "description": "Haluro 2.10.2: reparación de sincronización en vivo de Dodge & Burn, suavizado real en máscaras graduadas, tiradores de 28 px con traslado central y asas cardinales, atajos Esc/Supr, grano orgánico multiescala por ASA (100-6400) y propagación de óptica compartida en Sincronizar rollo.",
+  "version": "2.11.0",
+  "release_date": "2026-11-21",
+  "name": "Haluro v2.11.0",
+  "title": "Proyectos de Rollo Digital (.haluro) y Gestión Completa del Catálogo de Emulsiones",
+  "description": "Haluro 2.11.0: guarda y retoma carretes digitales completos con todas sus imágenes protegidas, selección y emulaciones por fotograma, exporta/importa paquetes portables .haluro, elimina o restaura emulsiones desde el catálogo y empaqueta Mis LUTs limpio para el usuario.",
   "highlights": [
-    "Dodge & Burn: exposición local y suavizado en tiempo real, suavizado real en graduado, punto central y asas cardinales",
-    "Atajos Esc (salir de edición de máscara) y Supr/Backspace (eliminar máscara activa)",
-    "Grano orgánico multiescala de 3 octavas por ASA (Auto, 100-6400) y calibración de halación",
-    "Sincronizar rollo propaga óptica compartida (reducción de ruido, defringe y nitidez)"
+    "Proyectos de rollo digital (⌥⌘S): guarda, actualiza y retoma carretes completos con recetas individuales, orden, selección, calibración y EXIF",
+    "Paquetes portables .haluro: exporta e importa proyectos completos (incluyendo arrastrar y soltar) con protección contra zip-slip",
+    "Gestión de catálogo: elimina LUTs de usuario o quita emulsiones del catálogo con restauración en un clic",
+    "Empaquetado limpio: la pestaña Mis LUTs (user_luts/) se entrega vacía y dedicada exclusivamente a LUTs del usuario"
   ],
   "download_urls": {
-    "macos_arm64": "dist/Haluro-2.10.2-macOS-arm64.dmg",
-    "macos_x86_64": "dist/Haluro-2.10.2-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.10.2/Haluro-Setup-2.10.2-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.10.2/Haluro-Portable-2.10.2-Win11-x64.zip"
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-2.11.0-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-2.11.0-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-Setup-2.11.0-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.11.0/Haluro-Portable-2.11.0-Win11-x64.zip"
   },
   "checksums": {
     "macos_arm64": "",
