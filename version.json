@@ -1,19 +1,20 @@
 {
-  "version": "2.11.1",
-  "release_date": "2026-11-21",
-  "name": "Haluro v2.11.1",
-  "title": "Corrección visual del catálogo de películas y gestión directa de Mis LUTs",
-  "description": "Haluro 2.11.1: corrige el solapamiento en la cabecera del catálogo de películas (+ LUT y contador de 3 dígitos), hace siempre visible el icono de eliminar en cada emulsión sin tapar el badge ISO y añade el botón Vaciar en Mis LUTs.",
+  "version": "2.12.0",
+  "release_date": "2026-11-22",
+  "name": "Haluro v2.12.0",
+  "title": "Presets Propios, Comparación A/B, Filtros B&N, Perfiles de Exportación y CLI de Proyectos",
+  "description": "Haluro 2.12.0: intensidad de emulsión (0-100%), balance rápido Temperatura/Matiz, filtros ópticos B&N (#8/#21/#25/#11/#47), comparación A/B por instantánea, biblioteca de presets propios (JSON), filtros de tira 35 mm + Revelar elegidas, autoguardado de proyectos, importar carpeta, subida concurrente con precarga predictiva, visor EXIF original, marco Galería + Pie analógico, perfiles de exportación, panel de almacenamiento/caché y CLI render-project.",
   "highlights": [
-    "Cabecera del catálogo sin solapamientos: título compacto, botón + LUT en una línea y contador siempre visible",
-    "Icono de papelera siempre visible en cada tarjeta de película/LUT sin tapar el badge ISO",
-    "Botón Vaciar en Mis LUTs (DELETE /api/user_luts) para limpiar todos los LUTs personalizados en un clic"
+    "Intensidad de emulsión (0-100%), balance rápido Temperatura/Matiz y filtros ópticos B&N (#8, #21, #25, #11, #47)",
+    "Biblioteca de Recetas/Presets propios (guardar, aplicar, exportar/importar JSON) y Comparación A/B por instantánea",
+    "Filtros en la tira 35 mm (Todas / Elegidas / Editadas) + Revelar elegidas, autoguardado .haluro e Importar carpeta",
+    "Subida concurrente con precarga predictiva, visor EXIF original, marco Galería + Pie analógico, perfiles Web/4K, caché local y CLI render-project"
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-2.11.1-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-2.11.1-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-Setup-2.11.1-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.11.1/Haluro-Portable-2.11.1-Win11-x64.zip"
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-2.12.0-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-2.12.0-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-Setup-2.12.0-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-Portable-2.12.0-Win11-x64.zip"
   },
   "checksums": {
     "macos_arm64": "",

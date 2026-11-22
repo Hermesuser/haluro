@@ -127,3 +127,57 @@ def test_prefetch_endpoint_and_cli_render_project(monkeypatch: pytest.MonkeyPatc
     rendered = list(cli_out.glob("01_*.jpg"))
     assert len(rendered) == 1
     assert (cli_out / "SHEET_PROJECT.jpg").is_file()
+
+
+def test_storage_info_and_safe_cache_cleanup(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """GET /api/storage reports sizes and POST /api/storage/clean spares protected project uploads."""
+    import app as haluro_app
+
+    uploads = tmp_path / "uploads"
+    developed = tmp_path / "developed"
+    projects = tmp_path / "projects"
+    for d in (uploads, developed, projects):
+        d.mkdir()
+    monkeypatch.setattr(haluro_app, "UPLOAD_DIR", uploads.resolve())
+    monkeypatch.setattr(haluro_app, "DEVELOPED_DIR", developed.resolve())
+    monkeypatch.setattr(haluro_app, "PROJECTS_DIR", projects.resolve())
+    haluro_app.app.config["TESTING"] = True
+
+    def _jpeg_bytes() -> io.BytesIO:
+        b = io.BytesIO()
+        Image.new("RGB", (40, 40), (100, 120, 140)).save(b, format="JPEG")
+        b.seek(0)
+        return b
+
+    with haluro_app.app.test_client() as client:
+        headers = {"X-Haluro-Token": haluro_app.API_TOKEN}
+        f_keep = client.post(
+            "/api/upload",
+            data={"file": (_jpeg_bytes(), "keep_in_proj.jpg")},
+            content_type="multipart/form-data",
+            headers=headers,
+        ).get_json()["filename"]
+        f_drop = client.post(
+            "/api/upload",
+            data={"file": (_jpeg_bytes(), "temp_unused.jpg")},
+            content_type="multipart/form-data",
+            headers=headers,
+        ).get_json()["filename"]
+
+        # Protect f_keep in a saved project
+        assert client.post(
+            "/api/projects",
+            json={"name": "Safe Roll", "frames": [{"filename": f_keep, "name": f_keep}]},
+            headers=headers,
+        ).status_code == 200
+
+        st = client.get("/api/storage").get_json()["storage"]
+        assert st["uploads"]["files"] == 2
+        assert st["total_bytes"] > 0
+
+        # Clean uploads: f_drop removed, f_keep spared
+        cl = client.post("/api/storage/clean", json={"target": "uploads"}, headers=headers)
+        assert cl.status_code == 200
+        assert cl.get_json()["removed_files"] == 1
+        assert (uploads / f_keep).is_file()
+        assert not (uploads / f_drop).exists()

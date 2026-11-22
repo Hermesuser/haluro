@@ -9,6 +9,19 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [2.12.0] — 2026-11-22
+
+### Añadido
+- **Motor fotoquímico ampliado (Modo Emulación):** Control de **Intensidad de emulsión (`0%–100%`)**, balance de blancos rápido en luz lineal (**Temperatura** y **Matiz**) y selector de **Filtros ópticos B&N** (`#8 Amarillo`, `#21 Naranja`, `#25 Rojo`, `#11 Verde`, `#47 Azul`) automático para emulsiones de Plata B&N.
+- **Biblioteca de Recetas / Presets propios (`engine/presets.py`, `/api/presets`):** Guarda, aplica, elimina, exporta e importa recetas favoritas en JSON reutilizables entre rollos y sesiones.
+- **Comparación A/B por instantánea:** Congela el revelado actual como *Instantánea A* en el lado izquierdo de la cortina dividida para compararlo en vivo contra cualquier otra película o ajuste B.
+- **Filtros de tira 35 mm y «Revelar elegidas»:** Filtra la tira inferior por *Todas / Elegidas (`P`) / Editadas* sin quitar fotos del rollo y revela en lote únicamente los fotogramas elegidos.
+- **Autoguardado `.haluro`, Importar carpeta, subida concurrente y precarga predictiva:** Autoguardado silencioso cada 90 s para proyectos abiertos, botón **Carpeta** (`webkitdirectory`), subida en paralelo con contador en vivo y precarga de fotogramas adyacentes (`POST /api/prefetch`).
+- **Visor de EXIF original, Marco «Galería + Pie analógico» y Perfiles de exportación:** Lectura automática del EXIF del archivo origen en el densitómetro, nuevo marginador `gallery_caption` con pie tipográfico, y selectores de resolución máxima (`Original`, `4K 3840 px`, `Web HD 2048 px`) y calidad JPEG (`96%`, `90%`, `82%`).
+- **CLI `render-project` y Panel de Almacenamiento local:** Nuevo subcomando `python cli.py render-project archivo.haluro --out ./salida [--only-picked] [--max-dim] [--sheet]` y diagnóstico/limpieza segura de caché en *Acerca de* (`/api/storage`, `/api/storage/clean`, protegiendo siempre los proyectos guardados).
+
+---
+
 ## [2.11.1] — 2026-11-21
 
 ### Corregido y Mejorado

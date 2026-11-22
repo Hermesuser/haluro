@@ -2691,6 +2691,85 @@ def api_import_presets():
 
 
 # -------------------------------------------------------------
+# LOCAL STORAGE DIAGNOSTICS & SAFE CACHE CLEANUP
+# -------------------------------------------------------------
+
+def _dir_usage(directory: Path) -> dict:
+    total_bytes = 0
+    file_count = 0
+    if directory.is_dir():
+        for item in directory.rglob("*"):
+            if item.is_file():
+                try:
+                    total_bytes += item.stat().st_size
+                    file_count += 1
+                except OSError:
+                    continue
+    return {"bytes": total_bytes, "files": file_count}
+
+
+def _storage_summary() -> dict:
+    uploads = _dir_usage(UPLOAD_DIR)
+    developed = _dir_usage(DEVELOPED_DIR)
+    projects = _dir_usage(PROJECTS_DIR)
+    user_luts = _dir_usage(get_user_luts_dir())
+    return {
+        "uploads": uploads,
+        "developed": developed,
+        "projects": projects,
+        "user_luts": user_luts,
+        "total_bytes": uploads["bytes"] + developed["bytes"] + projects["bytes"] + user_luts["bytes"],
+    }
+
+
+@app.route("/api/storage", methods=["GET"])
+def api_storage_info():
+    """Return local disk usage across workspace folders."""
+    return jsonify({"storage": _storage_summary()})
+
+
+@app.route("/api/storage/clean", methods=["POST"])
+def api_storage_clean():
+    """Safely clear transient files in `uploads` (sparing saved projects) or `developed`."""
+    data = request.json or {}
+    target = str(data.get("target") or "").strip().lower()
+    if target not in ("uploads", "developed"):
+        return jsonify({"error": "Destino de limpieza no válido (usa 'uploads' o 'developed')."}), 400
+
+    removed_files = 0
+    freed_bytes = 0
+    if target == "uploads":
+        protected = collect_protected_filenames(PROJECTS_DIR)
+        for item in list(UPLOAD_DIR.glob("*")):
+            if item.is_file() and item.name not in protected and item.name != ".gitkeep":
+                try:
+                    sz = item.stat().st_size
+                    item.unlink()
+                    removed_files += 1
+                    freed_bytes += sz
+                except OSError:
+                    continue
+    else:
+        for item in list(DEVELOPED_DIR.glob("*")):
+            if item.is_file() and item.name != ".gitkeep":
+                try:
+                    sz = item.stat().st_size
+                    item.unlink()
+                    removed_files += 1
+                    freed_bytes += sz
+                except OSError:
+                    continue
+
+    return jsonify({
+        "success": True,
+        "target": target,
+        "removed_files": removed_files,
+        "freed_bytes": freed_bytes,
+        "storage": _storage_summary(),
+    })
+
+
+# -------------------------------------------------------------
 # NEGATIVE LAB (Optical Density Inversion & Scanner Engine)
 # -------------------------------------------------------------
 

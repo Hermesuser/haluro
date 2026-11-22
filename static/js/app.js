@@ -8484,6 +8484,52 @@ async function offerResumeLastProject() {
   }
 }
 
+async function refreshStorageInfoUI() {
+  const totalBadge = document.getElementById("storageTotalBadge");
+  const breakdownEl = document.getElementById("storageBreakdownText");
+  if (!totalBadge && !breakdownEl) return;
+  const fmtMb = (b) => `${(Number(b || 0) / (1024 * 1024)).toFixed(1)} MB`;
+  try {
+    const res = await fetch("/api/storage");
+    if (!res.ok) return;
+    const { storage } = await res.json();
+    if (!storage) return;
+    if (totalBadge) totalBadge.textContent = fmtMb(storage.total_bytes);
+    if (breakdownEl) {
+      breakdownEl.textContent =
+        `Temporales: ${fmtMb(storage.uploads?.bytes)} (${storage.uploads?.files || 0}) · ` +
+        `Historial: ${fmtMb(storage.developed?.bytes)} · ` +
+        `Proyectos: ${fmtMb(storage.projects?.bytes)} · ` +
+        `Mis LUTs: ${fmtMb(storage.user_luts?.bytes)}`;
+    }
+  } catch (_) {}
+}
+
+async function cleanStorageTarget(target) {
+  const label = target === "uploads" ? "archivos temporales no protegidos" : "el historial interno de revelados";
+  if (!window.confirm(`¿Limpiar ${label}?\n\nTus proyectos guardados y archivos originales fuera de Haluro no se tocarán.`)) {
+    return;
+  }
+  try {
+    const res = await fetch("/api/storage/clean", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error de limpieza", data.error || `HTTP ${res.status}`);
+      return;
+    }
+    await refreshStorageInfoUI();
+    const freedMb = (Number(data.freed_bytes || 0) / (1024 * 1024)).toFixed(1);
+    showToast("Caché limpiada", `Se liberaron ${freedMb} MB (${data.removed_files} archivo(s)).`);
+  } catch (err) {
+    console.error("Error limpiando caché:", err);
+    showToast("Error de red", "No se pudo limpiar la caché local.");
+  }
+}
+
 async function openHistoryModal() {
   const modal = document.getElementById("historyModal");
   const list = document.getElementById("historyList");
@@ -8673,7 +8719,10 @@ function initUIListeners() {
   });
   document.getElementById("aboutBtn")?.addEventListener("click", () => {
     setModalOpen("aboutModal", true);
+    refreshStorageInfoUI();
   });
+  document.getElementById("btnCleanUploadsCache")?.addEventListener("click", () => cleanStorageTarget("uploads"));
+  document.getElementById("btnCleanDevelopedCache")?.addEventListener("click", () => cleanStorageTarget("developed"));
 
   // Live clipping zebra toggles & culling strip clear action
   document.getElementById("clipShadows")?.addEventListener("click", () => toggleZebraChannel("shadows"));
