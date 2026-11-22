@@ -71,6 +71,7 @@ from engine.pipeline import (
     RAW_EXTENSIONS,
     VALID_BW_FILTERS,
     develop_frame,
+    extract_source_exif,
     format_analog_caption,
     get_srgb_icc_bytes,
     linear_to_srgb,
@@ -793,12 +794,28 @@ def _parse_analog_meta(data) -> dict:
 
 def _parse_print_options(data):
     """Validate optional darkroom easel border & paper dry-down compensation."""
-    allowed = {"none", "white_thin", "white_gallery", "black_rebate"}
+    allowed = {"none", "white_thin", "white_gallery", "gallery_caption", "black_rebate"}
     border = str((data or {}).get("easel_border", "none") or "none").strip().lower()
     if border not in allowed:
         border = "none"
     dry_down = _num(data or {}, "dry_down_comp", 0.0, 0.0, 0.15)
     return border, dry_down
+
+
+def _parse_export_profile(data):
+    """Validate optional export max dimension (px) and JPEG quality (60-100)."""
+    src = data if isinstance(data, dict) else {}
+    raw_dim = src.get("export_max_dim")
+    max_dim = None
+    if raw_dim not in (None, "", 0, "0", "original"):
+        try:
+            parsed = int(raw_dim)
+            if 512 <= parsed <= 16000:
+                max_dim = parsed
+        except (TypeError, ValueError):
+            max_dim = None
+    quality = _int(src, "jpeg_quality", 96, 60, 100)
+    return max_dim, quality
 
 
 def _parse_local_masks(raw):
@@ -1313,7 +1330,29 @@ def api_upload():
         "is_heif": is_heif,
         "size_bytes": save_path.stat().st_size,
         "thumb_url": f"/api/thumbnail/{stored_filename}",
+        "source_exif": extract_source_exif(save_path),
     })
+
+
+@app.route("/api/prefetch", methods=["POST"])
+def api_prefetch():
+    """Warm thumbnail and linear preview caches for adjacent frames in the background."""
+    data = request.json or {}
+    filenames = data.get("filenames")
+    if not isinstance(filenames, list):
+        return jsonify({"warmed": 0})
+    warmed = 0
+    for fname in filenames[:4]:
+        fpath = _resolve_source_file(str(fname or ""))
+        if not fpath or not fpath.is_file():
+            continue
+        try:
+            _cached_thumb_bytes(str(fpath), fpath.stat().st_mtime_ns)
+            warmed += 1
+        except Exception as exc:
+            logger.debug("Prefetch omitido para %s: %s", fpath.name, exc)
+            continue
+    return jsonify({"warmed": warmed})
 
 
 @app.route("/api/thumbnail/<filename>")
@@ -1448,6 +1487,7 @@ def api_preview():
         "film": get_film(film_key),
     }
     if include_original:
+        resp["source_exif"] = extract_source_exif(file_path)
         resp["original"] = _cached_original_b64(
             str(file_path),
             file_path.stat().st_mtime_ns,
@@ -1989,6 +2029,7 @@ def api_export_single():
 
     analog_meta = _parse_analog_meta(data)
     easel_border, dry_down_comp = _parse_print_options(data)
+    export_max_dim, jpeg_quality = _parse_export_profile(data)
     sim_look = _parse_sim_look_params(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
@@ -2015,11 +2056,12 @@ def api_export_single():
         dev_img,
         target_path,
         source_path=fpath,
-        quality=96,
+        quality=jpeg_quality,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
         easel_border=easel_border,
         dry_down_comp=dry_down_comp,
+        export_max_dim=export_max_dim,
     )
     if bool(data.get("write_xmp", False)):
         write_geometry_xmp_sidecar(
@@ -2148,6 +2190,7 @@ def api_save_direct_to_downloads():
 
     analog_meta = _parse_analog_meta(data)
     easel_border, dry_down_comp = _parse_print_options(data)
+    export_max_dim, jpeg_quality = _parse_export_profile(data)
     sim_look = _parse_sim_look_params(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
@@ -2174,11 +2217,12 @@ def api_save_direct_to_downloads():
         dev_img,
         target_path,
         source_path=fpath,
-        quality=96,
+        quality=jpeg_quality,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
         easel_border=easel_border,
         dry_down_comp=dry_down_comp,
+        export_max_dim=export_max_dim,
     )
     if bool(data.get("write_xmp", False)):
         write_geometry_xmp_sidecar(

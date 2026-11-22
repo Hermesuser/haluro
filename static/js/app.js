@@ -294,6 +294,8 @@ const state = {
   outputFormat: "jpg", // 'jpg' | 'png' | 'tiff' | 'dng' | 'original'
   easelBorder: "none",
   dryDownComp: 0.0,
+  exportMaxDim: null,
+  jpegQuality: 96,
 
   // Viewport & Light Table
   viewMode: "split", // 'split' | 'full' | 'original' | 'sheet' | 'teststrip'
@@ -763,6 +765,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await applyStoredPreferences();
   await loadSamplePhoto(false);
   offerResumeLastProject();
+  startProjectAutosaveLoop();
 
   // Warn before closing if the active saved project has unsaved changes
   window.addEventListener("beforeunload", (e) => {
@@ -1385,47 +1388,80 @@ async function loadNegativeSample() {
 }
 
 async function importFiles(fileList) {
-  const files = Array.from(fileList || []);
+  const validExtRe = /\.(cr2|cr3|dng|nef|arw|orf|rw2|raf|pef|jpg|jpeg|png|tif|tiff|heic|heif|webp|bmp)$/i;
+  const files = Array.from(fileList || [])
+    .filter((f) => f && f.name && validExtRe.test(f.name))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   if (!files.length) return;
 
-  showLoading(true, `Importando ${files.length} fotograma(s) al laboratorio…`);
-  let importedCount = 0;
+  // Detect folder name when imported via directory picker
+  const firstRel = files[0].webkitRelativePath || "";
+  const folderName = firstRel.includes("/") ? firstRel.split("/")[0].trim() : "";
 
-  // Replace untouched single demo sample cleanly so user rolls stay pure
+  showLoading(true, `Importando 0 / ${files.length} fotograma(s) al laboratorio…`);
+  let importedCount = 0;
+  let completedCount = 0;
+
   const replacingUntouchedSample =
     state.frames.length === 1 &&
     state.frames[0].is_sample &&
     !isFrameCustomized(state.frames[0]);
 
   try {
-    const newEntries = [];
+    const orderedResults = new Array(files.length);
     const failedMessages = [];
-    for (const file of files) {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      let data = {};
-      try {
-        data = await res.json();
-      } catch (_) {
-        data = {};
+    const concurrency = Math.min(3, files.length);
+    let nextIdx = 0;
+
+    const worker = async () => {
+      while (true) {
+        const i = nextIdx;
+        nextIdx += 1;
+        if (i >= files.length) break;
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+          const res = await fetch("/api/upload", { method: "POST", body: formData });
+          let data = {};
+          try {
+            data = await res.json();
+          } catch (_) {
+            data = {};
+          }
+          if (res.ok && data.filename) {
+            orderedResults[i] = {
+              filename: data.filename,
+              name: data.name || file.name,
+              is_raw: Boolean(data.is_raw),
+              is_heif: Boolean(data.is_heif),
+              is_sample: false,
+              source_exif: data.source_exif || {},
+              thumb_url:
+                data.thumb_url || `/api/thumbnail/${encodeURIComponent(data.filename)}?t=${Date.now()}`,
+            };
+            importedCount += 1;
+          } else {
+            failedMessages.push(`${file.name}: ${data.error || `Error HTTP ${res.status}`}`);
+          }
+        } catch (err) {
+          failedMessages.push(`${file.name}: ${err.message || "Error de red"}`);
+        } finally {
+          completedCount += 1;
+          showLoading(true, `Importando ${completedCount} / ${files.length} fotograma(s)…`);
+        }
       }
-      if (res.ok && data.filename) {
-        newEntries.push({
-          filename: data.filename,
-          name: data.name || file.name,
-          is_raw: Boolean(data.is_raw),
-          is_sample: false,
-          thumb_url:
-            data.thumb_url || `/api/thumbnail/${encodeURIComponent(data.filename)}?t=${Date.now()}`,
-        });
-        importedCount += 1;
-      } else {
-        failedMessages.push(`${file.name}: ${data.error || `Error HTTP ${res.status}`}`);
-      }
-    }
+    };
+
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    const newEntries = orderedResults.filter(Boolean);
 
     if (importedCount > 0) {
+      if (folderName && !state.sheetRollName) {
+        state.sheetRollName = folderName.slice(0, 40);
+        const rollInput = document.getElementById("sheetRollNameInput");
+        if (rollInput) rollInput.value = state.sheetRollName;
+      }
       if (replacingUntouchedSample) {
         state.frames = [];
         state.activeFrameIndex = 0;
@@ -2572,6 +2608,13 @@ function applyPreviewResult(data, origKey, requestedOriginal) {
       };
       imgOrig.src = data.original;
     }
+    const exifEl = document.getElementById("sourceExifReadout");
+    if (exifEl) {
+      const summary = data.source_exif?.summary || "";
+      exifEl.textContent = summary;
+      exifEl.style.display = summary ? "block" : "none";
+    }
+    prefetchAdjacentFrames();
   }
 
   if (data.developed && imgDev) {
@@ -6987,6 +7030,8 @@ function buildExportPrintOptions() {
   return {
     easel_border: state.easelBorder || "none",
     dry_down_comp: Number(state.dryDownComp) || 0.0,
+    export_max_dim: state.exportMaxDim || null,
+    jpeg_quality: Number(state.jpegQuality || 96),
     write_xmp: Boolean(document.getElementById("writeXmpCheck")?.checked),
   };
 }
@@ -8367,6 +8412,48 @@ async function importProjectArchiveFile(file) {
   }
 }
 
+function prefetchAdjacentFrames() {
+  if (state.frames.length <= 1) return;
+  const targets = [];
+  const next = state.frames[state.activeFrameIndex + 1];
+  const prev = state.frames[state.activeFrameIndex - 1];
+  if (next?.filename) targets.push(next.filename);
+  if (prev?.filename) targets.push(prev.filename);
+  if (!targets.length) return;
+  fetch("/api/prefetch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filenames: targets }),
+  }).catch(() => {});
+}
+
+let projectAutosaveTimer = null;
+
+function startProjectAutosaveLoop() {
+  if (projectAutosaveTimer) return;
+  projectAutosaveTimer = setInterval(async () => {
+    if (!state.currentProjectId || !state.projectDirty || state.frames.length === 0) return;
+    try {
+      const payload = buildCurrentProjectPayload(
+        state.currentProjectName,
+        state.currentProjectNotes,
+        state.currentProjectId
+      );
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        state.projectDirty = false;
+        updateProjectHeaderIndicator();
+      }
+    } catch (_) {
+      // Silent background autosave retry next interval
+    }
+  }, 90000);
+}
+
 async function offerResumeLastProject() {
   let lastId = null;
   try {
@@ -8567,6 +8654,17 @@ function initUIListeners() {
   document.getElementById("fileInput")?.addEventListener("change", (e) => {
     importFiles(e.target.files);
     e.target.value = "";
+  });
+  document.getElementById("folderInput")?.addEventListener("change", (e) => {
+    importFiles(e.target.files);
+    e.target.value = "";
+  });
+  document.getElementById("exportMaxDimSelect")?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    state.exportMaxDim = val ? Number(val) : null;
+  });
+  document.getElementById("exportQualitySelect")?.addEventListener("change", (e) => {
+    state.jpegQuality = Number(e.target.value || 96);
   });
   document.getElementById("safelightToggle")?.addEventListener("click", toggleSafelight);
   document.getElementById("historyBtn")?.addEventListener("click", openHistoryModal);

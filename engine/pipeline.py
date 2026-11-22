@@ -1196,7 +1196,85 @@ def write_geometry_xmp_sidecar(
     return xmp_path
 
 
-EASEL_BORDERS = ("none", "white_thin", "white_gallery", "black_rebate")
+EASEL_BORDERS = ("none", "white_thin", "white_gallery", "gallery_caption", "black_rebate")
+
+
+def extract_source_exif(file_path: Path | str) -> dict[str, str]:
+    """Read key capture EXIF fields (camera, lens, focal, aperture, shutter, ISO, date) safely."""
+    path = Path(file_path)
+    if not path.is_file():
+        return {}
+    info: dict[str, str] = {}
+    try:
+        with Image.open(path) as img:
+            exif = img.getexif()
+            if not exif:
+                return {}
+            make = str(exif.get(271) or "").strip()
+            model = str(exif.get(272) or "").strip()
+            if model:
+                if make and not model.lower().startswith(make.lower()):
+                    info["camera"] = f"{make} {model}"
+                else:
+                    info["camera"] = model
+            elif make:
+                info["camera"] = make
+
+            sub = {}
+            try:
+                sub = exif.get_ifd(0x8769) or {}
+            except Exception:
+                sub = {}
+
+            lens = str(sub.get(42036) or "").strip()
+            if lens:
+                info["lens"] = lens
+
+            focal = sub.get(37386)
+            if focal:
+                try:
+                    f_val = float(focal)
+                    if f_val > 0:
+                        info["focal"] = f"{int(round(f_val))}mm"
+                except (TypeError, ValueError):
+                    logger.debug("EXIF focal no numérico en %s", path.name)
+
+            fnum = sub.get(33437)
+            if fnum:
+                try:
+                    fn = float(fnum)
+                    if fn > 0:
+                        info["aperture"] = f"f/{fn:.1f}".replace(".0", "")
+                except (TypeError, ValueError):
+                    logger.debug("EXIF apertura no numérica en %s", path.name)
+
+            exp = sub.get(33434)
+            if exp:
+                try:
+                    et = float(exp)
+                    if 0 < et < 1.0:
+                        info["shutter"] = f"1/{int(round(1.0 / et))}s"
+                    elif et >= 1.0:
+                        info["shutter"] = f"{et:.1f}s".replace(".0s", "s")
+                except (TypeError, ValueError):
+                    logger.debug("EXIF obturación no numérica en %s", path.name)
+
+            iso = sub.get(34855)
+            if iso:
+                if isinstance(iso, (tuple, list)) and iso:
+                    iso = iso[0]
+                info["iso"] = f"ISO {iso}"
+
+            dt = str(sub.get(36867) or exif.get(306) or "").strip()
+            if dt:
+                info["date"] = dt[:10].replace(":", "-")
+    except Exception:
+        return {}
+
+    parts = [info[k] for k in ("camera", "focal", "aperture", "shutter", "iso") if k in info]
+    if parts:
+        info["summary"] = " · ".join(parts)
+    return info
 
 
 def apply_darkroom_print_finishing(
@@ -1204,6 +1282,7 @@ def apply_darkroom_print_finishing(
     float_srgb: np.ndarray | None = None,
     easel_border: str = "none",
     dry_down_comp: float = 0.0,
+    analog_meta: dict | None = None,
 ) -> tuple[Image.Image, np.ndarray | None]:
     """Apply paper dry-down compensation and archival darkroom easel borders at export time."""
     border_key = easel_border if easel_border in EASEL_BORDERS else "none"
@@ -1223,13 +1302,14 @@ def apply_darkroom_print_finishing(
         gamma = 1.0 / (1.0 + comp * 0.85)
         arr_f = np.power(np.clip(arr_f, 0.0, 1.0), gamma).astype(np.float32)
 
+    pad_bottom = 0
     if border_key != "none":
         h, w = arr_f.shape[:2]
         short = min(h, w)
-        if border_key == "white_gallery":
+        if border_key in ("white_gallery", "gallery_caption"):
             side = max(20, int(round(short * 0.065)))
             pad_top, pad_left, pad_right = side, side, side
-            pad_bottom = int(round(side * 1.32))
+            pad_bottom = int(round(side * (1.65 if border_key == "gallery_caption" else 1.32)))
             bg_rgb = np.array([0.965, 0.960, 0.945], dtype=np.float32)
             keyline_rgb = np.array([0.16, 0.16, 0.16], dtype=np.float32)
         elif border_key == "black_rebate":
@@ -1259,6 +1339,28 @@ def apply_darkroom_print_finishing(
 
     arr_f = np.clip(arr_f, 0.0, 1.0).astype(np.float32)
     out_pil = Image.fromarray(np.rint(arr_f * 255.0).astype(np.uint8))
+
+    if border_key == "gallery_caption" and pad_bottom > 16:
+        from PIL import ImageFont
+
+        from .platform_io import load_ui_font
+
+        caption_txt = format_analog_caption(analog_meta or {}) or "HALURO · LABORATORIO ANALÓGICO"
+        draw = ImageDraw.Draw(out_pil)
+        font_sz = max(11, int(round(pad_bottom * 0.24)))
+        try:
+            font = load_ui_font("mono", font_sz)
+        except Exception:
+            font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), caption_txt, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        tx = max(10, (out_pil.width - tw) // 2)
+        ty = out_pil.height - pad_bottom + max(4, (pad_bottom - th) // 2)
+        draw.text((tx, ty), caption_txt, fill=(72, 70, 66), font=font)
+        if float_srgb is not None:
+            arr_f = np.asarray(out_pil.convert("RGB"), dtype=np.float32) / 255.0
+
     return out_pil, (arr_f if float_srgb is not None else None)
 
 
@@ -1271,17 +1373,33 @@ def save_output_image(
     analog_meta: dict | None = None,
     easel_border: str = "none",
     dry_down_comp: float = 0.0,
+    export_max_dim: int | None = None,
 ):
     """Save developed image in JPG (4:4:4 + EXIF), PNG, or 16-bit (48-bit RGB) archival TIFF.
 
     The file is written to a temporary sibling and then moved into place, so an
     interrupted export can never leave a truncated master behind.
     """
+    if export_max_dim and int(export_max_dim) > 0 and max(pil_img.size) > int(export_max_dim):
+        scale = float(export_max_dim) / float(max(pil_img.size))
+        new_w = max(1, int(round(pil_img.width * scale)))
+        new_h = max(1, int(round(pil_img.height * scale)))
+        pil_img = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        if float_srgb is not None:
+            zoom_y = new_h / float(float_srgb.shape[0])
+            zoom_x = new_w / float(float_srgb.shape[1])
+            float_srgb = np.clip(
+                scipy.ndimage.zoom(float_srgb, (zoom_y, zoom_x, 1.0), order=1),
+                0.0,
+                1.0,
+            ).astype(np.float32)
+
     pil_img, float_srgb = apply_darkroom_print_finishing(
         pil_img,
         float_srgb=float_srgb,
         easel_border=easel_border,
         dry_down_comp=dry_down_comp,
+        analog_meta=analog_meta,
     )
     target_path = Path(target_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)

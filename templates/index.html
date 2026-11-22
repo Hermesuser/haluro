@@ -82,6 +82,12 @@
         <span>Importar</span>
       </label>
 
+      <label class="btn btn-ghost btn-sm upload-label" id="folderImportLabel"
+        title="Importar una carpeta completa de un rollo escaneado">
+        <input type="file" id="folderInput" webkitdirectory directory multiple>
+        <span>Carpeta</span>
+      </label>
+
       <button class="btn btn-secondary btn-sm projects-header-btn" id="projectsBtn"
         title="Guardar o abrir proyectos de rollo digital (⌥⌘S)">
         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
@@ -1081,6 +1087,7 @@
             <span id="statTime">—</span>
           </span>
         </div>
+        <div class="cursor-readout" id="sourceExifReadout" style="display: none; margin-top: 4px;" aria-live="off"></div>
       </div>
 
       <!-- Inspector Scrollable Controls -->
@@ -2019,6 +2026,7 @@
               <option value="none">Sin margen</option>
               <option value="white_thin">Blanco fino (Baritado)</option>
               <option value="white_gallery">Blanco galería + filete</option>
+              <option value="gallery_caption">Galería + Pie analógico</option>
               <option value="black_rebate">Reborde negro portanegativos</option>
             </select>
           </label>
@@ -2029,6 +2037,24 @@
               <option value="0.05">+5% RC Satin</option>
               <option value="0.08">+8% Baritado</option>
               <option value="0.12">+12% Alto contraste</option>
+            </select>
+          </label>
+        </div>
+        <div class="print-finish-footer" style="margin-top: 6px;" aria-label="Perfil de resolución y calidad">
+          <label class="print-finish-field" title="Lado mayor máximo al exportar (Original conserva la resolución nativa)">
+            <span>Salida (px)</span>
+            <select id="exportMaxDimSelect" class="dark-select">
+              <option value="" selected>Original</option>
+              <option value="3840">4K (3840 px)</option>
+              <option value="2048">Web HD (2048 px)</option>
+            </select>
+          </label>
+          <label class="print-finish-field" title="Calidad de compresión para archivos JPEG">
+            <span>Calidad JPG</span>
+            <select id="exportQualitySelect" class="dark-select">
+              <option value="96" selected>96% Archivo</option>
+              <option value="90">90% Alta</option>
+              <option value="82">82% Web</option>
             </select>
           </label>
         </div>

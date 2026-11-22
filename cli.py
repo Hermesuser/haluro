@@ -2,8 +2,11 @@
 """Haluro CLI: emulación de 72 películas químicas e inversión óptica de negativos desde terminal."""
 
 import argparse
+import json
 import sys
+import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 from engine import APP_NAME, __version__, about_payload
@@ -118,6 +121,19 @@ def main():
         default="neutral",
         help="Virado químico B&N o papel fine-art (selenium_2, palladium, sepia_sulfide, etc.)",
     )
+
+    # render-project (.haluro portable archive or local project folder)
+    proj_p = subparsers.add_parser(
+        "render-project",
+        help="Revelar todos los fotogramas de un proyecto guardado (.haluro o carpeta de proyecto)",
+    )
+    proj_p.add_argument("project", help="Ruta al archivo .haluro o carpeta que contiene project.json")
+    proj_p.add_argument("--out", default="./project_render", help="Carpeta de salida")
+    proj_p.add_argument("--format", choices=["jpg", "png", "tiff"], default=None, help="Sobrescribir formato")
+    proj_p.add_argument("--only-picked", action="store_true", help="Revelar solo fotogramas marcados como elegidos")
+    proj_p.add_argument("--max-dim", type=int, default=None, help="Escalar lado mayor opcionalmente (ej. 2048)")
+    proj_p.add_argument("--quality", type=int, default=96, help="Calidad JPEG (60-100)")
+    proj_p.add_argument("--sheet", action="store_true", help="Generar también hoja de contactos SHEET.jpg")
     inv_p.add_argument(
         "--sharpen",
         choices=["off", "lab", "scanner"],
@@ -174,6 +190,10 @@ def main():
         for f in films:
             print(f"  {f['key']:<16} {f['brand']:<12} {f['name']:<28} {f['iso']:<6} {f['category']}")
         print(f"\n  Total: {len(films)} emulsiones disponibles en Haluro.\n")
+        return
+
+    if args.command == "render-project":
+        _run_render_project(args)
         return
 
     in_path = Path(args.input)
@@ -301,6 +321,132 @@ def main():
             print(f"\n  Hoja de contactos positiva creada: {sheet_path}")
 
         print(f"\n  Completado en {time.time() - t_start:.2f}s · Carpeta: {out_dir.resolve()}\n")
+
+
+def _run_render_project(args) -> None:
+    proj_path = Path(args.project).expanduser().resolve()
+    if not proj_path.exists():
+        print(f"Error: proyecto no encontrado -> {proj_path}")
+        sys.exit(1)
+
+    out_dir = Path(args.out).expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    t_start = time.time()
+
+    with tempfile.TemporaryDirectory(prefix="haluro_cli_proj_") as tmp_str:
+        work_dir = Path(tmp_str)
+        if proj_path.is_file() and zipfile.is_zipfile(proj_path):
+            with zipfile.ZipFile(proj_path, "r") as zf:
+                for info in zf.infolist():
+                    parts = Path(info.filename).parts
+                    if not parts or any(p in ("..", "/", "\\") or p.startswith("/") for p in parts):
+                        continue
+                    zf.extract(info, work_dir)
+            manifest_file = work_dir / "project.json"
+            media_dir = work_dir / "media"
+        else:
+            manifest_file = proj_path / "project.json" if proj_path.is_dir() else proj_path
+            media_dir = manifest_file.parent / "media"
+
+        if not manifest_file.is_file():
+            print(f"Error: project.json no encontrado en {proj_path}")
+            sys.exit(1)
+
+        proj_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+        frames = proj_data.get("frames") or []
+        if args.only_picked:
+            frames = [f for f in frames if f.get("pickStatus") == "pick"]
+        if not frames:
+            print("No hay fotogramas para revelar en este proyecto.")
+            return
+
+        exp_cfg = proj_data.get("export") or {}
+        fmt = args.format or exp_cfg.get("output_format") or "jpg"
+        ext = FORMAT_EXT_MAP.get(fmt, ".jpg")
+        easel_border = exp_cfg.get("easel_border", "none")
+        dry_down = float(exp_cfg.get("dry_down_comp", 0.0) or 0.0)
+        analog_meta = proj_data.get("analog_meta") or None
+        app_mode = proj_data.get("app_mode", "simulation")
+
+        print(f"\nHaluro — Renderizando proyecto «{proj_data.get('name', proj_path.stem)}» ({len(frames)} fotos)")
+        developed_images = []
+        for idx, frame in enumerate(frames, 1):
+            fname = Path(str(frame.get("filename") or "")).name
+            src = media_dir / fname
+            if not src.is_file():
+                print(f"  [{idx}/{len(frames)}] {fname} — omitido (archivo no encontrado)")
+                continue
+            t0 = time.time()
+            if app_mode == "negative":
+                rec = frame.get("negRecipe") or {}
+                prof = str(rec.get("profile") or "frontier")
+                out_file = out_dir / f"{idx:02d}_{src.stem}_{prof}{ext}"
+                img, srgb_f = process_negative_to_image(
+                    src,
+                    film_type=str(rec.get("film_type") or "color"),
+                    profile_key=prof,
+                    brightness=float(rec.get("brightness", 0.0) or 0.0),
+                    contrast=float(rec.get("contrast", 0.0) or 0.0),
+                    max_dim=None,
+                    return_float=True,
+                )
+            else:
+                rec = frame.get("simRecipe") or {}
+                fkey = str(rec.get("film") or "portra400")
+                out_file = out_dir / f"{idx:02d}_{src.stem}_{fkey}{ext}"
+                img, srgb_f = develop_frame(
+                    src,
+                    film_key=fkey,
+                    ev_adjust=float(rec.get("ev", 0.0) or 0.0),
+                    halation_mult=float(rec.get("halation", 1.0) if rec.get("halation") is not None else 1.0),
+                    grain_mult=float(rec.get("grain", 1.0) if rec.get("grain") is not None else 1.0),
+                    grain_asa=str(rec.get("grain_asa") or "auto"),
+                    vignette_mult=float(rec.get("vignette", 1.0) if rec.get("vignette") is not None else 1.0),
+                    shadows=float(rec.get("shadows", 0.0) or 0.0),
+                    mids=float(rec.get("mids", 0.0) or 0.0),
+                    highlights=float(rec.get("highlights", 0.0) or 0.0),
+                    curve=rec.get("curve"),
+                    add_date=bool(rec.get("date", False)),
+                    dev_process=str(rec.get("dev_process") or "standard"),
+                    film_strength=float(
+                        1.0 if rec.get("film_strength") is None else rec.get("film_strength")
+                    ),
+                    sim_temp=float(rec.get("sim_temp", 0.0) or 0.0),
+                    sim_tint=float(rec.get("sim_tint", 0.0) or 0.0),
+                    bw_filter=str(rec.get("bw_filter") or "none"),
+                    rotate=int(rec.get("rotate", 0) or 0),
+                    flip_h=bool(rec.get("flip_h", False)),
+                    flip_v=bool(rec.get("flip_v", False)),
+                    straighten=float(rec.get("straighten", 0.0) or 0.0),
+                    crop_rect=rec.get("crop_rect"),
+                    max_dim=None,
+                    return_float=True,
+                )
+            save_output_image(
+                img,
+                out_file,
+                source_path=src,
+                quality=max(60, min(100, int(args.quality or 96))),
+                float_srgb=srgb_f,
+                analog_meta=analog_meta,
+                easel_border=easel_border,
+                dry_down_comp=dry_down,
+                export_max_dim=args.max_dim,
+            )
+            developed_images.append(img)
+            print(f"  [{idx}/{len(frames)}] {fname} -> {out_file.name} ({time.time() - t0:.2f}s)")
+
+        if args.sheet and developed_images:
+            sheet_path = out_dir / "SHEET_PROJECT.jpg"
+            sheet = generate_contact_sheet(
+                developed_images,
+                roll_name=str(proj_data.get("name") or "HALURO").upper(),
+                film_name=f"Proyecto · {len(developed_images)} fotos",
+            )
+            sheet.save(sheet_path, quality=93, subsampling=0)
+            print(f"\n  Hoja de contactos creada: {sheet_path}")
+
+    print(f"\n  Proyecto renderizado en {time.time() - t_start:.2f}s · Carpeta: {out_dir}\n")
 
 
 if __name__ == "__main__":
