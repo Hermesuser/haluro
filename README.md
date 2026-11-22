@@ -1,9 +1,9 @@
-# Haluro — Laboratorio Analógico Digital (v2.11.1)
+# Haluro — Laboratorio Analógico Digital (v2.12.0)
 
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-orange.svg)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/Plataformas-macOS%20%7C%20Windows%2010%2F11-blue.svg)](#requisitos-técnicos)
-[![Tests](https://img.shields.io/badge/Tests-118%20Passing-emerald.svg)](tests/)
-[![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades%20(v2.11.1)-brightgreen.svg)](#seguridad-y-privacidad)
+[![Tests](https://img.shields.io/badge/Tests-127%20Passing-emerald.svg)](tests/)
+[![Seguridad](https://img.shields.io/badge/pip--audit-0%20Vulnerabilidades%20(v2.12.0)-brightgreen.svg)](#seguridad-y-privacidad)
 [![Privacidad](https://img.shields.io/badge/Privacidad-Local--First-success.svg)](#seguridad-y-privacidad)
 [![Edición](https://img.shields.io/badge/Edición-No%20Destructiva-blueviolet.svg)](#principios-de-diseño-y-calidad)
 
@@ -34,6 +34,8 @@
 
 El historial completo de versiones está en [CHANGELOG.md](CHANGELOG.md). Las mejoras estructurales recientes del motor incluyen:
 
+- **Motor fotoquímico v2.12, Presets propios y Comparación A/B:** intensidad de emulsión (`0%–100%`), balance rápido **Temperatura / Matiz**, **filtros ópticos B&N** (`#8`, `#21`, `#25`, `#11`, `#47`), **Comparación A/B** por instantánea, biblioteca de **Presets propios** (exportable/importable en JSON) y **filtros en la tira de 35 mm** (*Todas / Elegidas / Editadas*) con **Revelar elegidas**.
+- **Proyectos de rollo digital (`.haluro`), Importar carpeta y CLI `render-project`:** autoguardado silencioso cada 90 s, subida concurrente con precarga predictiva (`idx ± 1`), visor de **EXIF original**, marco **Galería + Pie analógico**, perfiles de exportación (`Original`, `4K 3840 px`, `Web HD 2048 px` y calidad JPEG), panel de almacenamiento/caché seguro y subcomando CLI `render-project`.
 - **Proyectos de rollo digital (`.haluro`):** guarda, actualiza y retoma carretes completos (`⌥⌘S` / `Ctrl+Alt+S`) conservando copias protegidas de las imágenes originales, el orden exacto de la tira, marcas de selección (`P`/`X`), recetas por fotograma, calibración negativa, hoja de contactos y EXIF analógico; incluye exportación e importación de paquetes portables `.haluro` (con *drag & drop* y protección *zip-slip*).
 - **Gestión completa del catálogo de películas y LUTs de usuario (`.cube`):** importación directa (`+ LUT`) en la pestaña **Mis LUTs** (6 espacios de entrada, empaquetada vacía para el usuario), icono de papelera siempre visible en cada tarjeta para eliminar LUTs de usuario u ocultar emulsiones base (con restauración en un clic) y botón **Vaciar** para limpiar todos los LUTs personalizados.
 - **Grano orgánico multiescala y control por ASA (`100`–`6400`):** el motor de grano combina tres octavas espaciales con remuestreo bicúbico, separación entre grano acromático B&N y nubes de colorante C-41, selector **ASA del rollo (grano)** (`Auto`, `100`, `200`, `400`, `800`, `1600`, `3200`, `6400`) y semilla determinista por fotograma entre vista previa y exportación.
@@ -315,9 +317,9 @@ python cli.py invert negativo_01.tif \
 4. **Validación de Rutas Seguras:** Las claves de película y de perfil negativo se canonicalizan contra el catálogo, nunca se interpolan sin verificar, y toda ruta de salida se comprueba contra su directorio permitido para impedir saltos de directorio (*path traversal*).
 5. **Validación de Entrada:** Todos los parámetros numéricos se acotan a rangos válidos y se rechazan con **HTTP 400** los valores no numéricos, no finitos o fuera de rango. Las subidas se validan por contenido real, no solo por extensión.
 6. **Servidor de Producción:** El backend se sirve con **Waitress** (WSGI de producción) en lugar del servidor de desarrollo de Flask, sin *debugger* interactivo y con límites de conexión y tiempo de espera.
-7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de compilación fijado al publicar la `v2.11.1` utiliza `Pillow >= 13.0.0`, con **0 vulnerabilidades conocidas** en las dependencias declaradas según `pip-audit`.
-8. **Escrituras Atómicas y Paquetes Seguros:** Toda exportación y manifiesto de proyecto (`project.json`) se escribe en un archivo temporal y se mueve con `os.replace()`, y la importación de paquetes `.haluro` valida rutas contra *zip-slip*, enlaces simbólicos y límites de tamaño.
-9. **Calidad de Código y Pruebas Automatizadas:** Suite de **118 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), el grano orgánico multiescala por ASA (`100`–`6400`), los LUTs de usuario (`.cube`) y la gestión del catálogo, los **proyectos de rollo digital (`.haluro`)**, la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
+7. **Auditoría de Vulnerabilidades (`pip-audit`):** El entorno de compilación fijado al publicar la `v2.12.0` utiliza `Pillow >= 13.0.0`, con **0 vulnerabilidades conocidas** en las dependencias declaradas según `pip-audit`.
+8. **Escrituras Atómicas y Paquetes Seguros:** Toda exportación, presets (`presets.json`) y manifiesto de proyecto (`project.json`) se escribe en un archivo temporal y se mueve con `os.replace()`, y la importación de paquetes `.haluro` valida rutas contra *zip-slip*, enlaces simbólicos y límites de tamaño.
+9. **Calidad de Código y Pruebas Automatizadas:** Suite de **127 pruebas automatizadas (`pytest`)** que verifican la inversión H&D, el motor de densidad neutra, la geometría (recorte, nivelación, keystone), la óptica compartida (limpieza puntual, reducción de ruido, defringe, dodge & burn local), el grano orgánico multiescala por ASA (`100`–`6400`), intensidad de emulsión, balance rápido y filtros ópticos B&N, los presets propios, los LUTs de usuario (`.cube`) y la gestión del catálogo, los **proyectos de rollo digital (`.haluro`)**, perfiles de exportación, CLI `render-project`, limpieza segura de caché, la exportación a **Linear DNG 16-bit** y sidecar `.XMP`, la hoja de contactos, el progreso de revelado por lotes, la persistencia EXIF y las protecciones de sesión, ruta y validación de entrada. La CI ejecuta además `ruff` y un guardián de coherencia de versión.
 
 ---
 
