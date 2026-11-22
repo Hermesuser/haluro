@@ -133,6 +133,14 @@ def render_frame_thumbnail(
         crop_rect=_frame_val("crop_rect", common_params.get("crop_rect")),
         auto_crop_straighten=bool(_frame_val("auto_crop_straighten", common_params.get("auto_crop_straighten", True))),
         dev_process=str(_frame_val("dev_process", common_params.get("dev_process", "standard")) or "standard"),
+        film_strength=float(
+            1.0
+            if _frame_val("film_strength", common_params.get("film_strength", 1.0)) is None
+            else _frame_val("film_strength", common_params.get("film_strength", 1.0))
+        ),
+        sim_temp=float(_frame_val("sim_temp", common_params.get("sim_temp", 0.0)) or 0.0),
+        sim_tint=float(_frame_val("sim_tint", common_params.get("sim_tint", 0.0)) or 0.0),
+        bw_filter=str(_frame_val("bw_filter", common_params.get("bw_filter", "none")) or "none"),
         denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
         denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
         defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),
@@ -228,6 +236,14 @@ def develop_one_full_res(
             ),
             return_float=True,
             dev_process=str(_frame_val("dev_process", common_params.get("dev_process", "standard")) or "standard"),
+        film_strength=float(
+            1.0
+            if _frame_val("film_strength", common_params.get("film_strength", 1.0)) is None
+            else _frame_val("film_strength", common_params.get("film_strength", 1.0))
+        ),
+        sim_temp=float(_frame_val("sim_temp", common_params.get("sim_temp", 0.0)) or 0.0),
+        sim_tint=float(_frame_val("sim_tint", common_params.get("sim_tint", 0.0)) or 0.0),
+        bw_filter=str(_frame_val("bw_filter", common_params.get("bw_filter", "none")) or "none"),
             denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
             denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
             defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),

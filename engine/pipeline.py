@@ -1785,6 +1785,16 @@ DEV_PROCESSES = {
 }
 
 
+BW_OPTICAL_FILTERS: dict[str, tuple[float, float, float]] = {
+    "yellow": (0.44, 0.50, 0.06),  # #8 Amarillo (contraste suave de cielos)
+    "orange": (0.62, 0.35, 0.03),  # #21 Naranja (cielos marcados, piel limpia)
+    "red": (0.80, 0.19, 0.01),     # #25 Rojo (dramático, cielos oscuros)
+    "green": (0.20, 0.72, 0.08),   # #11 Verde (follaje y retrato natural)
+    "blue": (0.10, 0.25, 0.65),    # #47 Azul (atmósfera y neblina)
+}
+VALID_BW_FILTERS = ("none", *BW_OPTICAL_FILTERS.keys())
+
+
 def develop_frame(
     image_input,
     film_key="portra400",
@@ -1817,6 +1827,10 @@ def develop_frame(
     dust_spots=None,
     sharpen_mode="off",
     sharpen_amount=1.0,
+    film_strength=1.0,
+    sim_temp=0.0,
+    sim_tint=0.0,
+    bw_filter="none",
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     has_geom = bool(
@@ -1898,6 +1912,17 @@ def develop_frame(
     if abs(total_ev) > 1e-4:
         lin = lin * (2.0 ** total_ev)
 
+    # 1-wb. Pre-emulsion white balance (Temperature & Tint in linear light)
+    if abs(float(sim_temp or 0.0)) > 1e-4 or abs(float(sim_tint or 0.0)) > 1e-4:
+        t_val = max(-1.0, min(1.0, float(sim_temp or 0.0)))
+        g_val = max(-1.0, min(1.0, float(sim_tint or 0.0)))
+        r_gain = 2.0 ** (0.35 * t_val + 0.15 * g_val)
+        g_gain = 2.0 ** (-0.25 * g_val)
+        b_gain = 2.0 ** (-0.35 * t_val + 0.15 * g_val)
+        luma_scale = 0.2126 * r_gain + 0.7152 * g_gain + 0.0722 * b_gain
+        wb_gains = np.array([r_gain, g_gain, b_gain], dtype=np.float32) / max(luma_scale, 1e-4)
+        lin = np.maximum(0.0, lin * wb_gains)
+
     # 1a. Compensating stand development highlight shoulder protection
     if proc_spec["compensating"] > 0.01:
         comp = float(proc_spec["compensating"])
@@ -1925,6 +1950,14 @@ def develop_frame(
             tint=film.get("hal_tint", (1.0, 0.28, 0.06))
         )
 
+    # 3b. Optical B&W lens filter (#8 Yellow, #21 Orange, #25 Red, #11 Green, #47 Blue)
+    bw_key = str(bw_filter or "none").strip().lower()
+    lin_for_film = lin
+    if film.get("mono") and bw_key in BW_OPTICAL_FILTERS:
+        filt_mix = np.array(BW_OPTICAL_FILTERS[bw_key], dtype=np.float32)
+        y_filt = np.maximum(0.0, np.sum(lin * filt_mix, axis=-1, keepdims=True))
+        lin_for_film = np.repeat(y_filt, 3, axis=-1)
+
     # 4. Color / Film Look
     lut_file = film.get("lut_file")
     if lut_file:
@@ -1935,20 +1968,20 @@ def develop_frame(
 
     if cube_path and cube_path.is_file():
         lut_obj = load_lut(str(cube_path), space=film.get("lut_space", "srgb"))
-        display = lut_obj.apply(lin)
+        display = lut_obj.apply(lin_for_film)
     else:
         # Mathematical curve model
         if film.get("mono"):
             mono_mix = np.array(film["mono"], dtype=np.float32)
-            luma_chan = np.sum(lin * mono_mix, axis=-1)
+            luma_chan = np.sum(lin_for_film * mono_mix, axis=-1)
             c0, p0 = film["contrast"][0], film["pivot"][0]
             b0, w0 = film["black"][0], film["white"][0]
             curve_val = apply_characteristic_curve(luma_chan, c0, p0, b0, w0)
             display = np.stack([curve_val] * 3, axis=-1)
         else:
-            y = np.sum(lin * LUMA, axis=-1, keepdims=True)
+            y = np.sum(lin_for_film * LUMA, axis=-1, keepdims=True)
             sat = film.get("sat", 1.0)
-            lin_sat = np.maximum(0.0, y + (lin - y) * sat)
+            lin_sat = np.maximum(0.0, y + (lin_for_film - y) * sat)
 
             contrast = film["contrast"]
             pivot = film["pivot"]
@@ -1968,6 +2001,12 @@ def develop_frame(
                 display = shift_hues(display, film["hues"])
 
     display = np.clip(display, 0.0, 1.0)
+
+    # 4-strength. Blend film emulation strength (0.0 = neutral sRGB, 1.0 = full emulation)
+    strength = max(0.0, min(1.0, float(film_strength if film_strength is not None else 1.0)))
+    if strength < 0.999:
+        neutral_srgb = linear_to_srgb(np.clip(lin, 0.0, 1.0))
+        display = np.clip(neutral_srgb * (1.0 - strength) + display * strength, 0.0, 1.0)
 
     # 4a. Chemical push/pull contrast & stand-development acutance
     if abs(proc_spec["contrast_mult"] - 1.0) > 0.005:

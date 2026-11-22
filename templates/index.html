@@ -674,6 +674,8 @@
             title="Generar hoja de contactos del rollo (Tecla 3)">Contactos</button>
           <button class="mode-btn" id="viewTestStripBtn" aria-pressed="false"
             title="Tira de prueba de cuarto oscuro en fracciones de paso (Tecla T)">Tira f-stop</button>
+          <button class="mode-btn" id="abCompareBtn" aria-pressed="false"
+            title="Comparación A/B: congela una instantánea A para compararla en vivo contra otro revelado B">A/B</button>
         </div>
 
         <!-- Geometry, Undo/Redo, Zoom & Recipe Sync Instruments -->
@@ -742,6 +744,7 @@
           <button class="tool-icon-btn" id="zoomInBtn" aria-label="Acercar zoom"
             title="Acercar (+ o rueda del ratón)">+</button>
           <span class="toolbar-sep" aria-hidden="true"></span>
+          <button class="recipe-pill-btn" id="presetsBtn" title="Biblioteca de recetas y presets guardados">Presets</button>
           <button class="recipe-pill-btn" id="copyRecipeBtn" title="Copiar receta óptica del fotograma activo (⇧C)">
             <svg class="icon-xs pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               aria-hidden="true">
@@ -1027,9 +1030,18 @@
       <!-- Main Light Table Footer: Culling Bar & 35mm Film Strip -->
       <footer class="film-strip" aria-label="Tira de fotogramas importados">
         <div class="strip-cull-bar" id="stripCullBar" style="display: none;">
+          <div class="strip-filter-group" role="group" aria-label="Filtrar tira de fotogramas">
+            <button type="button" class="strip-filter-pill active" data-strip-filter="all" aria-pressed="true">Todas</button>
+            <button type="button" class="strip-filter-pill" data-strip-filter="pick" aria-pressed="false">Elegidas</button>
+            <button type="button" class="strip-filter-pill" data-strip-filter="edited" aria-pressed="false">Editadas</button>
+          </div>
           <span class="cull-summary-text" id="cullSummaryText">0 elegidas · 0 descartadas</span>
-          <button type="button" class="btn btn-ghost btn-2xs" id="btnCullClearRejected"
-            title="Quitar fotogramas descartados (X) del rollo">Quitar descartes</button>
+          <div class="cull-actions-right">
+            <button type="button" class="btn btn-outline btn-2xs" id="btnDevelopPickedRoll" style="display: none;"
+              title="Revelar en lote únicamente los fotogramas marcados como elegidos (P)">Revelar elegidas</button>
+            <button type="button" class="btn btn-ghost btn-2xs" id="btnCullClearRejected"
+              title="Quitar fotogramas descartados (X) del rollo">Quitar descartes</button>
+          </div>
         </div>
         <div class="sprocket-track top" aria-hidden="true"></div>
         <div class="strip-frames-scroll" id="stripFrames">
@@ -1098,11 +1110,53 @@
 
             <div class="control-group">
               <div class="control-label">
+                <span id="lblSimStrength">Intensidad de emulsión</span>
+                <span class="control-val" id="simStrengthVal">100%</span>
+              </div>
+              <input type="range" id="simStrengthSlider" min="0" max="100" step="1" value="100" data-default="100"
+                aria-labelledby="lblSimStrength">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
                 <span id="lblEv">Compensación de exposición</span>
                 <span class="control-val" id="evVal">0.0 EV</span>
               </div>
               <input type="range" class="bipolar-range" id="evSlider" min="-2.0" max="2.0" step="0.1" value="0.0"
                 data-default="0.0" aria-labelledby="lblEv">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span id="lblSimTemp">Temperatura (Frío ↔ Cálido)</span>
+                <span class="control-val" id="simTempVal">0</span>
+              </div>
+              <input type="range" class="bipolar-range" id="simTempSlider" min="-1.0" max="1.0" step="0.05" value="0.0"
+                data-default="0.0" aria-labelledby="lblSimTemp">
+            </div>
+
+            <div class="control-group">
+              <div class="control-label">
+                <span id="lblSimTint">Matiz (Verde ↔ Magenta)</span>
+                <span class="control-val" id="simTintVal">0</span>
+              </div>
+              <input type="range" class="bipolar-range" id="simTintSlider" min="-1.0" max="1.0" step="0.05" value="0.0"
+                data-default="0.0" aria-labelledby="lblSimTint">
+            </div>
+
+            <div class="control-group" id="simBwFilterGroup" style="display: none;">
+              <div class="control-label">
+                <label id="lblSimBwFilter" for="simBwFilterSelect">Filtro óptico B&amp;N</label>
+              </div>
+              <select id="simBwFilterSelect" class="dark-select"
+                title="Simula filtros de contraste roscados en lente para emulsiones blanco y negro">
+                <option value="none" selected>Sin filtro (Neutro)</option>
+                <option value="yellow">#8 Amarillo — Cielos con contraste suave</option>
+                <option value="orange">#21 Naranja — Cielos marcados y piel limpia</option>
+                <option value="red">#25 Rojo — Cielos dramáticos y alto contraste</option>
+                <option value="green">#11 Verde — Follaje y retrato natural</option>
+                <option value="blue">#47 Azul — Atmósfera y neblina</option>
+              </select>
             </div>
 
             <div class="control-group">
@@ -2111,6 +2165,56 @@
           </div>
         </div>
         <div class="projects-list" id="projectsList">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: User Recipe Presets Library -->
+  <div class="modal-backdrop" id="presetsModal" role="dialog" aria-modal="true" aria-labelledby="presetsModalTitle">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h2 id="presetsModalTitle">Biblioteca de recetas y presets propios</h2>
+        <button class="modal-close" id="closePresetsBtn" aria-label="Cerrar presets">&times;</button>
+      </div>
+      <div class="modal-body modal-body-left">
+        <p class="helper-copy">
+          Guarda tus combinaciones favoritas de emulsión, balance, grano ASA, curvas y óptica para aplicarlas en un clic a cualquier fotograma o rollo futuro.
+        </p>
+
+        <section class="projects-save-card" aria-label="Guardar receta actual como preset">
+          <div class="projects-save-head">
+            <strong>Guardar receta activa como preset</strong>
+            <span class="mono-badge" id="presetCurrentSummary">Emulación</span>
+          </div>
+          <div class="projects-form-grid">
+            <div class="projects-field">
+              <label for="presetNameInput">Nombre del preset</label>
+              <input type="text" id="presetNameInput" class="dark-input" maxlength="100" placeholder="Ej. Portra Cálido Retrato">
+            </div>
+            <div class="projects-field">
+              <label for="presetNotesInput">Notas (opcional)</label>
+              <input type="text" id="presetNotesInput" class="dark-input" maxlength="300" placeholder="Luz de tarde, grano ASA 400…">
+            </div>
+          </div>
+          <div class="projects-save-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btnSavePreset">Guardar preset</button>
+          </div>
+        </section>
+
+        <div class="projects-list-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h3>Presets guardados</h3>
+            <span class="mono-badge" id="presetsCountBadge">0</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-secondary btn-xs" id="btnExportPresetsJson" title="Exportar todos tus presets a un archivo JSON">Exportar JSON</button>
+            <button type="button" class="btn btn-secondary btn-xs" id="btnImportPresetsJson" title="Importar presets desde un archivo JSON">Importar JSON</button>
+            <input type="file" id="presetsJsonInput" accept=".json" hidden>
+          </div>
+        </div>
+        <div class="projects-list" id="presetsList">
           <!-- Populated dynamically -->
         </div>
       </div>

@@ -260,6 +260,10 @@ const state = {
 
   // Mode 1: Film Simulation controls
   devProcess: "standard",
+  filmStrength: 1.0,
+  simTemp: 0.0,
+  simTint: 0.0,
+  bwFilter: "none",
   ev: 0.0,
   halation: 1.0,
   grain: 1.0,
@@ -329,6 +333,8 @@ const state = {
   currentProjectName: "",
   currentProjectNotes: "",
   projectDirty: false,
+  stripFilter: "all", // 'all' | 'pick' | 'edited'
+  abSnapshot: null, // null | { dataUrl, label, origDataUrl }
 };
 
 const negativeState = {
@@ -1285,11 +1291,20 @@ function selectFilm(key) {
     if (btn) btn.setAttribute("aria-pressed", sel ? "true" : "false");
   });
   saveActiveFrameRecipe();
+  syncBwFilterVisibility();
   updateActiveRecipeBanner();
   renderBorderGuideOverlay();
   drawCurveEditor();
   requestPreview();
   saveUserPreferences();
+}
+
+function syncBwFilterVisibility() {
+  const group = document.getElementById("simBwFilterGroup");
+  if (!group) return;
+  const filmObj = state.films.find((f) => f.key === state.selectedFilm);
+  const isBw = Boolean(filmObj && filmObj.kind === "bw");
+  group.style.display = isBw ? "block" : "none";
 }
 
 // =============================================================
@@ -1661,23 +1676,34 @@ function updateCullSummaryUI() {
   const bar = document.getElementById("stripCullBar");
   const text = document.getElementById("cullSummaryText");
   const clearBtn = document.getElementById("btnCullClearRejected");
+  const devPickedBtn = document.getElementById("btnDevelopPickedRoll");
   const sheetFilterBtn = document.getElementById("sheetHideRejectedBtn");
   const rejectedBadge = document.getElementById("rejectedCountBadge");
 
   if (bar) {
-    const showBar = total > 0 && (picks > 0 || rejects > 0);
+    const showBar = total > 1 || picks > 0 || rejects > 0;
     bar.style.display = showBar ? "flex" : "none";
   }
   if (text) {
     const parts = [];
     if (picks > 0) parts.push(`${picks} elegida${picks === 1 ? "" : "s"}`);
     if (rejects > 0) parts.push(`${rejects} descartada${rejects === 1 ? "" : "s"}`);
-    if (parts.length === 0) parts.push("Sin marcas aún");
+    if (parts.length === 0) parts.push(`${total} fotograma${total === 1 ? "" : "s"}`);
     text.textContent = parts.join(" · ");
+  }
+  if (devPickedBtn) {
+    devPickedBtn.style.display = picks > 0 ? "inline-flex" : "none";
+    devPickedBtn.textContent = `Revelar elegidas (${picks})`;
   }
   if (clearBtn) {
     clearBtn.style.display = rejects > 0 ? "inline-flex" : "none";
   }
+
+  document.querySelectorAll(".strip-filter-pill").forEach((pill) => {
+    const active = pill.dataset.stripFilter === (state.stripFilter || "all");
+    pill.classList.toggle("active", active);
+    pill.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 
   if (rejectedBadge) {
     rejectedBadge.textContent = String(rejects);
@@ -1931,6 +1957,9 @@ function renderFilmStrip() {
 
   state.frames.forEach((frame, idx) => {
     const pickStatus = frame.pickStatus || null;
+    const custom = isFrameCustomized(frame);
+    if (state.stripFilter === "pick" && pickStatus !== "pick") return;
+    if (state.stripFilter === "edited" && !custom) return;
     const thumb = document.createElement("div");
     thumb.className = [
       "film-frame-thumb",
@@ -1940,7 +1969,6 @@ function renderFilmStrip() {
       .filter(Boolean)
       .join(" ");
     thumb.dataset.index = String(idx);
-    const custom = isFrameCustomized(frame);
     const sampleNote = frame.is_sample ? " · Muestra de prueba" : "";
     const pickNote =
       pickStatus === "pick" ? " · Elegido" : pickStatus === "reject" ? " · Descartado" : "";
@@ -2534,12 +2562,16 @@ function applyPreviewResult(data, origKey, requestedOriginal) {
   const imgDev = document.getElementById("imgDeveloped");
 
   if (requestedOriginal && data.original && imgOrig) {
-    origLoupeSourceReady = false;
-    imgOrig.onload = () => {
-      prepareLoupeBuffer(imgOrig, "orig");
-    };
-    imgOrig.src = data.original;
     state.lastOriginalKey = origKey;
+    if (state.abSnapshot) {
+      state.abSnapshot.origDataUrl = data.original;
+    } else {
+      origLoupeSourceReady = false;
+      imgOrig.onload = () => {
+        prepareLoupeBuffer(imgOrig, "orig");
+      };
+      imgOrig.src = data.original;
+    }
   }
 
   if (data.developed && imgDev) {
@@ -2613,6 +2645,10 @@ function buildSimulationPayload() {
   return {
     film: state.selectedFilm,
     dev_process: state.devProcess || "standard",
+    film_strength: Number(state.filmStrength ?? 1.0),
+    sim_temp: Number(state.simTemp ?? 0.0),
+    sim_tint: Number(state.simTint ?? 0.0),
+    bw_filter: state.bwFilter || "none",
     ev: state.ev,
     halation: state.halation,
     grain: state.grain,
@@ -2719,6 +2755,10 @@ function snapshotSimRecipe() {
   return {
     film: state.selectedFilm,
     dev_process: state.devProcess || "standard",
+    film_strength: Number(state.filmStrength ?? 1.0),
+    sim_temp: Number(state.simTemp ?? 0.0),
+    sim_tint: Number(state.simTint ?? 0.0),
+    bw_filter: state.bwFilter || "none",
     ev: state.ev,
     halation: state.halation,
     grain: state.grain,
@@ -2844,6 +2884,12 @@ function applySimRecipeToUI(rec) {
   state.devProcess = rec.dev_process || "standard";
   const devProcSel = document.getElementById("simDevProcessSelect");
   if (devProcSel) devProcSel.value = state.devProcess;
+  state.filmStrength = Number(rec.film_strength ?? 1.0);
+  state.simTemp = Number(rec.sim_temp ?? 0.0);
+  state.simTint = Number(rec.sim_tint ?? 0.0);
+  state.bwFilter = rec.bw_filter || "none";
+  const bwFiltSel = document.getElementById("simBwFilterSelect");
+  if (bwFiltSel) bwFiltSel.value = state.bwFilter;
   state.ev = Number(rec.ev ?? 0);
   state.halation = Number(rec.halation ?? 1.0);
   state.grain = Number(rec.grain ?? 1.0);
@@ -2886,7 +2932,11 @@ function applySimRecipeToUI(rec) {
   document.getElementById("flipHBtn")?.classList.toggle("active", state.flip_h);
   document.getElementById("flipHBtn")?.setAttribute("aria-pressed", state.flip_h ? "true" : "false");
 
+  setSliderSilent("simStrengthSlider", "simStrengthVal", Math.round(state.filmStrength * 100), `${Math.round(state.filmStrength * 100)}%`);
+  setSliderSilent("simTempSlider", "simTempVal", state.simTemp, `${state.simTemp > 0 ? "+" : ""}${Math.round(state.simTemp * 100)}`);
+  setSliderSilent("simTintSlider", "simTintVal", state.simTint, `${state.simTint > 0 ? "+" : ""}${Math.round(state.simTint * 100)}`);
   setSliderSilent("evSlider", "evVal", state.ev, `${state.ev > 0 ? "+" : ""}${state.ev.toFixed(1)} EV`);
+  syncBwFilterVisibility();
   setSliderSilent("halationSlider", "halationVal", state.halation, `${state.halation.toFixed(1)}x`);
   setSliderSilent("grainSlider", "grainVal", state.grain, `${state.grain.toFixed(1)}x`);
   setSliderSilent("vignetteSlider", "vignetteVal", state.vignette, `${state.vignette.toFixed(1)}x`);
@@ -6535,7 +6585,10 @@ function resetSlidersWithUndo(ids, postHook = null) {
 function resetSimulationControls() {
   resetSlidersWithUndo(
     [
+      ["simStrengthSlider", "100"],
       ["evSlider", "0.0"],
+      ["simTempSlider", "0.0"],
+      ["simTintSlider", "0.0"],
       ["halationSlider", "1.0"],
       ["grainSlider", "1.0"],
       ["vignetteSlider", "1.0"],
@@ -6544,6 +6597,11 @@ function resetSimulationControls() {
       ["highlightsSlider", "0.0"],
     ],
     () => {
+      const bwFiltSel = document.getElementById("simBwFilterSelect");
+      if (bwFiltSel && bwFiltSel.value !== "none") {
+        bwFiltSel.value = "none";
+        bwFiltSel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       const devProcSel = document.getElementById("simDevProcessSelect");
       if (devProcSel && devProcSel.value !== "standard") {
         devProcSel.value = "standard";
@@ -7086,10 +7144,16 @@ async function saveAsWithDialog() {
 let activeBatchPollTimer = null;
 let activeBatchJobId = null;
 
-async function developFullRoll() {
+async function developFullRoll({ onlyPicked = false } = {}) {
   if (state.frames.length === 0 || activeBatchJobId) return;
 
-  const filenames = state.frames.map((f) => f.filename);
+  const targetFrames = onlyPicked ? state.frames.filter((f) => f.pickStatus === "pick") : state.frames;
+  if (targetFrames.length === 0) {
+    showToast("Sin elegidas", "Marca al menos un fotograma como elegido (tecla P) antes de revelar elegidas.");
+    return;
+  }
+
+  const filenames = targetFrames.map((f) => f.filename);
   const perFrameRecipes = buildPerFrameRecipesMap();
   const analogMeta = buildAnalogMetaPayload();
   const isNeg = state.appMode === "negative";
@@ -7445,6 +7509,276 @@ async function saveContactSheetOnly(withDialog = false) {
     showToast("Error al guardar contactos", err.message || "Operación interrumpida.");
   } finally {
     showLoading(false);
+  }
+}
+
+// =============================================================
+// A/B SNAPSHOT COMPARISON & USER RECIPE PRESETS LIBRARY
+// =============================================================
+
+function updateAbCompareUI() {
+  const btn = document.getElementById("abCompareBtn");
+  const origLabel = document.getElementById("originalLabel");
+  const active = Boolean(state.abSnapshot);
+  if (btn) {
+    btn.classList.toggle("ab-active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+    btn.textContent = active ? "A/B ✓" : "A/B";
+    btn.title = active
+      ? `Comparando contra instantánea A (${state.abSnapshot.label}) — clic para salir`
+      : "Comparación A/B: congela una instantánea A para compararla en vivo contra otro revelado B";
+  }
+  if (origLabel) {
+    origLabel.textContent = active
+      ? `A · ${state.abSnapshot.label}`
+      : state.appMode === "negative"
+        ? "Negativo escaneado"
+        : "Original";
+  }
+}
+
+function clearAbSnapshot({ silent = false } = {}) {
+  if (!state.abSnapshot) return;
+  const origDataUrl = state.abSnapshot.origDataUrl;
+  state.abSnapshot = null;
+  const imgOrig = document.getElementById("imgOriginal");
+  if (imgOrig && origDataUrl) {
+    imgOrig.src = origDataUrl;
+  } else {
+    state.lastOriginalKey = "";
+    requestPreview(true);
+  }
+  updateAbCompareUI();
+  if (!silent) {
+    showToast("Comparación A/B finalizada", "La cortina volvió al modo Original vs. Revelada.");
+  }
+}
+
+function toggleAbCompare() {
+  if (state.abSnapshot) {
+    clearAbSnapshot();
+    return;
+  }
+  if (state.frames.length === 0) {
+    showToast("Mesa de luz vacía", "Importa una fotografía antes de fijar una instantánea A.");
+    return;
+  }
+  const imgDev = document.getElementById("imgDeveloped");
+  const imgOrig = document.getElementById("imgOriginal");
+  if (!imgDev || !imgDev.src) {
+    showToast("Vista previa no lista", "Espera a que se revele la imagen antes de fijar A.");
+    return;
+  }
+
+  const label =
+    state.appMode === "negative"
+      ? PROFILE_LABELS[negativeState.profile] || negativeState.profile
+      : state.films.find((f) => f.key === state.selectedFilm)?.name || state.selectedFilm;
+
+  state.abSnapshot = {
+    dataUrl: imgDev.src,
+    label,
+    origDataUrl: imgOrig?.src || null,
+  };
+  if (imgOrig) {
+    imgOrig.src = state.abSnapshot.dataUrl;
+  }
+  if (state.viewMode !== "split") {
+    setViewMode("split");
+  }
+  updateAbCompareUI();
+  showToast("Instantánea A fijada", `«${label}» congelada a la izquierda. Cambia de película o ajustes para comparar B en vivo.`);
+}
+
+async function fetchAndRenderPresetsList() {
+  const listEl = document.getElementById("presetsList");
+  const badgeEl = document.getElementById("presetsCountBadge");
+  if (!listEl) return;
+
+  listEl.innerHTML = `<div class="film-empty">Cargando presets guardados…</div>`;
+  try {
+    const res = await fetch("/api/presets");
+    const data = await res.json();
+    const presets = Array.isArray(data.presets) ? data.presets : [];
+    if (badgeEl) badgeEl.textContent = String(presets.length);
+
+    listEl.innerHTML = "";
+    if (presets.length === 0) {
+      listEl.innerHTML = `<div class="film-empty">Aún no tienes presets guardados. Guarda tu receta activa arriba para reutilizarla en futuros rollos.</div>`;
+      return;
+    }
+
+    presets.forEach((preset) => {
+      const row = document.createElement("div");
+      row.className = "project-item";
+
+      const info = document.createElement("div");
+      info.className = "project-info";
+
+      const titleRow = document.createElement("div");
+      titleRow.className = "project-title-row";
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "project-name";
+      nameEl.textContent = preset.name;
+      titleRow.appendChild(nameEl);
+
+      const modePill = document.createElement("span");
+      modePill.className = "project-mode-pill";
+      modePill.textContent = preset.mode === "negative" ? "Negativo" : "Emulación";
+      titleRow.appendChild(modePill);
+
+      const rec = preset.recipe || {};
+      const detail =
+        preset.mode === "negative"
+          ? PROFILE_LABELS[rec.profile] || rec.profile || "Negativo"
+          : state.films.find((f) => f.key === rec.film)?.name || rec.film || "Película";
+      const metaEl = document.createElement("div");
+      metaEl.className = "history-meta";
+      metaEl.textContent = `${detail} · ${formatProjectTimestamp(preset.updated_at || preset.created_at)}`;
+
+      info.appendChild(titleRow);
+      info.appendChild(metaEl);
+
+      if (preset.notes) {
+        const notesEl = document.createElement("div");
+        notesEl.className = "project-notes";
+        notesEl.textContent = preset.notes;
+        info.appendChild(notesEl);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "project-actions";
+
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "btn btn-primary btn-xs";
+      applyBtn.textContent = "Aplicar";
+      applyBtn.addEventListener("click", () => applySavedPreset(preset));
+      actions.appendChild(applyBtn);
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-ghost btn-xs btn-danger-ghost";
+      delBtn.textContent = "Eliminar";
+      delBtn.addEventListener("click", () => deleteSavedPreset(preset.id, preset.name));
+      actions.appendChild(delBtn);
+
+      row.appendChild(info);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    console.error("Error cargando presets:", err);
+    listEl.innerHTML = `<div class="film-empty">No se pudieron cargar los presets guardados.</div>`;
+  }
+}
+
+async function openPresetsModal() {
+  const modal = document.getElementById("presetsModal");
+  if (!modal) return;
+  const summaryEl = document.getElementById("presetCurrentSummary");
+  if (summaryEl) {
+    const label =
+      state.appMode === "negative"
+        ? `Negativo · ${PROFILE_LABELS[negativeState.profile] || negativeState.profile}`
+        : `Emulación · ${state.films.find((f) => f.key === state.selectedFilm)?.name || state.selectedFilm}`;
+    summaryEl.textContent = label;
+  }
+  const nameInput = document.getElementById("presetNameInput");
+  const notesInput = document.getElementById("presetNotesInput");
+  if (nameInput) nameInput.value = "";
+  if (notesInput) notesInput.value = "";
+  setModalOpen(modal, true);
+  await fetchAndRenderPresetsList();
+}
+
+async function saveCurrentAsPreset() {
+  const nameInput = document.getElementById("presetNameInput");
+  const notesInput = document.getElementById("presetNotesInput");
+  const name = (nameInput?.value || "").trim();
+  if (!name) {
+    showToast("Falta el nombre", "Escribe un nombre para identificar tu preset.");
+    nameInput?.focus();
+    return;
+  }
+  const notes = (notesInput?.value || "").trim();
+  const mode = state.appMode === "negative" ? "negative" : "simulation";
+  const recipe = mode === "negative" ? snapshotNegRecipe() : snapshotSimRecipe();
+
+  try {
+    const res = await fetch("/api/presets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, notes, mode, recipe }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al guardar preset", data.error || `HTTP ${res.status}`);
+      return;
+    }
+    if (nameInput) nameInput.value = "";
+    if (notesInput) notesInput.value = "";
+    await fetchAndRenderPresetsList();
+    showToast("Preset guardado", `«${data.preset.name}» disponible en tu biblioteca de recetas.`);
+  } catch (err) {
+    console.error("Error guardando preset:", err);
+    showToast("Error de red", "No se pudo guardar el preset.");
+  }
+}
+
+async function applySavedPreset(preset) {
+  if (!preset || !preset.recipe) return;
+  pushUndoSnapshotForFrame();
+  const targetMode = preset.mode === "negative" ? "negative" : "simulation";
+  if (state.appMode !== targetMode) {
+    await switchStudioMode(targetMode, { skipSampleSwap: true, skipPreview: true });
+  }
+  if (targetMode === "negative") {
+    applyNegRecipeToUI(clonePlain(preset.recipe), true);
+  } else {
+    applySimRecipeToUI(clonePlain(preset.recipe));
+  }
+  saveActiveFrameRecipe();
+  state.lastOriginalKey = "";
+  setModalOpen("presetsModal", false);
+  await requestPreview(true);
+  showToast("Preset aplicado", `Se aplicó «${preset.name}» al fotograma activo.`);
+}
+
+async function deleteSavedPreset(presetId, presetName) {
+  if (!window.confirm(`¿Eliminar el preset «${presetName}»?`)) return;
+  try {
+    const res = await fetch(`/api/presets/${encodeURIComponent(presetId)}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al eliminar", data.error || `HTTP ${res.status}`);
+      return;
+    }
+    await fetchAndRenderPresetsList();
+    showToast("Preset eliminado", `Se eliminó «${presetName}».`);
+  } catch (err) {
+    console.error("Error eliminando preset:", err);
+    showToast("Error de red", "No se pudo eliminar el preset.");
+  }
+}
+
+async function importPresetsJsonFile(file) {
+  if (!file) return;
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    const res = await fetch("/api/presets/import", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast("Error al importar presets", data.error || `HTTP ${res.status}`);
+      return;
+    }
+    await fetchAndRenderPresetsList();
+    showToast("Presets importados", `Se añadieron ${data.added} preset(s) a tu biblioteca.`);
+  } catch (err) {
+    console.error("Error importando JSON de presets:", err);
+    showToast("Error de red", "No se pudo importar el archivo JSON.");
   }
 }
 
@@ -8247,6 +8581,46 @@ function initUIListeners() {
   document.getElementById("clipShadows")?.addEventListener("click", () => toggleZebraChannel("shadows"));
   document.getElementById("clipHighlights")?.addEventListener("click", () => toggleZebraChannel("highlights"));
   document.getElementById("btnCullClearRejected")?.addEventListener("click", removeRejectedFrames);
+  document.getElementById("btnDevelopPickedRoll")?.addEventListener("click", () => {
+    developFullRoll({ onlyPicked: true });
+  });
+  document.querySelectorAll(".strip-filter-pill").forEach((pill) => {
+    pill.addEventListener("click", () => {
+      state.stripFilter = pill.dataset.stripFilter || "all";
+      updateCullSummaryUI();
+      renderFilmStrip();
+    });
+  });
+  document.getElementById("abCompareBtn")?.addEventListener("click", toggleAbCompare);
+  document.getElementById("presetsBtn")?.addEventListener("click", openPresetsModal);
+  document.getElementById("closePresetsBtn")?.addEventListener("click", () => {
+    setModalOpen("presetsModal", false);
+  });
+  document.getElementById("btnSavePreset")?.addEventListener("click", saveCurrentAsPreset);
+  document.getElementById("btnExportPresetsJson")?.addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = "/api/presets/export";
+    a.download = "haluro_presets.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+  document.getElementById("btnImportPresetsJson")?.addEventListener("click", () => {
+    document.getElementById("presetsJsonInput")?.click();
+  });
+  document.getElementById("presetsJsonInput")?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) importPresetsJsonFile(file);
+    e.target.value = "";
+  });
+  ["presetNameInput", "presetNotesInput"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveCurrentAsPreset();
+      }
+    });
+  });
   document.getElementById("sheetHideRejectedBtn")?.addEventListener("click", () => {
     const { rejects, total } = getCullCounts();
     if (!state.hideRejectedInSheet && total > 0 && rejects >= total) {
@@ -8530,8 +8904,23 @@ function initUIListeners() {
 
   const fmtSigned = (v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`;
 
+  bindRange("simStrengthSlider", "simStrengthVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.filmStrength = Math.max(0, Math.min(1, v / 100));
+  });
   bindRange("evSlider", "evVal", (v) => `${v > 0 ? "+" : ""}${v.toFixed(1)} EV`, (v) => {
     state.ev = v;
+  });
+  bindRange("simTempSlider", "simTempVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`, (v) => {
+    state.simTemp = v;
+  });
+  bindRange("simTintSlider", "simTintVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`, (v) => {
+    state.simTint = v;
+  });
+  document.getElementById("simBwFilterSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.bwFilter = e.target.value || "none";
+    saveActiveFrameRecipe();
+    requestPreview(true);
   });
   bindRange("halationSlider", "halationVal", (v) => `${v.toFixed(1)}x`, (v) => {
     state.halation = v;

@@ -37,6 +37,7 @@ Desktop.ini
 # Design-audit evidence (local only)
 .taste-skill/
 
-# Per-user session token & hidden emulsions list (never commit)
+# Per-user session token, presets & hidden emulsions list (never commit)
 session.token
 hidden_films.json
+presets.json

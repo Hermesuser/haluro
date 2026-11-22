@@ -3512,6 +3512,48 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: #ff858e;
 }
 
+/* Strip Filter Pills & Culling Actions */
+.strip-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.strip-filter-pill {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline-rule);
+  background: transparent;
+  color: var(--pewter-muted);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.strip-filter-pill:hover {
+  color: var(--silver-text);
+  border-color: var(--pewter-muted);
+}
+
+.strip-filter-pill.active {
+  background: rgba(229, 149, 40, 0.16);
+  border-color: var(--sodium-amber, #e59528);
+  color: var(--sodium-amber, #e59528);
+}
+
+.cull-actions-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-btn.ab-active {
+  background: rgba(229, 149, 40, 0.2);
+  color: var(--sodium-amber, #e59528);
+  border-color: var(--sodium-amber, #e59528);
+}
+
 /* Shortcuts Grid */
 .shortcuts-grid {
   display: flex;

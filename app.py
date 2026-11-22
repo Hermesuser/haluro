@@ -69,6 +69,7 @@ from engine.pipeline import (
     DEV_PROCESSES,
     HEIF_EXTENSIONS,
     RAW_EXTENSIONS,
+    VALID_BW_FILTERS,
     develop_frame,
     format_analog_caption,
     get_srgb_icc_bytes,
@@ -88,6 +89,13 @@ from engine.platform_io import (
     get_user_data_root,
     open_directory,
     reveal_in_file_manager,
+)
+from engine.presets import (
+    PresetError,
+    delete_preset,
+    import_presets_payload,
+    list_presets,
+    save_preset,
 )
 from engine.projects import (
     ProjectError,
@@ -1365,6 +1373,22 @@ def _parse_grain_asa(value) -> str:
     return s if s in VALID_GRAIN_ASAS else "auto"
 
 
+def _parse_sim_look_params(data: dict, fallback: dict | None = None) -> dict:
+    """Parse film strength (0..1), pre-emulsion WB (temp/tint -1..1), and B&W lens filter."""
+    src = data if isinstance(data, dict) else {}
+    fb = fallback if isinstance(fallback, dict) else {}
+    raw_strength = src.get("film_strength", fb.get("film_strength", 1.0))
+    raw_temp = src.get("sim_temp", fb.get("sim_temp", 0.0))
+    raw_tint = src.get("sim_tint", fb.get("sim_tint", 0.0))
+    raw_bw = str(src.get("bw_filter", fb.get("bw_filter", "none")) or "none").strip().lower()
+    return {
+        "film_strength": _num({"v": raw_strength}, "v", 1.0, 0.0, 1.0),
+        "sim_temp": _num({"v": raw_temp}, "v", 0.0, -1.0, 1.0),
+        "sim_tint": _num({"v": raw_tint}, "v", 0.0, -1.0, 1.0),
+        "bw_filter": raw_bw if raw_bw in VALID_BW_FILTERS else "none",
+    }
+
+
 @app.route("/api/preview", methods=["POST"])
 def api_preview():
     data = request.json or {}
@@ -1380,6 +1404,7 @@ def api_preview():
     highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
     curve = _parse_curve(data.get("curve"))
     dev_process = _parse_dev_process(data.get("dev_process"))
+    sim_look = _parse_sim_look_params(data)
     add_date = bool(data.get("date", False))
     geom = _parse_geometry_params(data)
     optics = _parse_shared_optics_params(data)
@@ -1405,6 +1430,7 @@ def api_preview():
         add_date=add_date,
         max_dim=1280,
         dev_process=dev_process,
+        **sim_look,
         **geom,
         **optics,
     )
@@ -1619,6 +1645,7 @@ def api_develop_full():
         f_highlights = _num(fr, "highlights", highlights, -4.0, 4.0) if isinstance(fr, dict) else highlights
         f_curve = _parse_curve(fr.get("curve")) if isinstance(fr, dict) else curve
         f_dev_proc = _parse_dev_process(fr.get("dev_process", dev_process)) if isinstance(fr, dict) else dev_process
+        f_sim_look = _parse_sim_look_params(fr, fallback=data) if isinstance(fr, dict) else _parse_sim_look_params(data)
         f_date = bool(fr.get("date", add_date)) if isinstance(fr, dict) else add_date
         f_geom = _parse_geometry_params({**geom, **fr}) if isinstance(fr, dict) else geom
         f_optics = (
@@ -1644,6 +1671,7 @@ def api_develop_full():
             max_dim=None,
             return_float=True,
             dev_process=f_dev_proc,
+            **f_sim_look,
             **f_geom,
             **f_optics,
         )
@@ -1961,6 +1989,7 @@ def api_export_single():
 
     analog_meta = _parse_analog_meta(data)
     easel_border, dry_down_comp = _parse_print_options(data)
+    sim_look = _parse_sim_look_params(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
         fpath,
@@ -1978,6 +2007,7 @@ def api_export_single():
         max_dim=None,
         return_float=True,
         dev_process=dev_process,
+        **sim_look,
         **geom,
         **optics,
     )
@@ -2118,6 +2148,7 @@ def api_save_direct_to_downloads():
 
     analog_meta = _parse_analog_meta(data)
     easel_border, dry_down_comp = _parse_print_options(data)
+    sim_look = _parse_sim_look_params(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
         fpath,
@@ -2135,6 +2166,7 @@ def api_save_direct_to_downloads():
         max_dim=None,
         return_float=True,
         dev_process=dev_process,
+        **sim_look,
         **geom,
         **optics,
     )
@@ -2254,6 +2286,7 @@ def _save_simulation_to_dest(data, reveal=False):
     film_info = get_film(film_key)
     analog_meta = _parse_analog_meta(data)
     easel_border, dry_down_comp = _parse_print_options(data)
+    sim_look = _parse_sim_look_params(data)
     t0 = time.time()
     dev_img, srgb_f = develop_frame(
         fpath,
@@ -2271,6 +2304,7 @@ def _save_simulation_to_dest(data, reveal=False):
         max_dim=None,
         return_float=True,
         dev_process=dev_process,
+        **sim_look,
         **geom,
         **optics,
     )
@@ -2539,6 +2573,77 @@ def api_import_project():
     except ProjectError as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify({"success": True, "project": summary})
+
+
+# -------------------------------------------------------------
+# USER RECIPE PRESETS LIBRARY
+# -------------------------------------------------------------
+
+@app.route("/api/presets", methods=["GET"])
+def api_list_presets():
+    """List all saved user recipe presets."""
+    return jsonify({"presets": list_presets(USER_DATA_ROOT)})
+
+
+@app.route("/api/presets", methods=["POST"])
+def api_save_preset():
+    """Create or update a named user recipe preset."""
+    data = request.json or {}
+    try:
+        entry = save_preset(
+            USER_DATA_ROOT,
+            name=data.get("name", ""),
+            mode=data.get("mode", "simulation"),
+            recipe=data.get("recipe") or {},
+            notes=data.get("notes", ""),
+            preset_id=data.get("id") or data.get("preset_id"),
+        )
+    except PresetError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"success": True, "preset": entry, "presets": list_presets(USER_DATA_ROOT)})
+
+
+@app.route("/api/presets/<preset_id>", methods=["DELETE"])
+def api_delete_preset(preset_id):
+    """Delete a saved user preset by ID."""
+    try:
+        deleted = delete_preset(USER_DATA_ROOT, preset_id)
+    except PresetError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not deleted:
+        return jsonify({"error": "Preset no encontrado."}), 404
+    return jsonify({"success": True, "presets": list_presets(USER_DATA_ROOT)})
+
+
+@app.route("/api/presets/export", methods=["GET"])
+def api_export_presets():
+    """Download all saved user presets as a portable JSON file."""
+    payload = json.dumps({"version": 1, "presets": list_presets(USER_DATA_ROOT)}, ensure_ascii=False, indent=2)
+    return send_file(
+        io.BytesIO(payload.encode("utf-8")),
+        mimetype="application/json",
+        as_attachment=True,
+        download_name="haluro_presets.json",
+    )
+
+
+@app.route("/api/presets/import", methods=["POST"])
+def api_import_presets():
+    """Import user presets from a JSON file upload or JSON body."""
+    raw_data = None
+    if "file" in request.files:
+        f = request.files["file"]
+        try:
+            raw_data = json.loads(f.read().decode("utf-8"))
+        except Exception:
+            return jsonify({"error": "El archivo no es un JSON válido."}), 400
+    else:
+        raw_data = request.json
+    try:
+        added = import_presets_payload(USER_DATA_ROOT, raw_data)
+    except PresetError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"success": True, "added": added, "presets": list_presets(USER_DATA_ROOT)})
 
 
 # -------------------------------------------------------------
