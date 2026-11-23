@@ -260,6 +260,7 @@ const state = {
 
   // Mode 1: Film Simulation controls
   devProcess: "standard",
+  zoneDev: "N",
   filmStrength: 1.0,
   simTemp: 0.0,
   simTint: 0.0,
@@ -312,6 +313,9 @@ const state = {
   uiEssential: false,
   spacePressed: false,
   zebraMode: { shadows: false, highlights: false },
+  zoneMapMode: "off", // 'off' | 'anchors' | 'full' | 'single'
+  zoneMapTarget: null, // 0..10 when zoneMapMode === 'single'
+  evalSurround: "dark", // 'dark' | 'gray18' | 'gallery'
 
   // Contact Sheet Light Table
   sheetColumns: 4,
@@ -2688,6 +2692,7 @@ function buildSimulationPayload() {
   return {
     film: state.selectedFilm,
     dev_process: state.devProcess || "standard",
+    zone_dev: state.zoneDev || "N",
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -2798,6 +2803,7 @@ function snapshotSimRecipe() {
   return {
     film: state.selectedFilm,
     dev_process: state.devProcess || "standard",
+    zone_dev: state.zoneDev || "N",
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -2927,6 +2933,8 @@ function applySimRecipeToUI(rec) {
   state.devProcess = rec.dev_process || "standard";
   const devProcSel = document.getElementById("simDevProcessSelect");
   if (devProcSel) devProcSel.value = state.devProcess;
+  state.zoneDev = rec.zone_dev || "N";
+  syncZoneDevUI();
   state.filmStrength = Number(rec.film_strength ?? 1.0);
   state.simTemp = Number(rec.sim_temp ?? 0.0);
   state.simTint = Number(rec.sim_tint ?? 0.0);
@@ -4864,8 +4872,273 @@ function renderHistogramFromImage(imgEl) {
   ctx.stroke();
 
   ctx.restore();
+  updateZoneScaleBar(yBins, totalPixels);
   renderZebraOverlay();
+  renderZoneMapOverlay();
   renderBorderGuideOverlay();
+}
+
+const ZONE_ROMAN = ["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+const ZONE_NAMES = [
+  "Negro máximo (D-max)",
+  "Casi negro sin textura",
+  "Sombra muy profunda",
+  "Ancla de sombras con textura",
+  "Follaje oscuro / sombra abierta",
+  "Gris medio 18%",
+  "Piel clara / piedra iluminada",
+  "Luz alta suave con detalle",
+  "Ancla de altas luces con textura",
+  "Blanco brillante sin textura",
+  "Blanco puro del papel",
+];
+const ZONE_FULL_PALETTE = [
+  [120, 20, 48],   // 0
+  [65, 38, 128],   // I
+  [44, 78, 185],   // II
+  [59, 130, 246],  // III (cobalt)
+  [20, 168, 180],  // IV
+  [34, 197, 94],   // V (emerald 18%)
+  [154, 205, 50],  // VI
+  [234, 195, 35],  // VII
+  [245, 158, 11],  // VIII (amber)
+  [249, 115, 22],  // IX
+  [236, 72, 153],  // X (paper white)
+];
+
+function lumaToZoneIndex(luma) {
+  if (luma <= 8) return 0;
+  if (luma >= 247) return 10;
+  return Math.min(9, Math.max(1, Math.floor((luma - 9) / 26.445) + 1));
+}
+
+function updateZoneScaleBar(yBins, totalPixels) {
+  const bar = document.getElementById("zoneScaleBar");
+  if (!bar || !yBins || !totalPixels) return;
+  const zoneCounts = new Uint32Array(11);
+  for (let i = 0; i < 256; i++) {
+    zoneCounts[lumaToZoneIndex(i)] += yBins[i];
+  }
+  let maxPct = 0.01;
+  const pcts = [];
+  for (let z = 0; z < 11; z++) {
+    const p = (zoneCounts[z] / totalPixels) * 100;
+    pcts.push(p);
+    if (p > maxPct) maxPct = p;
+  }
+  bar.querySelectorAll(".zone-cell").forEach((cell) => {
+    const z = Number(cell.dataset.zone);
+    const p = pcts[z] || 0;
+    const barEl = cell.querySelector(".zone-bar");
+    if (barEl) {
+      barEl.style.height = `${Math.min(100, Math.round((p / maxPct) * 100))}%`;
+    }
+    cell.classList.toggle("has-mass", p >= 0.5);
+    const isSel = state.zoneMapMode === "single" && state.zoneMapTarget === z;
+    cell.classList.toggle("active", isSel);
+    cell.setAttribute("aria-pressed", isSel ? "true" : "false");
+    cell.title = `Zona ${ZONE_ROMAN[z]} (${ZONE_NAMES[z]}) · ${p.toFixed(1)}% — Clic para aislar en visor`;
+  });
+}
+
+function renderZoneMapOverlay() {
+  const zoneCanvas = document.getElementById("zoneMapCanvas");
+  const legendEl = document.getElementById("zoneMapLegend");
+  const imgDev = document.getElementById("imgDeveloped");
+  if (!zoneCanvas) return;
+
+  const mode = state.zoneMapMode || "off";
+  const active = mode !== "off";
+  if (
+    !active ||
+    state.frames.length === 0 ||
+    state.viewMode === "sheet" ||
+    !imgDev ||
+    !imgDev.naturalWidth
+  ) {
+    zoneCanvas.style.display = "none";
+    if (legendEl) legendEl.style.display = "none";
+    return;
+  }
+
+  const src = devLoupeSourceReady && offscreenDevLoupeCanvas ? offscreenDevLoupeCanvas : null;
+  const maxDim = 640;
+  let w;
+  let h;
+  let srcPixels;
+  const sourceEl = src && src.width && src.height ? src : imgDev;
+  const natW = sourceEl.width || sourceEl.naturalWidth;
+  const natH = sourceEl.height || sourceEl.naturalHeight;
+  const scale = Math.min(1, maxDim / Math.max(natW, natH));
+  w = Math.max(1, Math.round(natW * scale));
+  h = Math.max(1, Math.round(natH * scale));
+  const tmp = document.createElement("canvas");
+  tmp.width = w;
+  tmp.height = h;
+  const tCtx = tmp.getContext("2d", { willReadFrequently: true });
+  tCtx.drawImage(sourceEl, 0, 0, w, h);
+  srcPixels = tCtx.getImageData(0, 0, w, h).data;
+
+  zoneCanvas.width = w;
+  zoneCanvas.height = h;
+  const zCtx = zoneCanvas.getContext("2d");
+  const outImg = zCtx.createImageData(w, h);
+  const out = outImg.data;
+  const targetZ = state.zoneMapTarget;
+
+  for (let i = 0; i < srcPixels.length; i += 4) {
+    const luma = Math.min(255, Math.round(0.2126 * srcPixels[i] + 0.7152 * srcPixels[i + 1] + 0.0722 * srcPixels[i + 2]));
+    const z = lumaToZoneIndex(luma);
+    if (mode === "anchors") {
+      if (z === 0) {
+        out[i] = 239; out[i + 1] = 68; out[i + 2] = 68; out[i + 3] = 175;
+      } else if (z === 3) {
+        out[i] = 59; out[i + 1] = 130; out[i + 2] = 246; out[i + 3] = 165;
+      } else if (z === 5) {
+        out[i] = 34; out[i + 1] = 197; out[i + 2] = 94; out[i + 3] = 145;
+      } else if (z === 8) {
+        out[i] = 245; out[i + 1] = 158; out[i + 2] = 11; out[i + 3] = 165;
+      } else if (z === 10) {
+        out[i] = 236; out[i + 1] = 72; out[i + 2] = 153; out[i + 3] = 175;
+      }
+    } else if (mode === "full") {
+      const col = ZONE_FULL_PALETTE[z];
+      out[i] = col[0];
+      out[i + 1] = col[1];
+      out[i + 2] = col[2];
+      out[i + 3] = 168;
+    } else if (mode === "single") {
+      if (z === targetZ) {
+        out[i] = 242; out[i + 1] = 169; out[i + 2] = 59; out[i + 3] = 196;
+      } else {
+        out[i] = 0; out[i + 1] = 0; out[i + 2] = 0; out[i + 3] = 76;
+      }
+    }
+  }
+
+  zCtx.putImageData(outImg, 0, 0);
+  zoneCanvas.style.display = "block";
+
+  if (legendEl) {
+    if (mode === "anchors") {
+      legendEl.innerHTML =
+        `<span class="zone-legend-chip"><span class="zone-legend-swatch" style="background:#ef4444"></span>0 D-max</span>` +
+        `<span class="zone-legend-chip"><span class="zone-legend-swatch" style="background:#3b82f6"></span>III Sombras</span>` +
+        `<span class="zone-legend-chip"><span class="zone-legend-swatch" style="background:#22c55e"></span>V Gris 18%</span>` +
+        `<span class="zone-legend-chip"><span class="zone-legend-swatch" style="background:#f59e0b"></span>VIII Luces</span>` +
+        `<span class="zone-legend-chip"><span class="zone-legend-swatch" style="background:#ec4899"></span>X Papel</span>`;
+    } else if (mode === "full") {
+      legendEl.innerHTML = ZONE_ROMAN.map((r, idx) => {
+        const [cr, cg, cb] = ZONE_FULL_PALETTE[idx];
+        return `<span class="zone-legend-chip"><span class="zone-legend-swatch" style="background:rgb(${cr},${cg},${cb})"></span>${r}</span>`;
+      }).join("");
+    } else if (mode === "single" && targetZ != null) {
+      legendEl.innerHTML = `<span class="zone-legend-chip"><span class="zone-legend-swatch" style="background:#f2a93b"></span>Aislando Zona ${ZONE_ROMAN[targetZ]} — ${ZONE_NAMES[targetZ]}</span>`;
+    }
+    legendEl.style.display = "flex";
+  }
+
+  if (state.viewMode === "split") {
+    applySplitPercent(state.splitPercent);
+  } else if (state.viewMode === "full") {
+    zoneCanvas.style.clipPath = "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
+  } else if (state.viewMode === "original") {
+    zoneCanvas.style.clipPath = "polygon(0 0, 0 0, 0 100%, 0 100%)";
+  }
+}
+
+function syncZoneMapButtonUI() {
+  const btn = document.getElementById("zoneMapToggleBtn");
+  const mode = state.zoneMapMode || "off";
+  if (btn) {
+    btn.classList.toggle("active", mode !== "off");
+    btn.setAttribute("aria-pressed", mode !== "off" ? "true" : "false");
+    btn.textContent =
+      mode === "anchors"
+        ? "Zonas III·V·VIII"
+        : mode === "full"
+        ? "Zonas 0–X"
+        : mode === "single" && state.zoneMapTarget != null
+        ? `Zona ${ZONE_ROMAN[state.zoneMapTarget]}`
+        : "Zonas";
+  }
+  document.querySelectorAll("#zoneScaleBar .zone-cell").forEach((cell) => {
+    const isSel = mode === "single" && Number(cell.dataset.zone) === state.zoneMapTarget;
+    cell.classList.toggle("active", isSel);
+    cell.setAttribute("aria-pressed", isSel ? "true" : "false");
+  });
+}
+
+function cycleZoneMapMode() {
+  if (state.zoneMapMode === "off") {
+    state.zoneMapMode = "anchors";
+    state.zoneMapTarget = null;
+  } else if (state.zoneMapMode === "anchors") {
+    state.zoneMapMode = "full";
+    state.zoneMapTarget = null;
+  } else {
+    state.zoneMapMode = "off";
+    state.zoneMapTarget = null;
+  }
+  syncZoneMapButtonUI();
+  renderZoneMapOverlay();
+}
+
+function toggleSingleZoneHighlight(zoneIdx) {
+  if (state.zoneMapMode === "single" && state.zoneMapTarget === zoneIdx) {
+    state.zoneMapMode = "off";
+    state.zoneMapTarget = null;
+  } else {
+    state.zoneMapMode = "single";
+    state.zoneMapTarget = zoneIdx;
+  }
+  syncZoneMapButtonUI();
+  renderZoneMapOverlay();
+}
+
+function syncZoneDevUI() {
+  const val = state.zoneDev || "N";
+  const lbl = document.getElementById("valSimZoneDev");
+  if (lbl) lbl.textContent = val.replace("-", "−");
+  document.querySelectorAll("#simZoneDevBar .zone-dev-btn").forEach((btn) => {
+    const active = btn.dataset.zoneDev === val;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-checked", active ? "true" : "false");
+  });
+}
+
+function setEvalSurround(mode) {
+  const valid = ["dark", "gray18", "gallery"];
+  const next = valid.includes(mode) ? mode : "dark";
+  state.evalSurround = next;
+  const container = document.getElementById("canvasContainer");
+  if (container) {
+    container.classList.toggle("surround-gray18", next === "gray18");
+    container.classList.toggle("surround-gallery", next === "gallery");
+  }
+  document.querySelectorAll("#evalSurroundGroup .surround-btn").forEach((btn) => {
+    const active = btn.dataset.surround === next;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  try {
+    localStorage.setItem("haluro_eval_surround", next);
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+function cycleEvalSurround() {
+  const order = ["dark", "gray18", "gallery"];
+  const idx = order.indexOf(state.evalSurround || "dark");
+  const next = order[(idx + 1) % order.length];
+  setEvalSurround(next);
+  const names = {
+    dark: "Cuarto oscuro",
+    gray18: "Gris neutro 18%",
+    gallery: "Pared Galería Blanca",
+  };
+  showToast("Entorno de evaluación", names[next]);
 }
 
 function renderZebraOverlay() {
@@ -5091,6 +5364,10 @@ function applySplitPercent(pct, wrapWidth = null) {
     if (zebraCanvas) {
       zebraCanvas.style.clipPath = `polygon(${localPct}% 0, 100% 0, 100% 100%, ${localPct}% 100%)`;
     }
+    const zoneCanvas = document.getElementById("zoneMapCanvas");
+    if (zoneCanvas) {
+      zoneCanvas.style.clipPath = `polygon(${localPct}% 0, 100% 0, 100% 100%, ${localPct}% 100%)`;
+    }
   }
 }
 
@@ -5234,6 +5511,7 @@ function setViewMode(mode) {
     }
     applyZoomTransform();
     renderZebraOverlay();
+    renderZoneMapOverlay();
     generateContactSheetPreview();
     return;
   }
@@ -5257,6 +5535,10 @@ function setViewMode(mode) {
     if (zebraCanvas) {
       zebraCanvas.style.clipPath = "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
     }
+    const zoneCanvasFull = document.getElementById("zoneMapCanvas");
+    if (zoneCanvasFull) {
+      zoneCanvasFull.style.clipPath = "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
+    }
   } else if (mode === "original") {
     if (divider) divider.style.display = "none";
     if (origLabel) origLabel.style.display = "block";
@@ -5267,8 +5549,13 @@ function setViewMode(mode) {
     if (zebraCanvas) {
       zebraCanvas.style.clipPath = "polygon(0 0, 0 0, 0 100%, 0 100%)";
     }
+    const zoneCanvasOrig = document.getElementById("zoneMapCanvas");
+    if (zoneCanvasOrig) {
+      zoneCanvasOrig.style.clipPath = "polygon(0 0, 0 0, 0 100%, 0 100%)";
+    }
   }
   renderZebraOverlay();
+  renderZoneMapOverlay();
   renderBorderGuideOverlay();
   if (mode === "teststrip" || prevMode === "teststrip") {
     requestPreview(false);
@@ -6650,6 +6937,10 @@ function resetSimulationControls() {
         devProcSel.value = "standard";
         devProcSel.dispatchEvent(new Event("change", { bubbles: true }));
       }
+      if (state.zoneDev !== "N") {
+        state.zoneDev = "N";
+        syncZoneDevUI();
+      }
       const grainAsaSel = document.getElementById("grainAsaSelect");
       if (grainAsaSel && grainAsaSel.value !== "auto") {
         grainAsaSel.value = "auto";
@@ -6982,6 +7273,10 @@ function initKeyboardShortcuts() {
       nudgeCmyChannel(2, e.shiftKey ? -0.05 : 0.05);
     } else if (e.key === "l" || e.key === "L") {
       toggleSafelight();
+    } else if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      cycleZoneMapMode();
+    } else if ((e.key === "e" || e.key === "E") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      cycleEvalSurround();
     } else if (e.key === "?") {
       const sm = document.getElementById("shortcutsModal");
       if (sm) setModalOpen(sm, !sm.classList.contains("active"));
@@ -8998,6 +9293,34 @@ function initUIListeners() {
     saveUserPreferences();
     requestPreview(false);
   });
+  document.querySelectorAll("#simZoneDevBar .zone-dev-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const next = btn.dataset.zoneDev || "N";
+      if (state.zoneDev === next) return;
+      pushUndoSnapshotForFrame();
+      state.zoneDev = next;
+      syncZoneDevUI();
+      saveActiveFrameRecipe();
+      requestPreview(false);
+    });
+  });
+  document.getElementById("zoneMapToggleBtn")?.addEventListener("click", cycleZoneMapMode);
+  document.querySelectorAll("#zoneScaleBar .zone-cell").forEach((cell) => {
+    cell.addEventListener("click", () => {
+      toggleSingleZoneHighlight(Number(cell.dataset.zone));
+    });
+  });
+  document.querySelectorAll("#evalSurroundGroup .surround-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setEvalSurround(btn.dataset.surround || "dark");
+    });
+  });
+  try {
+    const savedSurround = localStorage.getItem("haluro_eval_surround");
+    if (savedSurround) setEvalSurround(savedSurround);
+  } catch {
+    // ignore
+  }
   document.getElementById("grainAsaSelect")?.addEventListener("change", (e) => {
     pushUndoSnapshotForFrame();
     state.grainAsa = e.target.value || "auto";

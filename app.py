@@ -70,6 +70,7 @@ from engine.pipeline import (
     HEIF_EXTENSIONS,
     RAW_EXTENSIONS,
     VALID_BW_FILTERS,
+    VALID_ZONE_DEVS,
     develop_frame,
     extract_source_exif,
     format_analog_caption,
@@ -1413,18 +1414,20 @@ def _parse_grain_asa(value) -> str:
 
 
 def _parse_sim_look_params(data: dict, fallback: dict | None = None) -> dict:
-    """Parse film strength (0..1), pre-emulsion WB (temp/tint -1..1), and B&W lens filter."""
+    """Parse film strength (0..1), pre-emulsion WB (temp/tint -1..1), B&W filter, and Zone System N-2..N+2."""
     src = data if isinstance(data, dict) else {}
     fb = fallback if isinstance(fallback, dict) else {}
     raw_strength = src.get("film_strength", fb.get("film_strength", 1.0))
     raw_temp = src.get("sim_temp", fb.get("sim_temp", 0.0))
     raw_tint = src.get("sim_tint", fb.get("sim_tint", 0.0))
     raw_bw = str(src.get("bw_filter", fb.get("bw_filter", "none")) or "none").strip().lower()
+    raw_zone = str(src.get("zone_dev", fb.get("zone_dev", "N")) or "N").strip().upper()
     return {
         "film_strength": _num({"v": raw_strength}, "v", 1.0, 0.0, 1.0),
         "sim_temp": _num({"v": raw_temp}, "v", 0.0, -1.0, 1.0),
         "sim_tint": _num({"v": raw_tint}, "v", 0.0, -1.0, 1.0),
         "bw_filter": raw_bw if raw_bw in VALID_BW_FILTERS else "none",
+        "zone_dev": raw_zone if raw_zone in VALID_ZONE_DEVS else "N",
     }
 
 

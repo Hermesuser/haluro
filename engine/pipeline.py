@@ -1912,6 +1912,54 @@ BW_OPTICAL_FILTERS: dict[str, tuple[float, float, float]] = {
 }
 VALID_BW_FILTERS = ("none", *BW_OPTICAL_FILTERS.keys())
 
+# Ansel Adams Zone System development contraction/expansion (N-2 .. N+2).
+# "Expose for the shadows, develop for the highlights":
+# Pivots above Zone III (linear ~0.045) so shadow detail stays anchored while
+# midtones and highlights contract (N-2, N-1) or expand (N+1, N+2).
+ZONE_DEV_PROFILES: dict[str, dict[str, float | str]] = {
+    "N-2": {"name": "N−2 (Contracción fuerte)", "gamma": 0.78, "shoulder": 0.38},
+    "N-1": {"name": "N−1 (Contracción suave)", "gamma": 0.89, "shoulder": 0.18},
+    "N": {"name": "N (Revelado normal)", "gamma": 1.00, "shoulder": 0.00},
+    "N+1": {"name": "N+1 (Expansión suave)", "gamma": 1.13, "shoulder": 0.00},
+    "N+2": {"name": "N+2 (Expansión fuerte)", "gamma": 1.28, "shoulder": 0.08},
+}
+VALID_ZONE_DEVS = tuple(ZONE_DEV_PROFILES.keys())
+
+
+def apply_zone_system_dev(lin: np.ndarray, zone_dev: str = "N") -> np.ndarray:
+    """Apply Zone System N-2..N+2 development around Zone III anchor in linear light."""
+    key = str(zone_dev or "N").strip().upper()
+    if key not in ZONE_DEV_PROFILES or key == "N":
+        return lin
+    spec = ZONE_DEV_PROFILES[key]
+    gamma = float(spec["gamma"])
+    shoulder = float(spec["shoulder"])
+
+    z3 = 0.045  # Linear Zone III (~2 stops below 18% middle gray)
+    x = np.maximum(lin.astype(np.float32, copy=False), 0.0)
+    luma = np.maximum(np.sum(x * LUMA, axis=-1, keepdims=True), 1e-6)
+
+    # Smooth Hermite weight: 0 below Zone I (0.012), 1 at/above Zone III (0.045)
+    t = np.clip((luma - 0.012) / (z3 - 0.012), 0.0, 1.0)
+    w = t * t * (3.0 - 2.0 * t)
+
+    # Expand or contract luminance relative to Zone III anchor
+    target_luma = z3 * np.power(np.maximum(luma / z3, 1e-6), gamma)
+    new_luma = luma * (1.0 - w) + target_luma * w
+
+    # Gentle highlight shoulder compression for N-1 / N-2 (and safety rolloff on N+2)
+    if shoulder > 0.001:
+        knee = 0.55 if gamma < 1.0 else 1.15
+        excess = np.maximum(0.0, new_luma - knee)
+        new_luma = np.where(
+            new_luma > knee,
+            knee + excess / (1.0 + shoulder * excess),
+            new_luma,
+        )
+
+    scale = np.clip(new_luma / luma, 0.25, 4.0)
+    return np.maximum(0.0, x * scale)
+
 
 def develop_frame(
     image_input,
@@ -1949,6 +1997,7 @@ def develop_frame(
     sim_temp=0.0,
     sim_tint=0.0,
     bw_filter="none",
+    zone_dev="N",
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     has_geom = bool(
@@ -2049,6 +2098,10 @@ def develop_frame(
             0.55 + (lin - 0.55) / (1.0 + comp * 0.45 * np.maximum(0.0, lin - 0.55)),
             lin,
         )
+
+    # 1a-zone. Zone System N-2..N+2 development (pivoted around Zone III)
+    if zone_dev and str(zone_dev).strip().upper() != "N":
+        lin = apply_zone_system_dev(lin, zone_dev=str(zone_dev))
 
     # 1b. Tonal zones (shadows / midtones / highlights) as linear exposure
     if abs(shadows) > 1e-4 or abs(mids) > 1e-4 or abs(highlights) > 1e-4:

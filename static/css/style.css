@@ -2183,6 +2183,224 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: none;
 }
 
+.zone-map-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  display: none;
+}
+
+.zone-map-legend {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(12, 13, 16, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--silver-text);
+  pointer-events: none;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+}
+
+.zone-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zone-legend-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Evaluation Surround Modes (Rod Dresser / Steve Anchell) */
+.eval-surround-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px;
+  background: var(--chamber-black);
+  border: 1px solid var(--hairline-rule);
+  border-radius: var(--radius-sm);
+}
+
+.surround-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+
+.surround-btn:hover { border-color: rgba(255, 255, 255, 0.28); }
+.surround-btn.active {
+  border-color: var(--sodium-amber);
+  background: rgba(242, 169, 59, 0.14);
+}
+
+.surround-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.surround-dot.dark { background: #101114; }
+.surround-dot.gray18 { background: #777777; }
+.surround-dot.gallery { background: #ebe8e1; border-color: rgba(0, 0, 0, 0.25); }
+
+.canvas-container.surround-gray18 {
+  background-color: #777777;
+}
+
+.canvas-container.surround-gray18 .split-slider-wrapper {
+  border-color: rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.26);
+}
+
+.canvas-container.surround-gallery {
+  background-color: #ebe8e1;
+  padding: 28px;
+}
+
+.canvas-container.surround-gallery .split-slider-wrapper {
+  border: 12px solid #f7f5f0;
+  border-radius: 1px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 14px 36px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.07);
+}
+
+/* 11-Zone Densitometer Scale Bar (0 .. X) */
+.zone-scale-bar {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 2px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.zone-cell {
+  position: relative;
+  height: 22px;
+  border: 1px solid var(--hairline-rule);
+  border-radius: 2px;
+  background: var(--chamber-black);
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: border-color 0.12s ease;
+}
+
+.zone-cell:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.zone-cell.zone-anchor {
+  border-color: rgba(242, 169, 59, 0.35);
+}
+
+.zone-cell.active {
+  border-color: var(--sodium-amber);
+  box-shadow: 0 0 0 1px rgba(242, 169, 59, 0.55);
+}
+
+.zone-cell .zone-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0%;
+  background: rgba(242, 169, 59, 0.35);
+  transition: height 0.12s ease;
+  pointer-events: none;
+}
+
+.zone-cell[data-zone="0"] .zone-bar { background: rgba(239, 68, 68, 0.52); }
+.zone-cell[data-zone="3"] .zone-bar { background: rgba(59, 130, 246, 0.52); }
+.zone-cell[data-zone="5"] .zone-bar { background: rgba(34, 197, 94, 0.48); }
+.zone-cell[data-zone="8"] .zone-bar { background: rgba(245, 158, 11, 0.56); }
+.zone-cell[data-zone="10"] .zone-bar { background: rgba(236, 72, 153, 0.52); }
+
+.zone-cell .zone-lbl {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--pewter-muted);
+  pointer-events: none;
+}
+
+.zone-cell.has-mass .zone-lbl {
+  color: var(--silver-text);
+}
+
+.zone-cell.active .zone-lbl {
+  color: var(--sodium-amber);
+}
+
+/* Zone System N-2..N+2 Development Segmented Bar */
+.zone-dev-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  padding: 2px;
+  background: var(--chamber-black);
+  border: 1px solid var(--hairline-rule);
+  border-radius: var(--radius-sm);
+}
+
+.zone-dev-btn {
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--pewter-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 2px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.zone-dev-btn:hover {
+  color: var(--silver-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.zone-dev-btn.active {
+  background: rgba(242, 169, 59, 0.16);
+  border-color: rgba(242, 169, 59, 0.5);
+  color: var(--sodium-amber);
+}
+
 .border-guide-overlay {
   position: absolute;
   inset: 0;

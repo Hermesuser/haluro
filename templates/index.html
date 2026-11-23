@@ -682,6 +682,16 @@
             title="Tira de prueba de cuarto oscuro en fracciones de paso (Tecla T)">Tira f-stop</button>
           <button class="mode-btn" id="abCompareBtn" aria-pressed="false"
             title="Comparación A/B: congela una instantánea A para compararla en vivo contra otro revelado B">A/B</button>
+          <span class="toolbar-sep" aria-hidden="true"></span>
+          <div class="eval-surround-group" id="evalSurroundGroup" role="group"
+            aria-label="Entorno de evaluación de copia (Tecla E)">
+            <button type="button" class="surround-btn active" data-surround="dark" aria-pressed="true"
+              title="Entorno Oscuro (Cuarto oscuro) — Tecla E para alternar"><span class="surround-dot dark"></span></button>
+            <button type="button" class="surround-btn" data-surround="gray18" aria-pressed="false"
+              title="Entorno Gris Neutro 18% (Evaluación de densidad sin engaño perceptual) — Tecla E"><span class="surround-dot gray18"></span></button>
+            <button type="button" class="surround-btn" data-surround="gallery" aria-pressed="false"
+              title="Entorno Pared Galería Blanca con paspartú virtual — Tecla E"><span class="surround-dot gallery"></span></button>
+          </div>
         </div>
 
         <!-- Geometry, Undo/Redo, Zoom & Recipe Sync Instruments -->
@@ -783,6 +793,7 @@
             <img id="imgOriginal" class="split-image original" alt="Fotografía original sin procesar" draggable="false">
             <img id="imgDeveloped" class="split-image developed" alt="Fotografía revelada en Haluro"
               crossorigin="anonymous" draggable="false">
+            <canvas id="zoneMapCanvas" class="zone-map-overlay" aria-hidden="true"></canvas>
             <canvas id="zebraCanvas" class="zebra-overlay" aria-hidden="true"></canvas>
             <div id="borderGuideOverlay" class="border-guide-overlay" style="display: none;" aria-hidden="true">
               <div class="border-guide-analysis" id="borderGuideAnalysisBox">
@@ -950,6 +961,7 @@
 
           <div class="split-label label-left" id="originalLabel">Original</div>
           <div class="split-label label-right" id="developedLabel">Kodak Portra 400</div>
+          <div class="zone-map-legend" id="zoneMapLegend" style="display: none;" aria-hidden="true"></div>
 
           <!-- Floating Eyedropper Magnifier Card -->
           <div class="eyedropper-loupe" id="eyedropperLoupe" style="display: none;">
@@ -1064,6 +1076,8 @@
         <div class="histogram-header">
           <h2 class="panel-label">Densitómetro RGB</h2>
           <div class="clip-indicators">
+            <button type="button" class="clip-pill clip-toggle-btn" id="zoneMapToggleBtn" aria-pressed="false"
+              title="Mapa Visual del Sistema de Zonas (clic cicla Anclas III·V·VIII → Mapa 0–X → Apagado · Tecla M)">Zonas</button>
             <button type="button" class="clip-pill clip-toggle-btn" id="clipShadows" aria-pressed="false"
               title="Alternar aviso de sombras empastadas en azul (Tecla J)">Sombras 0.0%</button>
             <button type="button" class="clip-pill clip-toggle-btn" id="clipHighlights" aria-pressed="false"
@@ -1071,6 +1085,20 @@
           </div>
         </div>
         <canvas id="histogramCanvas" width="272" height="84" aria-label="Histograma RGB en tiempo real"></canvas>
+        <div class="zone-scale-bar" id="zoneScaleBar" role="group"
+          aria-label="Distribución tonal en las 11 Zonas de Ansel Adams (clic para aislar una Zona)">
+          <button type="button" class="zone-cell" data-zone="0" title="Zona 0 (Negro máximo D-max)"><span class="zone-bar"></span><span class="zone-lbl">0</span></button>
+          <button type="button" class="zone-cell" data-zone="1" title="Zona I (Casi negro sin textura)"><span class="zone-bar"></span><span class="zone-lbl">I</span></button>
+          <button type="button" class="zone-cell" data-zone="2" title="Zona II (Sombra muy profunda)"><span class="zone-bar"></span><span class="zone-lbl">II</span></button>
+          <button type="button" class="zone-cell zone-anchor" data-zone="3" title="Zona III (Ancla de sombras con textura)"><span class="zone-bar"></span><span class="zone-lbl">III</span></button>
+          <button type="button" class="zone-cell" data-zone="4" title="Zona IV (Follaje oscuro / sombra abierta)"><span class="zone-bar"></span><span class="zone-lbl">IV</span></button>
+          <button type="button" class="zone-cell zone-anchor" data-zone="5" title="Zona V (Gris medio 18%)"><span class="zone-bar"></span><span class="zone-lbl">V</span></button>
+          <button type="button" class="zone-cell" data-zone="6" title="Zona VI (Piel clara / piedra iluminada)"><span class="zone-bar"></span><span class="zone-lbl">VI</span></button>
+          <button type="button" class="zone-cell" data-zone="7" title="Zona VII (Luz alta suave con detalle)"><span class="zone-bar"></span><span class="zone-lbl">VII</span></button>
+          <button type="button" class="zone-cell zone-anchor" data-zone="8" title="Zona VIII (Ancla de altas luces con textura)"><span class="zone-bar"></span><span class="zone-lbl">VIII</span></button>
+          <button type="button" class="zone-cell" data-zone="9" title="Zona IX (Blanco brillante sin textura)"><span class="zone-bar"></span><span class="zone-lbl">IX</span></button>
+          <button type="button" class="zone-cell" data-zone="10" title="Zona X (Blanco puro del papel)"><span class="zone-bar"></span><span class="zone-lbl">X</span></button>
+        </div>
         <div class="cursor-readout" id="cursorReadout" aria-live="off">Mueve el cursor para leer RGB y Zona</div>
         <div class="active-stock-bar">
           <span class="stock-label-muted" id="statFilmLabel">Receta activa</span>
@@ -1113,6 +1141,27 @@
                 <option value="push_2">Push +2 EV (forzado 2 pasos)</option>
                 <option value="pull_1">Pull -1 EV (subrevelado suave)</option>
               </select>
+            </div>
+
+            <div class="control-group compact-top">
+              <div class="control-label">
+                <span id="lblSimZoneDev">Desarrollo Sistema de Zonas</span>
+                <span class="val-readout" id="valSimZoneDev">N</span>
+              </div>
+              <div class="zone-dev-bar" id="simZoneDevBar" role="radiogroup"
+                aria-label="Contracción o expansión del Sistema de Zonas (N-2 a N+2)"
+                title="Expón para las sombras, revela para las luces: mantiene anclada la Zona III mientras contrae o expande el hombro de altas luces">
+                <button type="button" class="zone-dev-btn" data-zone-dev="N-2" aria-checked="false" role="radio"
+                  title="N−2: Contracción fuerte (escenas de alto contraste)">N−2</button>
+                <button type="button" class="zone-dev-btn" data-zone-dev="N-1" aria-checked="false" role="radio"
+                  title="N−1: Contracción suave (protege altas luces)">N−1</button>
+                <button type="button" class="zone-dev-btn active" data-zone-dev="N" aria-checked="true" role="radio"
+                  title="N: Revelado normal">N</button>
+                <button type="button" class="zone-dev-btn" data-zone-dev="N+1" aria-checked="false" role="radio"
+                  title="N+1: Expansión suave (escenas planas o nubladas)">N+1</button>
+                <button type="button" class="zone-dev-btn" data-zone-dev="N+2" aria-checked="false" role="radio"
+                  title="N+2: Expansión fuerte (niebla o muy bajo contraste)">N+2</button>
+              </div>
             </div>
 
             <div class="control-group">

@@ -414,6 +414,7 @@ def _run_render_project(args) -> None:
                     sim_temp=float(rec.get("sim_temp", 0.0) or 0.0),
                     sim_tint=float(rec.get("sim_tint", 0.0) or 0.0),
                     bw_filter=str(rec.get("bw_filter") or "none"),
+                    zone_dev=str(rec.get("zone_dev") or "N"),
                     rotate=int(rec.get("rotate", 0) or 0),
                     flip_h=bool(rec.get("flip_h", False)),
                     flip_v=bool(rec.get("flip_v", False)),
