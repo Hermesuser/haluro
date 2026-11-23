@@ -445,6 +445,9 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 ---
 
 ### Cuarto Oscuro Maestro (v3.0.0)
+
+![Mapa Visual del Sistema de Zonas, Entorno Gris 18% y Cuarto de Copia B&N en Haluro 3.0.0](docs/images/12_cuarto_oscuro_maestro_zonas.png)
+
 - **Sistema de Zonas visual (`M`) y Densitómetro de 11 Zonas (`0–X`):** pulsa `M` o el botón `Zonas` para alternar entre **Anclas III · V · VIII**, **Mapa completo 0–X** o aislar cualquier Zona haciendo clic sobre su celda en el densitómetro.
 - **Entorno de evaluación (`E`):** alterna el fondo de la mesa de luz entre **Oscuro**, **Gris Neutro 18%** y **Pared Galería Blanca con paspartú virtual**.
 - **Desarrollo `N−2` a `N+2`, Reveladores clásicos y Cabezal de ampliadora:** elige entre `D-76 1:1`, `D-23 Dividido (Adams)`, `PMK Pyro`, `Pyrocat-HD`, `Rodinal 1:50` y `Windisch/POTA`, más cabezal **Condensador (Callier)** o **Difusor / Luz Fría**.
