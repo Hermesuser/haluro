@@ -10,7 +10,7 @@ hardcoded copy, which previously drifted (the Windows build kept shipping 2.4.5
 artefacts for a 2.4.6 release).
 """
 
-__version__ = "3.1.1"
+__version__ = "3.1.2"
 APP_NAME = "Haluro"
 APP_FULL_NAME = "Haluro — Laboratorio Analógico Digital"
 APP_TAGLINE = (

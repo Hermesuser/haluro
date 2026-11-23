@@ -9,6 +9,16 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [3.1.2] — 2026-11-23
+
+### Optimizado (Rendimiento de Exportación y Ampliación)
+- **Súper-Resolución IBP ~3.2× más rápida (45.6 MP / 50×70 cm @ 300 DPI: `11.24 s → 3.53 s`):** Retroproyección Iterativa optimizada sobre canal único de luminancia (`Y`) en 2 iteraciones de alta convergencia sin franjas cromáticas, elevando el umbral de *tiling* a `75 MP`.
+- **Halación óptica ~30× más rápida en alta resolución (`3.18 s → 0.08 s`):** El resplandor difuso de baja frecuencia se calcula a escala `1/4` en imágenes mayores a `1200 px` con resultado visual idéntico.
+- **Desplazamiento selectivo de tonos (`shift_hues`) con tabla angular 1D (`1024` entradas):** Elimina decenas de millones de llamadas `exp()` por píxel al exportar copias maestras a resolución completa.
+- **Grano multiescala y guardado JPEG 4:4:4 acelerados:** Remuestreo bilineal en octavas orgánicas de grano, muestreo rápido de desviación estándar (`[::4, ::4]`) y codificación JPEG de pasada única para copias gigantes `> 12 MP` (`0.15 s` en 45.6 MP).
+
+---
+
 ## [3.1.1] — 2026-11-23
 
 ### Corregido

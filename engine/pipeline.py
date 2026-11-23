@@ -269,40 +269,49 @@ def apply_user_curves(display, curve_spec):
 
 
 def shift_hues(rgb, hue_rules):
-    """Shift selective hues (e.g. skin tones, greens, skies)."""
+    """Shift selective hues (e.g. skin tones, greens, skies) using a fast 1D angular LUT."""
+    if not hue_rules:
+        return rgb
     y = np.sum(rgb * LUMA, axis=-1, keepdims=True)
-    cb = (rgb[..., 2:3] - y) / 1.8556
-    cr = (rgb[..., 0:1] - y) / 1.5748
+    cb = (rgb[..., 2:3] - y) * np.float32(1.0 / 1.8556)
+    cr = (rgb[..., 0:1] - y) * np.float32(1.0 / 1.5748)
     h = np.arctan2(cr, cb)
     c = np.sqrt(cb * cb + cr * cr)
-    gate = np.clip(c / 0.04, 0.0, 1.0)
+    gate = np.clip(c * np.float32(25.0), np.float32(0.0), np.float32(1.0))
 
-    dh = np.zeros_like(h)
-    cm = np.ones_like(c)
-    sigma = 35.0 * math.pi / 180.0
+    # Precompute 1D angular transfer tables (1024 steps across [-pi, pi]) instead of per-pixel exp()
+    n_lut = 1024
+    angles = np.linspace(-math.pi, math.pi, n_lut, dtype=np.float32)
+    dh_tab = np.zeros(n_lut, dtype=np.float32)
+    cm_delta_tab = np.zeros(n_lut, dtype=np.float32)
+    inv_sigma = np.float32(1.0 / (35.0 * math.pi / 180.0))
 
     for from_name, to_name, amt, chroma in hue_rules:
         from_idx = HUE_NAMES.index(from_name)
         to_idx = HUE_NAMES.index(to_name)
-        hs = HUE_ANGLES[from_idx]
-        d = wrap_angle(h - hs) / sigma
-        w = np.exp(-0.5 * d * d) * gate
+        hs = np.float32(HUE_ANGLES[from_idx])
+        d = wrap_angle(angles - hs) * inv_sigma
+        w = np.exp(np.float32(-0.5) * d * d).astype(np.float32)
         if from_idx != to_idx:
-            target_diff = wrap_angle(HUE_ANGLES[to_idx] - hs)
-            dh += w * amt * target_diff
-        cm *= 1.0 + w * (chroma - 1.0)
+            target_diff = np.float32(wrap_angle(HUE_ANGLES[to_idx] - hs))
+            dh_tab += w * np.float32(amt) * target_diff
+        cm_delta_tab = (np.float32(1.0) + cm_delta_tab) * (np.float32(1.0) + w * np.float32(chroma - 1.0)) - np.float32(
+            1.0
+        )
 
-    h_new = h + dh
-    c_new = c * cm
+    idx_scale = np.float32((n_lut - 1) / (2.0 * math.pi))
+    idx = np.clip(((h + np.float32(math.pi)) * idx_scale).astype(np.int32), 0, n_lut - 1)
+    h_new = h + dh_tab[idx] * gate
+    c_new = c * (np.float32(1.0) + cm_delta_tab[idx] * gate)
 
     cr_new = c_new * np.sin(h_new)
     cb_new = c_new * np.cos(h_new)
 
-    r = y + cr_new * 1.5748
-    b = y + cb_new * 1.8556
-    g = (y - LUMA[0] * r - LUMA[2] * b) / LUMA[1]
+    r = y + cr_new * np.float32(1.5748)
+    b = y + cb_new * np.float32(1.8556)
+    g = (y - LUMA[0] * r - LUMA[2] * b) * np.float32(1.0 / LUMA[1])
 
-    return np.clip(np.concatenate([r, g, b], axis=-1), 0.0, 1.0)
+    return np.clip(np.concatenate([r, g, b], axis=-1), np.float32(0.0), np.float32(1.0))
 
 
 RAW_EXTENSIONS = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2", ".raf", ".pef"}
@@ -1479,12 +1488,13 @@ def save_output_image(
                 save_kwargs["exif"] = exif_bytes
             pil_img.save(tmp_path, **save_kwargs)
         else:
-            # High-grade JPEG with 4:4:4 chroma subsampling=0 & embedded sRGB ICC to preserve grain and display gamut
+            # High-grade JPEG with 4:4:4 chroma subsampling=0 & embedded sRGB ICC to preserve grain and display gamut.
+            # Skip slow 2-pass Huffman optimization on giant print masters (>12 MP) for 2-3x faster saving.
             save_kwargs = {
                 "format": "JPEG",
                 "quality": quality,
                 "subsampling": 0,
-                "optimize": True,
+                "optimize": (pil_img.width * pil_img.height) <= 12_000_000,
                 "icc_profile": icc_bytes,
             }
             if exif_bytes:
@@ -1770,12 +1780,32 @@ def apply_halation(lin, strength=1.0, threshold=0.70, tint=(1.0, 0.28, 0.06)):
     eff_thr = max(0.35, float(threshold) - 0.18)
     over = np.maximum(0.0, luma - eff_thr)
 
-    # Combine a tight inner rim with a wider 0.8% frame-width bloom
-    sigma_wide = max(2.0, lin.shape[1] * 0.008)
+    # Combine a tight inner rim with a wider 0.8% frame-width bloom.
+    # Low-frequency optical glow computed at 1/4 scale on large images (>1200 px) is ~30x faster and visually identical.
+    h, w = over.shape[:2]
+    sigma_wide = max(2.0, w * 0.008)
     sigma_inner = max(1.0, sigma_wide * 0.35)
-    glow_wide = scipy.ndimage.gaussian_filter(over, sigma=sigma_wide)
-    glow_inner = scipy.ndimage.gaussian_filter(over, sigma=sigma_inner)
-    glow = 0.65 * glow_wide + 0.35 * glow_inner
+    if max(h, w) > 1200:
+        ds = 4
+        sw, sh = max(1, w // ds), max(1, h // ds)
+        over_small = np.asarray(
+            Image.fromarray(np.ascontiguousarray(over, dtype=np.float32), mode="F").resize(
+                (sw, sh), Image.Resampling.BILINEAR
+            ),
+            dtype=np.float32,
+        )
+        glow_small = (
+            0.65 * scipy.ndimage.gaussian_filter(over_small, sigma=sigma_wide / ds)
+            + 0.35 * scipy.ndimage.gaussian_filter(over_small, sigma=max(0.5, sigma_inner / ds))
+        ).astype(np.float32)
+        glow = np.asarray(
+            Image.fromarray(glow_small, mode="F").resize((w, h), Image.Resampling.BILINEAR),
+            dtype=np.float32,
+        )
+    else:
+        glow_wide = scipy.ndimage.gaussian_filter(over, sigma=sigma_wide)
+        glow_inner = scipy.ndimage.gaussian_filter(over, sigma=sigma_inner)
+        glow = 0.65 * glow_wide + 0.35 * glow_inner
 
     tint_arr = np.array(tint, dtype=np.float32)[None, None, :]
     glow_rgb = glow[..., None] * tint_arr * (strength * 0.55)
@@ -1805,7 +1835,7 @@ def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280,
         nfh, nfw = max(1, int(h / (0.85 * res_scale))), max(1, int(w / (0.85 * res_scale)))
         fine_small = rng.normal(0.0, 1.0, (nfh, nfw)).astype(np.float32)
         fine = np.asarray(
-            Image.fromarray(fine_small).resize((w, h), Image.Resampling.BICUBIC),
+            Image.fromarray(fine_small, mode="F").resize((w, h), Image.Resampling.BILINEAR),
             dtype=np.float32,
         )
     else:
@@ -1816,7 +1846,7 @@ def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280,
     nmh, nmw = max(1, int(h / med_step)), max(1, int(w / med_step))
     med_small = rng.normal(0.0, 1.0, (nmh, nmw)).astype(np.float32)
     med = np.asarray(
-        Image.fromarray(med_small).resize((w, h), Image.Resampling.BICUBIC),
+        Image.fromarray(med_small, mode="F").resize((w, h), Image.Resampling.BILINEAR),
         dtype=np.float32,
     )
 
@@ -1825,14 +1855,14 @@ def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280,
     nch, ncw = max(1, int(h / mac_step)), max(1, int(w / mac_step))
     mac_small = rng.normal(0.0, 1.0, (nch, ncw)).astype(np.float32)
     mac = np.asarray(
-        Image.fromarray(mac_small).resize((w, h), Image.Resampling.BICUBIC),
+        Image.fromarray(mac_small, mode="F").resize((w, h), Image.Resampling.BILINEAR),
         dtype=np.float32,
     )
 
-    luma_noise = 0.24 * fine + 0.54 * med + 0.22 * mac
-    std = float(np.std(luma_noise))
+    luma_noise = np.float32(0.24) * fine + np.float32(0.54) * med + np.float32(0.22) * mac
+    std = float(np.std(luma_noise[::4, ::4])) if min(h, w) >= 64 else float(np.std(luma_noise))
     if std > 1e-6:
-        luma_noise = luma_noise / std
+        luma_noise *= np.float32(1.0 / std)
 
     chroma_ratio = float(np.clip(chroma, 0.0, 0.6))
     if chroma_ratio > 1e-3 and rgb.ndim == 3 and rgb.shape[2] == 3:
@@ -1841,7 +1871,7 @@ def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280,
         c_small = rng.normal(0.0, 1.0, (ch, cw, 3)).astype(np.float32)
         c_channels = [
             np.asarray(
-                Image.fromarray(c_small[..., idx]).resize((w, h), Image.Resampling.BICUBIC),
+                Image.fromarray(c_small[..., idx], mode="F").resize((w, h), Image.Resampling.BILINEAR),
                 dtype=np.float32,
             )
             for idx in range(3)
@@ -1849,9 +1879,9 @@ def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280,
         chroma_noise = np.stack(c_channels, axis=-1)
         chroma_noise -= np.mean(chroma_noise, axis=-1, keepdims=True)
         chroma_noise *= np.array([1.10, 0.75, 1.15], dtype=np.float32)[None, None, :]
-        c_std = float(np.std(chroma_noise))
+        c_std = float(np.std(chroma_noise[::4, ::4])) if min(h, w) >= 64 else float(np.std(chroma_noise))
         if c_std > 1e-6:
-            chroma_noise = chroma_noise / c_std
+            chroma_noise *= np.float32(1.0 / c_std)
         noise_rgb = luma_noise[..., None] * (1.0 - chroma_ratio) + chroma_noise * chroma_ratio
     else:
         noise_rgb = luma_noise[..., None]
