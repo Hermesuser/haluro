@@ -1,20 +1,20 @@
 {
-  "version": "2.12.0",
+  "version": "3.0.0",
   "release_date": "2026-11-22",
-  "name": "Haluro v2.12.0",
-  "title": "Presets Propios, Comparación A/B, Filtros B&N, Perfiles de Exportación y CLI de Proyectos",
-  "description": "Haluro 2.12.0: intensidad de emulsión (0-100%), balance rápido Temperatura/Matiz, filtros ópticos B&N (#8/#21/#25/#11/#47), comparación A/B por instantánea, biblioteca de presets propios (JSON), filtros de tira 35 mm + Revelar elegidas, autoguardado de proyectos, importar carpeta, subida concurrente con precarga predictiva, visor EXIF original, marco Galería + Pie analógico, perfiles de exportación, panel de almacenamiento/caché y CLI render-project.",
+  "name": "Haluro v3.0.0",
+  "title": "Cuarto Oscuro Maestro — Sistema de Zonas, Química Clásica, Virado Dual y Mapa de Copia",
+  "description": "Haluro 3.0.0: Mapa Visual del Sistema de Zonas (0–X, Anclas III·V·VIII, tecla M) + Densitómetro de 11 Zonas, Entorno de Evaluación (Oscuro / Gris 18% / Pared Galería Blanca, tecla E), Desarrollo N-2 a N+2, Reveladores clásicos (D-76 1:1, D-23 Dividido, PMK Pyro, Pyrocat-HD, Rodinal 1:50, Windisch), Cabezal Condensador/Difusor, Cuarto de Copia B&N (Papel, Split-Grade 00/5, Pre-velado), Virado Dual Secuencial (Selenio/Platino + Sepia/Oro GP-1), Blanqueo Farmer global y local, Interpretaciones virtuales por fotograma, Tira de prueba de Contraste/Virado, Mapa de Copia imprimible y Negativo Digital B&N para contacto UV.",
   "highlights": [
-    "Intensidad de emulsión (0-100%), balance rápido Temperatura/Matiz y filtros ópticos B&N (#8, #21, #25, #11, #47)",
-    "Biblioteca de Recetas/Presets propios (guardar, aplicar, exportar/importar JSON) y Comparación A/B por instantánea",
-    "Filtros en la tira 35 mm (Todas / Elegidas / Editadas) + Revelar elegidas, autoguardado .haluro e Importar carpeta",
-    "Subida concurrente con precarga predictiva, visor EXIF original, marco Galería + Pie analógico, perfiles Web/4K, caché local y CLI render-project"
+    "Sistema de Zonas de Ansel Adams: Mapa Visual (0–X y Anclas III·V·VIII, tecla M), Densitómetro de 11 Zonas, Entorno Gris 18%/Galería (tecla E) y desarrollo N-2 a N+2",
+    "Química de autor (Darkroom Cookbook): D-76 1:1, D-23 Dividido, PMK Pyro, Pyrocat-HD, Rodinal 1:50, Windisch y Cabezal Condensador (Callier) vs. Difusor",
+    "Cuarto de Copia B&N en Emulación: Revelador de papel (Amidol, Ansco 130, Dektol, Selectol), Soporte (Baritado/Marfil/Algodón), Split-Grade 00/5, Pre-velado, Virado Dual Secuencial y Blanqueo Farmer global/local",
+    "Interpretaciones virtuales por fotograma (.haluro), Tira de prueba de Contraste y Virado, Mapa de Copia imprimible (Print Map) y Negativo Digital B&N volteado para contacto UV"
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-2.12.0-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-2.12.0-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-Setup-2.12.0-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v2.12.0/Haluro-Portable-2.12.0-Win11-x64.zip"
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-3.0.0-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-3.0.0-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-Setup-3.0.0-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-Portable-3.0.0-Win11-x64.zip"
   },
   "checksums": {
     "macos_arm64": "",

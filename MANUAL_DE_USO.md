@@ -1,4 +1,4 @@
-# Haluro 2.12.0 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
+# Haluro 3.0.0 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
 
 Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfica concebida desde la práctica y los principios de la fotoquímica analógica. Esta guía detalla cada módulo, herramienta, atajo de teclado y proceso de calibración para obtener el máximo rendimiento tanto en la inversión de negativos digitalizados con cámara como en la emulación de emulsiones cinematográficas y fotográficas clásicas.
 
@@ -45,8 +45,8 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 | Arquitectura de Mac | Archivo a Descargar |
 | :--- | :--- |
-| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-2.12.0-macOS-arm64.dmg` |
-| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-2.12.0-macOS-x86_64.dmg` |
+| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-3.0.0-macOS-arm64.dmg` |
+| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-3.0.0-macOS-x86_64.dmg` |
 
 #### Pasos de Instalación
 
@@ -70,7 +70,7 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 ### Windows 11
 
-- **Archivo requerido:** `Haluro-Setup-2.12.0-Win11-x64.exe` (o la versión portátil `Haluro-Portable-2.12.0-Win11-x64.zip`).
+- **Archivo requerido:** `Haluro-Setup-3.0.0-Win11-x64.exe` (o la versión portátil `Haluro-Portable-3.0.0-Win11-x64.zip`).
 - **Instalación:** Ejecuta el instalador. No requiere permisos de administrador forzados (instalación limpia por usuario) y se integra automáticamente con el motor **Microsoft Edge WebView2** preinstalado en Windows 11.
 
 ---
@@ -444,4 +444,13 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 2.12.0 — Desarrollado para fotógrafos que aman la ciencia y el arte.*
+### Cuarto Oscuro Maestro (v3.0.0)
+- **Sistema de Zonas visual (`M`) y Densitómetro de 11 Zonas (`0–X`):** pulsa `M` o el botón `Zonas` para alternar entre **Anclas III · V · VIII**, **Mapa completo 0–X** o aislar cualquier Zona haciendo clic sobre su celda en el densitómetro.
+- **Entorno de evaluación (`E`):** alterna el fondo de la mesa de luz entre **Oscuro**, **Gris Neutro 18%** y **Pared Galería Blanca con paspartú virtual**.
+- **Desarrollo `N−2` a `N+2`, Reveladores clásicos y Cabezal de ampliadora:** elige entre `D-76 1:1`, `D-23 Dividido (Adams)`, `PMK Pyro`, `Pyrocat-HD`, `Rodinal 1:50` y `Windisch/POTA`, más cabezal **Condensador (Callier)** o **Difusor / Luz Fría**.
+- **Cuarto de copia B&N, Virado Dual Secuencial y Blanqueo Farmer:** en *Vista Completa*, despliega *Cuarto de copia · Papel, Virado Dual y Farmer* para combinar revelador de papel (`Amidol`, `Ansco 130`, `Dektol`, `Selectol`), soporte de papel, Split-Grade `00/5`, Pre-velado, virado dual de sombras + luces y blanqueo *Farmer's Reducer* (también disponible como técnica local en *Dodge & Burn*).
+- **Interpretaciones virtuales, Tira Multi-Modo, Mapa de Copia y Negativo Digital UV:** crea varias interpretaciones (`+ Copia`) por fotograma dentro de tu `.haluro`, usa la tira de prueba (`T`) en modo **f-stop**, **Contraste** o **Virado**, genera una ficha imprimible con **Mapa de copia** y activa **Negativo digital B&N para contacto (UV)** al exportar para procesos alternativos.
+
+---
+
+*Haluro 3.0.0 — Desarrollado para fotógrafos que aman la ciencia y el arte.*
