@@ -1612,11 +1612,13 @@ def apply_local_dodge_burn(lin: np.ndarray, local_masks=None) -> np.ndarray:
         indexing="ij",
     )
     total_ev_map = np.zeros((h, w), dtype=np.float32)
+    total_farmer_map = np.zeros((h, w), dtype=np.float32)
 
     for mask in local_masks[:8]:
         if not isinstance(mask, dict):
             continue
         mtype = str(mask.get("type", "linear") or "linear").lower()
+        mode = str(mask.get("mode", "exposure") or "exposure").lower()
         ev = float(max(-2.5, min(2.5, float(mask.get("ev", 0.0) or 0.0))))
         if abs(ev) < 1e-4:
             continue
@@ -1647,12 +1649,24 @@ def apply_local_dodge_burn(lin: np.ndarray, local_masks=None) -> np.ndarray:
 
         if invert:
             alpha = 1.0 - alpha
-        total_ev_map += ev * alpha
+        if mode == "farmer":
+            # Farmer's Reducer local bleach: brightens highlights faster than shadows
+            total_farmer_map += max(0.0, abs(ev) / 2.0) * alpha
+        else:
+            total_ev_map += ev * alpha
 
-    if not np.any(np.abs(total_ev_map) > 1e-4):
-        return lin
-    gain = np.power(2.0, np.clip(total_ev_map, -3.5, 3.5)).astype(np.float32)
-    return np.maximum(lin * gain[..., None], 0.0)
+    out = lin
+    if np.any(np.abs(total_ev_map) > 1e-4):
+        gain = np.power(2.0, np.clip(total_ev_map, -3.5, 3.5)).astype(np.float32)
+        out = np.maximum(out * gain[..., None], 0.0)
+    if np.any(total_farmer_map > 1e-4):
+        f_amt = np.clip(total_farmer_map, 0.0, 1.25)[..., None]
+        luma = np.maximum(np.sum(out * LUMA, axis=-1, keepdims=True), 1e-5)
+        # Proportional silver subtraction: lifts upper midtones/highlights while anchoring Zone I-II
+        hi_weight = np.clip((luma - 0.03) / 0.35, 0.0, 1.0) ** 0.75
+        bleach_gain = 1.0 + f_amt * (0.95 * hi_weight)
+        out = np.maximum(out * bleach_gain, 0.0)
+    return out
 
 
 def apply_optical_sharpen(srgb_arr: np.ndarray, mode: str = "off", amount: float = 1.0) -> np.ndarray:
@@ -1730,7 +1744,7 @@ def apply_halation(lin, strength=1.0, threshold=0.70, tint=(1.0, 0.28, 0.06)):
     return lin + glow_rgb
 
 
-def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280):
+def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280, highlight_mask=0.0):
     """Add multi-octave organic silver-halide / dye-cloud film grain.
 
     Uses a local deterministic RNG seeded per frame so preview and export carry
@@ -1808,6 +1822,10 @@ def apply_grain(rgb, amount=0.02, size=1.0, seed=None, chroma=0.0, ref_dim=1280)
     mid_peak = 4.0 * luma * np.maximum(0.0, 1.0 - luma)
     shadow_bias = np.clip(1.15 - 0.55 * luma, 0.35, 1.15)
     weight = (0.28 + 0.72 * mid_peak) * shadow_bias
+    if float(highlight_mask or 0.0) > 0.005:
+        # Pyro proportional stain masks grain density in upper midtones & highlights
+        hi_fade = np.clip((luma - 0.42) / 0.50, 0.0, 1.0)
+        weight = weight * (1.0 - float(np.clip(highlight_mask, 0.0, 0.85)) * hi_fade)
 
     noisy_rgb = rgb + noise_rgb * (amount * weight)
     return np.clip(noisy_rgb, 0.0, 1.0)
@@ -1863,6 +1881,74 @@ DEV_PROCESSES = {
         "clump_mult": 1.0,
         "acutance": 0.0,
         "compensating": 0.0,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.0,
+    },
+    "d76_1_1": {
+        "name": "Kodak D-76 (1:1 · clásico equilibrado)",
+        "ev_offset": 0.0,
+        "contrast_mult": 1.02,
+        "grain_mult": 0.96,
+        "clump_mult": 0.98,
+        "acutance": 0.18,
+        "compensating": 0.15,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.02,
+    },
+    "d23_divided": {
+        "name": "Kodak D-23 Dividido (Ansel Adams · baño de agua)",
+        "ev_offset": 0.05,
+        "contrast_mult": 0.95,
+        "grain_mult": 0.88,
+        "clump_mult": 0.92,
+        "acutance": 0.12,
+        "compensating": 0.72,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.08,
+    },
+    "pmk_pyro": {
+        "name": "PMK Pyro (Hutchings · mancha y acutancia)",
+        "ev_offset": 0.0,
+        "contrast_mult": 1.04,
+        "grain_mult": 0.92,
+        "clump_mult": 0.95,
+        "acutance": 0.55,
+        "compensating": 0.58,
+        "pyro_mask": 0.65,
+        "shadow_lift": 0.03,
+    },
+    "pyrocat_hd": {
+        "name": "Pyrocat-HD (Sandy King · catecol alta definición)",
+        "ev_offset": 0.0,
+        "contrast_mult": 1.06,
+        "grain_mult": 0.82,
+        "clump_mult": 0.88,
+        "acutance": 0.52,
+        "compensating": 0.45,
+        "pyro_mask": 0.50,
+        "shadow_lift": 0.02,
+    },
+    "rodinal_1_50": {
+        "name": "Rodinal 1:50 (alta acutancia y grano cincelado)",
+        "ev_offset": 0.0,
+        "contrast_mult": 1.05,
+        "grain_mult": 1.24,
+        "clump_mult": 1.18,
+        "acutance": 0.62,
+        "compensating": 0.25,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.0,
+    },
+    "windisch_comp": {
+        "name": "Windisch / POTA (compensador extremo 10+ pasos)",
+        "ev_offset": 0.05,
+        "contrast_mult": 0.90,
+        "grain_mult": 0.92,
+        "clump_mult": 0.95,
+        "acutance": 0.30,
+        "compensating": 1.45,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.10,
     },
     "stand_rodinal": {
         "name": "Stand / Rodinal 1+100 (alta acutancia)",
@@ -1872,6 +1958,8 @@ DEV_PROCESSES = {
         "clump_mult": 1.10,
         "acutance": 0.45,
         "compensating": 1.0,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.04,
     },
     "push_1": {
         "name": "Push +1 EV (forzado 1 paso)",
@@ -1881,6 +1969,8 @@ DEV_PROCESSES = {
         "clump_mult": 1.15,
         "acutance": 0.15,
         "compensating": 0.0,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.0,
     },
     "push_2": {
         "name": "Push +2 EV (forzado 2 pasos)",
@@ -1890,6 +1980,8 @@ DEV_PROCESSES = {
         "clump_mult": 1.32,
         "acutance": 0.25,
         "compensating": 0.0,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.0,
     },
     "pull_1": {
         "name": "Pull -1 EV (subrevelado suave)",
@@ -1899,8 +1991,253 @@ DEV_PROCESSES = {
         "clump_mult": 0.90,
         "acutance": 0.0,
         "compensating": 0.35,
+        "pyro_mask": 0.0,
+        "shadow_lift": 0.0,
     },
 }
+
+
+# Enlarger head optical physics (Darkroom Cookbook Cap. 4 p. 33 & Cap. 8 p. 86)
+ENLARGER_HEADS: dict[str, dict[str, float | str]] = {
+    "standard": {"name": "Estándar (Neutro)", "contrast": 1.0, "acutance": 0.0, "grain_mult": 1.0, "mid_lift": 0.0},
+    "condenser": {
+        "name": "Condensador (Efecto Callier · microcontraste)",
+        "contrast": 1.09,
+        "acutance": 0.28,
+        "grain_mult": 1.14,
+        "mid_lift": -0.015,
+    },
+    "diffuser": {
+        "name": "Difusor / Luz Fría (Cold Light · suave)",
+        "contrast": 0.94,
+        "acutance": 0.0,
+        "grain_mult": 0.84,
+        "mid_lift": 0.022,
+    },
+}
+VALID_ENLARGER_HEADS = tuple(ENLARGER_HEADS.keys())
+
+# Paper developer silver image tone (separate from paper base tint — Darkroom Cookbook Cap. 8 p. 78)
+PAPER_DEVELOPERS: dict[str, dict] = {
+    "neutral": {
+        "name": "Neutro (Estándar)",
+        "contrast": 1.0,
+        "mid_lift": 0.0,
+        "dmax_shift": 0.0,
+        "tint": (0.0, 0.0, 0.0),
+    },
+    "amidol": {
+        "name": "Amidol (Edward Weston · negros profundos fríos)",
+        "contrast": 1.08,
+        "mid_lift": -0.01,
+        "dmax_shift": -0.018,
+        "tint": (-0.012, -0.004, 0.016),
+    },
+    "ansco130": {
+        "name": "Ansco 130 (Ansel Adams · escala larga luminosa)",
+        "contrast": 1.03,
+        "mid_lift": 0.024,
+        "dmax_shift": -0.012,
+        "tint": (-0.004, 0.0, 0.005),
+    },
+    "dektol": {
+        "name": "Kodak Dektol / D-72 (exposición neutro-frío)",
+        "contrast": 1.06,
+        "mid_lift": 0.0,
+        "dmax_shift": -0.010,
+        "tint": (-0.008, -0.002, 0.010),
+    },
+    "selectol": {
+        "name": "Selectol-Soft / D-52 (cálido suave en luces)",
+        "contrast": 0.92,
+        "mid_lift": 0.018,
+        "dmax_shift": 0.006,
+        "tint": (0.024, 0.010, -0.026),
+    },
+}
+VALID_PAPER_DEVELOPERS = tuple(PAPER_DEVELOPERS.keys())
+
+# Paper base support tint (applied proportionally to highlight reflectance)
+PAPER_BASES: dict[str, dict] = {
+    "none": {"name": "Sin tinte de base", "rgb": (1.0, 1.0, 1.0), "dmax_floor": 0.0},
+    "fb_bright": {"name": "Baritado Blanco Brillante", "rgb": (0.985, 0.992, 1.0), "dmax_floor": 0.0},
+    "fb_ivory": {"name": "Baritado Marfil Cálido", "rgb": (1.0, 0.968, 0.905), "dmax_floor": 0.006},
+    "cotton_matte": {"name": "Algodón Mate Museo", "rgb": (0.985, 0.962, 0.918), "dmax_floor": 0.026},
+}
+VALID_PAPER_BASES = tuple(PAPER_BASES.keys())
+
+# Tim Rudman sequential dual-toning baths (Cap. 10 pp. 118-119)
+# Shadow toners act bottom-up (Zones I-IV); Highlight toners act top-down (Zones V-IX).
+DUAL_SHADOW_TONERS: dict[str, dict] = {
+    "none": {"name": "Sin virado de sombras", "tint": (0.0, 0.0, 0.0), "dmax_boost": 0.0},
+    "selenium": {"name": "Selenio 1:19 (berenjena frío + D-max)", "tint": (0.055, -0.024, 0.036), "dmax_boost": 0.022},
+    "split_selenium": {"name": "Selenio 1:9 (ciruela profundo)", "tint": (0.088, -0.038, 0.052), "dmax_boost": 0.032},
+    "platinum": {"name": "Platino / Paladio (pizarra fría)", "tint": (-0.018, -0.005, 0.032), "dmax_boost": 0.012},
+    "iron_blue": {"name": "Azul de Hierro / Prusia", "tint": (-0.075, -0.012, 0.095), "dmax_boost": 0.015},
+}
+VALID_DUAL_SHADOW_TONERS = tuple(DUAL_SHADOW_TONERS.keys())
+
+DUAL_HIGHLIGHT_TONERS: dict[str, dict] = {
+    "none": {"name": "Sin virado de luces", "tint": (0.0, 0.0, 0.0)},
+    "sepia": {"name": "Sepia Sulfuro (cálido clásico)", "tint": (0.105, 0.042, -0.115)},
+    "gold_gp1": {"name": "Oro GP-1 (azul pizarra protector)", "tint": (-0.052, -0.010, 0.078)},
+    "copper": {"name": "Cobre (rojizo cálido)", "tint": (0.118, 0.014, -0.082)},
+    "tea": {"name": "Té / Pergamino antiguo", "tint": (0.072, 0.044, -0.068)},
+}
+VALID_DUAL_HIGHLIGHT_TONERS = tuple(DUAL_HIGHLIGHT_TONERS.keys())
+
+
+def apply_enlarger_head(display: np.ndarray, head: str = "standard") -> np.ndarray:
+    """Apply Condenser (Callier effect) or Diffuser (Cold Light) optical transfer."""
+    key = str(head or "standard").strip().lower()
+    if key not in ENLARGER_HEADS or key == "standard":
+        return display
+    spec = ENLARGER_HEADS[key]
+    out = np.clip(display.astype(np.float32, copy=False), 0.0, 1.0)
+    contrast = float(spec["contrast"])
+    mid_lift = float(spec["mid_lift"])
+    if abs(contrast - 1.0) > 0.005:
+        out = np.clip(0.48 + (out - 0.48) * contrast, 0.0, 1.0)
+    if abs(mid_lift) > 0.001:
+        y = np.sum(out * LUMA, axis=-1, keepdims=True)
+        mid_bell = 4.0 * y * np.maximum(0.0, 1.0 - y)
+        out = np.clip(out + mid_lift * mid_bell, 0.0, 1.0)
+    if float(spec["acutance"]) > 0.01:
+        out = apply_optical_sharpen(out, mode="lab", amount=float(spec["acutance"]))
+    return out
+
+
+def apply_bw_darkroom_print(
+    display: np.ndarray,
+    paper_dev: str = "neutral",
+    paper_base: str = "none",
+    bw_grade00: float = 0.0,
+    bw_grade5: float = 0.0,
+    bw_preflash: float = 0.0,
+) -> np.ndarray:
+    """Apply B&W darkroom print controls: Split-Grade 00/5, Pre-flash, Paper Developer & Paper Base."""
+    p_dev = str(paper_dev or "neutral").strip().lower()
+    p_base = str(paper_base or "none").strip().lower()
+    g00 = float(np.clip(bw_grade00 or 0.0, -1.0, 1.0))
+    g5 = float(np.clip(bw_grade5 or 0.0, -1.0, 1.0))
+    preflash = float(np.clip(bw_preflash or 0.0, 0.0, 1.0))
+
+    if (
+        p_dev == "neutral"
+        and p_base == "none"
+        and abs(g00) < 0.005
+        and abs(g5) < 0.005
+        and preflash < 0.005
+    ):
+        return display
+
+    out = np.clip(display.astype(np.float32, copy=False), 0.0, 1.0)
+    y = np.sum(out * LUMA, axis=-1, keepdims=True)
+
+    # 1. Pre-flashing (Les McLean): overcomes paper inertia in Zone VIII-X without lifting shadows
+    if preflash > 0.005:
+        hi_mask = np.power(np.clip((y - 0.58) / 0.42, 0.0, 1.0), 1.5)
+        out = np.clip(out - (0.075 * preflash) * hi_mask, 0.0, 1.0)
+        y = np.sum(out * LUMA, axis=-1, keepdims=True)
+
+    # 2. Split-Grade 00 (soft highlight/midtone burn) & Grade 5 (hard shadow contrast)
+    if abs(g00) > 0.005:
+        hi_w = np.clip((y - 0.30) / 0.70, 0.0, 1.0)
+        out = np.clip(out - 0.14 * g00 * hi_w * (1.0 - 0.35 * y), 0.0, 1.0)
+    if abs(g5) > 0.005:
+        lo_w = np.clip((0.55 - y) / 0.55, 0.0, 1.0)
+        out = np.clip(out - 0.16 * g5 * lo_w * y * 2.0, 0.0, 1.0)
+
+    # 3. Paper Developer (silver image tone + tonal curve)
+    if p_dev in PAPER_DEVELOPERS and p_dev != "neutral":
+        dev_spec = PAPER_DEVELOPERS[p_dev]
+        y = np.sum(out * LUMA, axis=-1, keepdims=True)
+        out = np.clip(0.48 + (out - 0.48) * float(dev_spec["contrast"]), 0.0, 1.0)
+        mid_bell = 4.0 * y * np.maximum(0.0, 1.0 - y)
+        if abs(float(dev_spec["mid_lift"])) > 0.001:
+            out = np.clip(out + float(dev_spec["mid_lift"]) * mid_bell, 0.0, 1.0)
+        if abs(float(dev_spec["dmax_shift"])) > 0.001:
+            sh_w = np.clip((0.35 - y) / 0.35, 0.0, 1.0) ** 1.4
+            out = np.clip(out + float(dev_spec["dmax_shift"]) * sh_w, 0.0, 1.0)
+        tint = np.array(dev_spec["tint"], dtype=np.float32)[None, None, :]
+        # Silver image tone acts strongest in shadows & midtones (where silver density lives)
+        silver_w = np.clip(4.0 * y * np.maximum(0.0, 1.0 - y) + 0.35 * (1.0 - y), 0.0, 1.0)
+        out = np.clip(out + tint * silver_w, 0.0, 1.0)
+
+    # 4. Paper Base tint & matte D-max floor (acts on paper reflectance)
+    if p_base in PAPER_BASES and p_base != "none":
+        base_spec = PAPER_BASES[p_base]
+        dmax_floor = float(base_spec["dmax_floor"])
+        if dmax_floor > 0.001:
+            out = dmax_floor + out * (1.0 - dmax_floor)
+        base_rgb = np.array(base_spec["rgb"], dtype=np.float32)[None, None, :]
+        y = np.sum(out * LUMA, axis=-1, keepdims=True)
+        paper_w = np.power(np.clip(y, 0.0, 1.0), 1.15)
+        out = np.clip(out * (1.0 - paper_w) + (out * base_rgb) * paper_w, 0.0, 1.0)
+
+    return out
+
+
+def apply_dual_toning(
+    display: np.ndarray,
+    toner_shadows: str = "none",
+    toner_shadows_amt: float = 0.0,
+    toner_highlights: str = "none",
+    toner_highlights_amt: float = 0.0,
+) -> np.ndarray:
+    """Apply Tim Rudman sequential chemical dual-toning (bottom-up shadow + top-down highlight)."""
+    sh_key = str(toner_shadows or "none").strip().lower()
+    hi_key = str(toner_highlights or "none").strip().lower()
+    sh_amt = float(np.clip(toner_shadows_amt or 0.0, 0.0, 1.0))
+    hi_amt = float(np.clip(toner_highlights_amt or 0.0, 0.0, 1.0))
+
+    has_sh = sh_key in DUAL_SHADOW_TONERS and sh_key != "none" and sh_amt > 0.005
+    has_hi = hi_key in DUAL_HIGHLIGHT_TONERS and hi_key != "none" and hi_amt > 0.005
+    if not has_sh and not has_hi:
+        return display
+
+    out = np.clip(display.astype(np.float32, copy=False), 0.0, 1.0)
+    y = np.sum(out * LUMA, axis=-1, keepdims=True)
+
+    # Step 1: Shadow bath (bottom-up: Zones I-IV, fading smoothly above Zone VI)
+    if has_sh:
+        spec = DUAL_SHADOW_TONERS[sh_key]
+        t_lo = np.clip((y - 0.015) / 0.16, 0.0, 1.0)
+        t_hi = 1.0 - np.clip((y - 0.34) / 0.44, 0.0, 1.0)
+        sh_mask = (t_lo * t_lo * (3.0 - 2.0 * t_lo)) * (t_hi * t_hi * (3.0 - 2.0 * t_hi))
+        tint = np.array(spec["tint"], dtype=np.float32)[None, None, :]
+        out = np.clip(out + tint * (sh_mask * sh_amt), 0.0, 1.0)
+        dmax_boost = float(spec["dmax_boost"])
+        if dmax_boost > 0.001:
+            deep_w = np.clip((0.28 - y) / 0.28, 0.0, 1.0) ** 1.3
+            out = np.clip(out - (dmax_boost * sh_amt) * deep_w, 0.0, 1.0)
+
+    # Step 2: Highlight bath (top-down: Zones V-IX, leaving deep shadows intact)
+    if has_hi:
+        spec = DUAL_HIGHLIGHT_TONERS[hi_key]
+        t_up = np.clip((y - 0.28) / 0.40, 0.0, 1.0)
+        t_top = 1.0 - np.clip((y - 0.90) / 0.10, 0.0, 1.0)
+        hi_mask = (t_up * t_up * (3.0 - 2.0 * t_up)) * (0.25 + 0.75 * (t_top * t_top * (3.0 - 2.0 * t_top)))
+        tint = np.array(spec["tint"], dtype=np.float32)[None, None, :]
+        out = np.clip(out + tint * (hi_mask * hi_amt), 0.0, 1.0)
+
+    return out
+
+
+def apply_farmer_bleach(display: np.ndarray, amount: float = 0.0) -> np.ndarray:
+    """Apply Jay Dusard global Farmer's Reducer bleaching: brightens highlights & boosts microcontrast."""
+    amt = float(np.clip(amount or 0.0, 0.0, 1.0))
+    if amt < 0.005:
+        return display
+    out = np.clip(display.astype(np.float32, copy=False), 0.0, 1.0)
+    y = np.sum(out * LUMA, axis=-1, keepdims=True)
+    # Subtracting constant silver lifts Zone VI-IX much faster than Zone I-II
+    hi_lift = np.power(np.clip((y - 0.18) / 0.82, 0.0, 1.0), 1.35) * (1.0 - 0.55 * np.clip((y - 0.88) / 0.12, 0.0, 1.0))
+    out = np.clip(out + (0.16 * amt) * hi_lift, 0.0, 1.0)
+    # Subtle microcontrast sparkle in upper midtones
+    if amt > 0.05:
+        out = apply_optical_sharpen(out, mode="lab", amount=0.22 * amt)
+    return out
 
 
 BW_OPTICAL_FILTERS: dict[str, tuple[float, float, float]] = {
@@ -1998,6 +2335,17 @@ def develop_frame(
     sim_tint=0.0,
     bw_filter="none",
     zone_dev="N",
+    enlarger_head="standard",
+    paper_dev="neutral",
+    paper_base="none",
+    bw_grade00=0.0,
+    bw_grade5=0.0,
+    bw_preflash=0.0,
+    toner_shadows="none",
+    toner_shadows_amt=0.0,
+    toner_highlights="none",
+    toner_highlights_amt=0.0,
+    farmer_bleach=0.0,
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     has_geom = bool(
@@ -2090,7 +2438,7 @@ def develop_frame(
         wb_gains = np.array([r_gain, g_gain, b_gain], dtype=np.float32) / max(luma_scale, 1e-4)
         lin = np.maximum(0.0, lin * wb_gains)
 
-    # 1a. Compensating stand development highlight shoulder protection
+    # 1a. Compensating developer highlight shoulder protection & shadow luminosity (D-23, Pyro, Windisch)
     if proc_spec["compensating"] > 0.01:
         comp = float(proc_spec["compensating"])
         lin = np.where(
@@ -2098,6 +2446,11 @@ def develop_frame(
             0.55 + (lin - 0.55) / (1.0 + comp * 0.45 * np.maximum(0.0, lin - 0.55)),
             lin,
         )
+    if float(proc_spec.get("shadow_lift", 0.0)) > 0.005:
+        s_lift = float(proc_spec["shadow_lift"])
+        luma_s = np.sum(lin * LUMA, axis=-1, keepdims=True)
+        sh_mask = np.clip((0.20 - luma_s) / 0.20, 0.0, 1.0) ** 1.4
+        lin = np.maximum(0.0, lin * (1.0 + s_lift * sh_mask))
 
     # 1a-zone. Zone System N-2..N+2 development (pivoted around Zone III)
     if zone_dev and str(zone_dev).strip().upper() != "N":
@@ -2179,19 +2532,47 @@ def develop_frame(
         neutral_srgb = linear_to_srgb(np.clip(lin, 0.0, 1.0))
         display = np.clip(neutral_srgb * (1.0 - strength) + display * strength, 0.0, 1.0)
 
-    # 4a. Chemical push/pull contrast & stand-development acutance
+    # 4a. Chemical push/pull contrast & developer acutance
     if abs(proc_spec["contrast_mult"] - 1.0) > 0.005:
         display = np.clip(0.45 + (display - 0.45) * float(proc_spec["contrast_mult"]), 0.0, 1.0)
     if proc_spec["acutance"] > 0.01:
         display = apply_optical_sharpen(display, mode="lab", amount=float(proc_spec["acutance"]))
 
+    # 4a-head. Enlarger head optical transfer (Condenser Callier vs. Diffuser Cold Light)
+    head_spec = ENLARGER_HEADS.get(str(enlarger_head or "standard").strip().lower(), ENLARGER_HEADS["standard"])
+    if enlarger_head and str(enlarger_head).strip().lower() != "standard":
+        display = apply_enlarger_head(display, head=str(enlarger_head))
+
+    # 4a-print. B&W Darkroom Printmaking (Split-Grade 00/5, Pre-flash, Paper Developer & Paper Base)
+    display = apply_bw_darkroom_print(
+        display,
+        paper_dev=paper_dev,
+        paper_base=paper_base,
+        bw_grade00=bw_grade00,
+        bw_grade5=bw_grade5,
+        bw_preflash=bw_preflash,
+    )
+
+    # 4a-farmer. Global Farmer's Reducer bleaching (Jay Dusard)
+    if float(farmer_bleach or 0.0) > 0.005:
+        display = apply_farmer_bleach(display, amount=float(farmer_bleach))
+
+    # 4a-toner. Sequential Chemical Dual-Toning (Tim Rudman)
+    display = apply_dual_toning(
+        display,
+        toner_shadows=toner_shadows,
+        toner_shadows_amt=toner_shadows_amt,
+        toner_highlights=toner_highlights,
+        toner_highlights_amt=toner_highlights_amt,
+    )
+
     # 4b. User tone curve (display-referred: same space as a darkroom curve)
     if curve:
         display = apply_user_curves(display, curve)
 
-    # 5. Film Grain
+    # 5. Film Grain (modulated by developer, enlarger head Callier/Diffuser, and Pyro highlight stain)
     base_grain_amt, base_grain_size = resolve_grain_profile(film, grain_asa=grain_asa)
-    grain_amt = base_grain_amt * grain_mult * float(proc_spec["grain_mult"])
+    grain_amt = base_grain_amt * grain_mult * float(proc_spec["grain_mult"]) * float(head_spec["grain_mult"])
     if grain_amt > 0.001:
         seed = grain_seed if grain_seed is not None else _stable_grain_seed(image_input, film_key)
         eff_grain_size = (
@@ -2206,6 +2587,7 @@ def develop_frame(
             size=eff_grain_size,
             seed=seed,
             chroma=grain_chroma,
+            highlight_mask=float(proc_spec.get("pyro_mask", 0.0)),
         )
 
     # 6. Optical Softness & Output Sharpening

@@ -2377,6 +2377,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-radius: var(--radius-sm);
 }
 
+.enlarger-head-bar {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .zone-dev-btn {
   border: 1px solid transparent;
   border-radius: 3px;

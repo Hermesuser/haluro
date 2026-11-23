@@ -1134,12 +1134,22 @@
               <div class="control-label">
                 <label id="lblSimDevProcess" for="simDevProcessSelect">Proceso de revelado</label>
               </div>
-              <select id="simDevProcessSelect" class="dark-select" title="Simula baño químico compensador o forzado">
-                <option value="standard" selected>Estándar (C-41 / D-76)</option>
-                <option value="stand_rodinal">Stand / Rodinal 1+100 (alta acutancia)</option>
-                <option value="push_1">Push +1 EV (forzado 1 paso)</option>
-                <option value="push_2">Push +2 EV (forzado 2 pasos)</option>
-                <option value="pull_1">Pull -1 EV (subrevelado suave)</option>
+              <select id="simDevProcessSelect" class="dark-select" title="Simula revelador clásico, baño compensador o forzado">
+                <optgroup label="Reveladores clásicos (Darkroom Cookbook)">
+                  <option value="standard" selected>Estándar (C-41 / D-76)</option>
+                  <option value="d76_1_1">Kodak D-76 (1:1 · clásico equilibrado)</option>
+                  <option value="d23_divided">Kodak D-23 Dividido (Ansel Adams · baño de agua)</option>
+                  <option value="pmk_pyro">PMK Pyro (Hutchings · mancha y acutancia)</option>
+                  <option value="pyrocat_hd">Pyrocat-HD (Sandy King · catecol alta definición)</option>
+                  <option value="rodinal_1_50">Rodinal 1:50 (alta acutancia y grano cincelado)</option>
+                  <option value="windisch_comp">Windisch / POTA (compensador extremo 10+ pasos)</option>
+                  <option value="stand_rodinal">Stand / Rodinal 1+100 (alta acutancia)</option>
+                </optgroup>
+                <optgroup label="Forzado y subrevelado">
+                  <option value="push_1">Push +1 EV (forzado 1 paso)</option>
+                  <option value="push_2">Push +2 EV (forzado 2 pasos)</option>
+                  <option value="pull_1">Pull -1 EV (subrevelado suave)</option>
+                </optgroup>
               </select>
             </div>
 
@@ -1161,6 +1171,22 @@
                   title="N+1: Expansión suave (escenas planas o nubladas)">N+1</button>
                 <button type="button" class="zone-dev-btn" data-zone-dev="N+2" aria-checked="false" role="radio"
                   title="N+2: Expansión fuerte (niebla o muy bajo contraste)">N+2</button>
+              </div>
+            </div>
+
+            <div class="control-group compact-top ui-adv-only">
+              <div class="control-label">
+                <span id="lblSimEnlargerHead">Cabezal de ampliadora</span>
+                <span class="val-readout" id="valSimEnlargerHead">Estándar</span>
+              </div>
+              <div class="zone-dev-bar enlarger-head-bar" id="simEnlargerHeadBar" role="radiogroup"
+                aria-label="Cabezal óptico de ampliadora">
+                <button type="button" class="zone-dev-btn active" data-head="standard" aria-checked="true" role="radio"
+                  title="Transferencia óptica neutra">Estándar</button>
+                <button type="button" class="zone-dev-btn" data-head="condenser" aria-checked="false" role="radio"
+                  title="Condensador (Efecto Callier): mayor microcontraste, grano nítido y negros incisivos">Condensador</button>
+                <button type="button" class="zone-dev-btn" data-head="diffuser" aria-checked="false" role="radio"
+                  title="Difusor / Luz Fría (Cold Light): suaviza el grano y alarga los medios tonos">Difusor</button>
               </div>
             </div>
 
@@ -1267,6 +1293,124 @@
               <label for="dateToggle" class="toggle-text">Sello de fecha en cuarzo ámbar</label>
             </div>
           </section>
+
+          <!-- B&W Darkroom Printmaking, Sequential Dual Toning & Farmer's Reducer (Phase B) -->
+          <details class="panel-card analog-exif-card ui-adv-only" id="simDarkroomPrintDetails">
+            <summary class="analog-exif-summary">
+              <span>Cuarto de copia · Papel, Virado Dual y Farmer</span>
+              <span class="analog-exif-badge" id="simDarkroomPrintBadge">Neutro</span>
+            </summary>
+            <div class="analog-exif-body">
+              <p class="helper-copy">Separa tono de plata (revelador) de tinte de papel, aplica Split-Grade 00/5, pre-velado, virado dual secuencial y blanqueo Farmer.</p>
+
+              <div class="control-group compact-top">
+                <div class="control-label">
+                  <label for="simPaperDevSelect">Revelador de papel (tono de imagen)</label>
+                </div>
+                <select id="simPaperDevSelect" class="dark-select">
+                  <option value="neutral" selected>Neutro (Estándar)</option>
+                  <option value="amidol">Amidol (Edward Weston · negros profundos fríos)</option>
+                  <option value="ansco130">Ansco 130 (Ansel Adams · escala larga luminosa)</option>
+                  <option value="dektol">Kodak Dektol / D-72 (exposición neutro-frío)</option>
+                  <option value="selectol">Selectol-Soft / D-52 (cálido suave en luces)</option>
+                </select>
+              </div>
+
+              <div class="control-group compact-top">
+                <div class="control-label">
+                  <label for="simPaperBaseSelect">Soporte de papel (tinte de base)</label>
+                </div>
+                <select id="simPaperBaseSelect" class="dark-select">
+                  <option value="none" selected>Sin tinte de base</option>
+                  <option value="fb_bright">Baritado Blanco Brillante</option>
+                  <option value="fb_ivory">Baritado Marfil Cálido</option>
+                  <option value="cotton_matte">Algodón Mate Museo (D-max suave)</option>
+                </select>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblSimGrade00">Split-Grade 00 (luces suaves)</span>
+                  <span class="control-val" id="simGrade00Val">0.00</span>
+                </div>
+                <input type="range" class="bipolar-range" id="simGrade00Slider" min="-1.0" max="1.0" step="0.05"
+                  value="0.0" data-default="0.0" aria-labelledby="lblSimGrade00">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblSimGrade5">Split-Grade 5 (negros duros)</span>
+                  <span class="control-val" id="simGrade5Val">0.00</span>
+                </div>
+                <input type="range" class="bipolar-range" id="simGrade5Slider" min="-1.0" max="1.0" step="0.05"
+                  value="0.0" data-default="0.0" aria-labelledby="lblSimGrade5">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblSimPreflash">Pre-velado (Pre-flash · Zona VIII–IX)</span>
+                  <span class="control-val" id="simPreflashVal">0%</span>
+                </div>
+                <input type="range" id="simPreflashSlider" min="0" max="100" step="2" value="0" data-default="0"
+                  aria-labelledby="lblSimPreflash" title="Vence la inercia del papel en Zona VIII–IX sin aplanar los negros">
+              </div>
+
+              <div class="control-group compact-top">
+                <div class="control-label">
+                  <label for="simTonerShadowsSelect">Virado de sombras (abajo → arriba)</label>
+                </div>
+                <select id="simTonerShadowsSelect" class="dark-select">
+                  <option value="none" selected>Sin virado de sombras</option>
+                  <option value="selenium">Selenio 1:19 (berenjena frío + D-max)</option>
+                  <option value="split_selenium">Selenio 1:9 (ciruela profundo)</option>
+                  <option value="platinum">Platino / Paladio (pizarra fría)</option>
+                  <option value="iron_blue">Azul de Hierro / Prusia</option>
+                </select>
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblSimTonerShadowsAmt">Intensidad virado sombras</span>
+                  <span class="control-val" id="simTonerShadowsVal">0%</span>
+                </div>
+                <input type="range" id="simTonerShadowsSlider" min="0" max="100" step="2" value="0" data-default="0"
+                  aria-labelledby="lblSimTonerShadowsAmt">
+              </div>
+
+              <div class="control-group compact-top">
+                <div class="control-label">
+                  <label for="simTonerHighlightsSelect">Virado de luces (arriba → abajo)</label>
+                </div>
+                <select id="simTonerHighlightsSelect" class="dark-select">
+                  <option value="none" selected>Sin virado de luces</option>
+                  <option value="sepia">Sepia Sulfuro (cálido clásico)</option>
+                  <option value="gold_gp1">Oro GP-1 (azul pizarra protector)</option>
+                  <option value="copper">Cobre (rojizo cálido)</option>
+                  <option value="tea">Té / Pergamino antiguo</option>
+                </select>
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblSimTonerHighlightsAmt">Intensidad virado luces</span>
+                  <span class="control-val" id="simTonerHighlightsVal">0%</span>
+                </div>
+                <input type="range" id="simTonerHighlightsSlider" min="0" max="100" step="2" value="0" data-default="0"
+                  aria-labelledby="lblSimTonerHighlightsAmt">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblSimFarmerBleach">Blanqueo Farmer's Reducer</span>
+                  <span class="control-val" id="simFarmerBleachVal">0%</span>
+                </div>
+                <input type="range" id="simFarmerBleachSlider" min="0" max="100" step="2" value="0" data-default="0"
+                  aria-labelledby="lblSimFarmerBleach" title="Sustrae plata en luces aumentando el brillo y microcontraste local">
+              </div>
+
+              <div class="geom-insp-footer">
+                <button type="button" class="reset-link" id="resetSimPrintBtn">Restablecer cuarto de copia</button>
+              </div>
+            </div>
+          </details>
 
           <!-- TONAL ZONES: exposure per zone (shadows / midtones / highlights) -->
           <section class="panel-card">
@@ -1825,6 +1969,16 @@
               </div>
               <div class="local-masks-list" id="localMasksList"></div>
               <div class="active-mask-editor" id="activeMaskEditor" style="display: none;">
+                <div class="control-group compact-top">
+                  <div class="control-label">
+                    <label for="maskModeSelect">Técnica local</label>
+                  </div>
+                  <select id="maskModeSelect" class="dark-select"
+                    title="Exposición tradicional (f-stop) o Blanqueo químico Farmer (aclara luces aumentando microcontraste)">
+                    <option value="exposure" selected>Reserva / Quemado (f-stop)</option>
+                    <option value="farmer">Blanqueo Farmer (luces + microcontraste)</option>
+                  </select>
+                </div>
                 <div class="control-group">
                   <div class="control-label">
                     <label for="maskEvSlider">Exposición local</label>

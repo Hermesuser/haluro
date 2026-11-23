@@ -70,6 +70,11 @@ from engine.pipeline import (
     HEIF_EXTENSIONS,
     RAW_EXTENSIONS,
     VALID_BW_FILTERS,
+    VALID_DUAL_HIGHLIGHT_TONERS,
+    VALID_DUAL_SHADOW_TONERS,
+    VALID_ENLARGER_HEADS,
+    VALID_PAPER_BASES,
+    VALID_PAPER_DEVELOPERS,
     VALID_ZONE_DEVS,
     develop_frame,
     extract_source_exif,
@@ -830,6 +835,9 @@ def _parse_local_masks(raw):
         mtype = str(item.get("type", "linear") or "linear").lower()
         if mtype not in ("linear", "radial"):
             mtype = "linear"
+        mmode = str(item.get("mode", "exposure") or "exposure").lower()
+        if mmode not in ("exposure", "farmer"):
+            mmode = "exposure"
         try:
             x1 = max(-0.5, min(1.5, float(item.get("x1", 0.5))))
             y1 = max(-0.5, min(1.5, float(item.get("y1", 0.25))))
@@ -842,6 +850,7 @@ def _parse_local_masks(raw):
         cleaned.append(
             {
                 "type": mtype,
+                "mode": mmode,
                 "x1": round(x1, 4),
                 "y1": round(y1, 4),
                 "x2": round(x2, 4),
@@ -1414,7 +1423,7 @@ def _parse_grain_asa(value) -> str:
 
 
 def _parse_sim_look_params(data: dict, fallback: dict | None = None) -> dict:
-    """Parse film strength (0..1), pre-emulsion WB (temp/tint -1..1), B&W filter, and Zone System N-2..N+2."""
+    """Parse film strength, WB, B&W filter, Zone System N-2..N+2, enlarger head, B&W print, dual toner & Farmer."""
     src = data if isinstance(data, dict) else {}
     fb = fallback if isinstance(fallback, dict) else {}
     raw_strength = src.get("film_strength", fb.get("film_strength", 1.0))
@@ -1422,12 +1431,32 @@ def _parse_sim_look_params(data: dict, fallback: dict | None = None) -> dict:
     raw_tint = src.get("sim_tint", fb.get("sim_tint", 0.0))
     raw_bw = str(src.get("bw_filter", fb.get("bw_filter", "none")) or "none").strip().lower()
     raw_zone = str(src.get("zone_dev", fb.get("zone_dev", "N")) or "N").strip().upper()
+    raw_head = str(src.get("enlarger_head", fb.get("enlarger_head", "standard")) or "standard").strip().lower()
+    raw_pdev = str(src.get("paper_dev", fb.get("paper_dev", "neutral")) or "neutral").strip().lower()
+    raw_pbase = str(src.get("paper_base", fb.get("paper_base", "none")) or "none").strip().lower()
+    raw_tsh = str(src.get("toner_shadows", fb.get("toner_shadows", "none")) or "none").strip().lower()
+    raw_thi = str(src.get("toner_highlights", fb.get("toner_highlights", "none")) or "none").strip().lower()
     return {
         "film_strength": _num({"v": raw_strength}, "v", 1.0, 0.0, 1.0),
         "sim_temp": _num({"v": raw_temp}, "v", 0.0, -1.0, 1.0),
         "sim_tint": _num({"v": raw_tint}, "v", 0.0, -1.0, 1.0),
         "bw_filter": raw_bw if raw_bw in VALID_BW_FILTERS else "none",
         "zone_dev": raw_zone if raw_zone in VALID_ZONE_DEVS else "N",
+        "enlarger_head": raw_head if raw_head in VALID_ENLARGER_HEADS else "standard",
+        "paper_dev": raw_pdev if raw_pdev in VALID_PAPER_DEVELOPERS else "neutral",
+        "paper_base": raw_pbase if raw_pbase in VALID_PAPER_BASES else "none",
+        "bw_grade00": _num({"v": src.get("bw_grade00", fb.get("bw_grade00", 0.0))}, "v", 0.0, -1.0, 1.0),
+        "bw_grade5": _num({"v": src.get("bw_grade5", fb.get("bw_grade5", 0.0))}, "v", 0.0, -1.0, 1.0),
+        "bw_preflash": _num({"v": src.get("bw_preflash", fb.get("bw_preflash", 0.0))}, "v", 0.0, 0.0, 1.0),
+        "toner_shadows": raw_tsh if raw_tsh in VALID_DUAL_SHADOW_TONERS else "none",
+        "toner_shadows_amt": _num(
+            {"v": src.get("toner_shadows_amt", fb.get("toner_shadows_amt", 0.0))}, "v", 0.0, 0.0, 1.0
+        ),
+        "toner_highlights": raw_thi if raw_thi in VALID_DUAL_HIGHLIGHT_TONERS else "none",
+        "toner_highlights_amt": _num(
+            {"v": src.get("toner_highlights_amt", fb.get("toner_highlights_amt", 0.0))}, "v", 0.0, 0.0, 1.0
+        ),
+        "farmer_bleach": _num({"v": src.get("farmer_bleach", fb.get("farmer_bleach", 0.0))}, "v", 0.0, 0.0, 1.0),
     }
 
 

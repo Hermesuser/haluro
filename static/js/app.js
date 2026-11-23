@@ -261,6 +261,17 @@ const state = {
   // Mode 1: Film Simulation controls
   devProcess: "standard",
   zoneDev: "N",
+  enlargerHead: "standard",
+  paperDev: "neutral",
+  paperBase: "none",
+  simGrade00: 0.0,
+  simGrade5: 0.0,
+  simPreflash: 0.0,
+  tonerShadows: "none",
+  tonerShadowsAmt: 0.0,
+  tonerHighlights: "none",
+  tonerHighlightsAmt: 0.0,
+  farmerBleach: 0.0,
   filmStrength: 1.0,
   simTemp: 0.0,
   simTint: 0.0,
@@ -2693,6 +2704,17 @@ function buildSimulationPayload() {
     film: state.selectedFilm,
     dev_process: state.devProcess || "standard",
     zone_dev: state.zoneDev || "N",
+    enlarger_head: state.enlargerHead || "standard",
+    paper_dev: state.paperDev || "neutral",
+    paper_base: state.paperBase || "none",
+    bw_grade00: Number(state.simGrade00 ?? 0.0),
+    bw_grade5: Number(state.simGrade5 ?? 0.0),
+    bw_preflash: Number(state.simPreflash ?? 0.0),
+    toner_shadows: state.tonerShadows || "none",
+    toner_shadows_amt: Number(state.tonerShadowsAmt ?? 0.0),
+    toner_highlights: state.tonerHighlights || "none",
+    toner_highlights_amt: Number(state.tonerHighlightsAmt ?? 0.0),
+    farmer_bleach: Number(state.farmerBleach ?? 0.0),
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -2804,6 +2826,17 @@ function snapshotSimRecipe() {
     film: state.selectedFilm,
     dev_process: state.devProcess || "standard",
     zone_dev: state.zoneDev || "N",
+    enlarger_head: state.enlargerHead || "standard",
+    paper_dev: state.paperDev || "neutral",
+    paper_base: state.paperBase || "none",
+    bw_grade00: Number(state.simGrade00 ?? 0.0),
+    bw_grade5: Number(state.simGrade5 ?? 0.0),
+    bw_preflash: Number(state.simPreflash ?? 0.0),
+    toner_shadows: state.tonerShadows || "none",
+    toner_shadows_amt: Number(state.tonerShadowsAmt ?? 0.0),
+    toner_highlights: state.tonerHighlights || "none",
+    toner_highlights_amt: Number(state.tonerHighlightsAmt ?? 0.0),
+    farmer_bleach: Number(state.farmerBleach ?? 0.0),
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -2935,6 +2968,18 @@ function applySimRecipeToUI(rec) {
   if (devProcSel) devProcSel.value = state.devProcess;
   state.zoneDev = rec.zone_dev || "N";
   syncZoneDevUI();
+  state.enlargerHead = rec.enlarger_head || "standard";
+  state.paperDev = rec.paper_dev || "neutral";
+  state.paperBase = rec.paper_base || "none";
+  state.simGrade00 = Number(rec.bw_grade00 ?? 0.0);
+  state.simGrade5 = Number(rec.bw_grade5 ?? 0.0);
+  state.simPreflash = Number(rec.bw_preflash ?? 0.0);
+  state.tonerShadows = rec.toner_shadows || "none";
+  state.tonerShadowsAmt = Number(rec.toner_shadows_amt ?? 0.0);
+  state.tonerHighlights = rec.toner_highlights || "none";
+  state.tonerHighlightsAmt = Number(rec.toner_highlights_amt ?? 0.0);
+  state.farmerBleach = Number(rec.farmer_bleach ?? 0.0);
+  syncDarkroomPrintUI();
   state.filmStrength = Number(rec.film_strength ?? 1.0);
   state.simTemp = Number(rec.sim_temp ?? 0.0);
   state.simTint = Number(rec.sim_tint ?? 0.0);
@@ -5107,6 +5152,71 @@ function syncZoneDevUI() {
   });
 }
 
+function syncDarkroomPrintUI() {
+  const head = state.enlargerHead || "standard";
+  const headNames = { standard: "Estándar", condenser: "Condensador", diffuser: "Difusor" };
+  const headLbl = document.getElementById("valSimEnlargerHead");
+  if (headLbl) headLbl.textContent = headNames[head] || "Estándar";
+  document.querySelectorAll("#simEnlargerHeadBar .zone-dev-btn").forEach((btn) => {
+    const active = btn.dataset.head === head;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-checked", active ? "true" : "false");
+  });
+
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.value = v;
+  };
+  setVal("simPaperDevSelect", state.paperDev || "neutral");
+  setVal("simPaperBaseSelect", state.paperBase || "none");
+  setVal("simTonerShadowsSelect", state.tonerShadows || "none");
+  setVal("simTonerHighlightsSelect", state.tonerHighlights || "none");
+
+  const g00 = Number(state.simGrade00 ?? 0.0);
+  const g5 = Number(state.simGrade5 ?? 0.0);
+  const pf = Math.round(Number(state.simPreflash ?? 0.0) * 100);
+  const tsh = Math.round(Number(state.tonerShadowsAmt ?? 0.0) * 100);
+  const thi = Math.round(Number(state.tonerHighlightsAmt ?? 0.0) * 100);
+  const fb = Math.round(Number(state.farmerBleach ?? 0.0) * 100);
+
+  setSliderSilent("simGrade00Slider", "simGrade00Val", g00.toFixed(2), `${g00 > 0 ? "+" : ""}${g00.toFixed(2)}`);
+  setSliderSilent("simGrade5Slider", "simGrade5Val", g5.toFixed(2), `${g5 > 0 ? "+" : ""}${g5.toFixed(2)}`);
+  setSliderSilent("simPreflashSlider", "simPreflashVal", pf, `${pf}%`);
+  setSliderSilent("simTonerShadowsSlider", "simTonerShadowsVal", tsh, `${tsh}%`);
+  setSliderSilent("simTonerHighlightsSlider", "simTonerHighlightsVal", thi, `${thi}%`);
+  setSliderSilent("simFarmerBleachSlider", "simFarmerBleachVal", fb, `${fb}%`);
+
+  let activeCount = 0;
+  if ((state.paperDev || "neutral") !== "neutral") activeCount += 1;
+  if ((state.paperBase || "none") !== "none") activeCount += 1;
+  if (Math.abs(g00) > 0.005 || Math.abs(g5) > 0.005) activeCount += 1;
+  if (pf > 0) activeCount += 1;
+  if ((state.tonerShadows || "none") !== "none" && tsh > 0) activeCount += 1;
+  if ((state.tonerHighlights || "none") !== "none" && thi > 0) activeCount += 1;
+  if (fb > 0) activeCount += 1;
+
+  const badge = document.getElementById("simDarkroomPrintBadge");
+  if (badge) {
+    badge.textContent = activeCount > 0 ? `${activeCount} activos` : "Neutro";
+    badge.classList.toggle("is-active", activeCount > 0);
+  }
+}
+
+function resetSimDarkroomPrintState() {
+  state.enlargerHead = "standard";
+  state.paperDev = "neutral";
+  state.paperBase = "none";
+  state.simGrade00 = 0.0;
+  state.simGrade5 = 0.0;
+  state.simPreflash = 0.0;
+  state.tonerShadows = "none";
+  state.tonerShadowsAmt = 0.0;
+  state.tonerHighlights = "none";
+  state.tonerHighlightsAmt = 0.0;
+  state.farmerBleach = 0.0;
+  syncDarkroomPrintUI();
+}
+
 function setEvalSurround(mode) {
   const valid = ["dark", "gray18", "gallery"];
   const next = valid.includes(mode) ? mode : "dark";
@@ -6314,7 +6424,10 @@ function renderLocalMasksUI() {
       btn.type = "button";
       btn.className = `mask-chip${idx === state.activeMaskIndex ? " active" : ""}`;
       const evNum = Number(m.ev || 0);
-      const evStr = `${evNum >= 0 ? "+" : ""}${evNum.toFixed(1)}EV`;
+      const isFarmer = m.mode === "farmer";
+      const evStr = isFarmer
+        ? `Farmer ${Math.round(Math.min(100, (Math.abs(evNum) / 2.0) * 100))}%`
+        : `${evNum >= 0 ? "+" : ""}${evNum.toFixed(1)}EV`;
       btn.textContent = `${m.type === "radial" ? "Radial" : "Grad"} ${idx + 1} (${evStr})`;
       btn.addEventListener("click", () => {
         state.activeMaskIndex = idx;
@@ -6331,8 +6444,17 @@ function renderLocalMasksUI() {
       editorEl.style.display = "none";
     } else {
       editorEl.style.display = "flex";
+      const modeSel = document.getElementById("maskModeSelect");
+      if (modeSel) modeSel.value = active.mode === "farmer" ? "farmer" : "exposure";
       const evVal = Number(active.ev || 0);
-      setSliderSilent("maskEvSlider", "maskEvVal", evVal, `${evVal >= 0 ? "+" : ""}${evVal.toFixed(1)} EV`);
+      setSliderSilent(
+        "maskEvSlider",
+        "maskEvVal",
+        evVal,
+        active.mode === "farmer"
+          ? `Farmer ${Math.round(Math.min(100, (Math.abs(evVal) / 2.0) * 100))}%`
+          : `${evVal >= 0 ? "+" : ""}${evVal.toFixed(1)} EV`
+      );
       const featherPct = Math.round(Number(active.feather ?? 0.4) * 100);
       setSliderSilent("maskFeatherSlider", "maskFeatherVal", featherPct, `${featherPct}%`);
       const invChk = document.getElementById("maskInvertCheck");
@@ -6549,6 +6671,18 @@ function initSharedDarkroomTools() {
     setLocalMaskEditMode(!state.maskEditMode);
   });
 
+  document.getElementById("maskModeSelect")?.addEventListener("change", (e) => {
+    const active = state.localMasks?.[state.activeMaskIndex];
+    if (!active) return;
+    pushUndoSnapshotForFrame();
+    active.mode = e.target.value === "farmer" ? "farmer" : "exposure";
+    if (active.mode === "farmer" && active.ev <= 0) {
+      active.ev = 0.8;
+    }
+    renderLocalMasksUI();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
   document.getElementById("maskEvSlider")?.addEventListener("input", (e) => {
     const active = state.localMasks?.[state.activeMaskIndex];
     if (!active) return;
@@ -6941,6 +7075,7 @@ function resetSimulationControls() {
         state.zoneDev = "N";
         syncZoneDevUI();
       }
+      resetSimDarkroomPrintState();
       const grainAsaSel = document.getElementById("grainAsaSelect");
       if (grainAsaSel && grainAsaSel.value !== "auto") {
         grainAsaSel.value = "auto";
@@ -9304,6 +9439,57 @@ function initUIListeners() {
       requestPreview(false);
     });
   });
+  document.querySelectorAll("#simEnlargerHeadBar .zone-dev-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const next = btn.dataset.head || "standard";
+      if (state.enlargerHead === next) return;
+      pushUndoSnapshotForFrame();
+      state.enlargerHead = next;
+      syncDarkroomPrintUI();
+      saveActiveFrameRecipe();
+      requestPreview(false);
+    });
+  });
+  document.getElementById("simPaperDevSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.paperDev = e.target.value || "neutral";
+    syncDarkroomPrintUI();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("simPaperBaseSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.paperBase = e.target.value || "none";
+    syncDarkroomPrintUI();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("simTonerShadowsSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.tonerShadows = e.target.value || "none";
+    if (state.tonerShadows !== "none" && state.tonerShadowsAmt <= 0.005) {
+      state.tonerShadowsAmt = 0.5;
+    }
+    syncDarkroomPrintUI();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("simTonerHighlightsSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.tonerHighlights = e.target.value || "none";
+    if (state.tonerHighlights !== "none" && state.tonerHighlightsAmt <= 0.005) {
+      state.tonerHighlightsAmt = 0.45;
+    }
+    syncDarkroomPrintUI();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("resetSimPrintBtn")?.addEventListener("click", () => {
+    pushUndoSnapshotForFrame();
+    resetSimDarkroomPrintState();
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
   document.getElementById("zoneMapToggleBtn")?.addEventListener("click", cycleZoneMapMode);
   document.querySelectorAll("#zoneScaleBar .zone-cell").forEach((cell) => {
     cell.addEventListener("click", () => {
@@ -9391,6 +9577,30 @@ function initUIListeners() {
     state.bwFilter = e.target.value || "none";
     saveActiveFrameRecipe();
     requestPreview(true);
+  });
+  bindRange("simGrade00Slider", "simGrade00Val", fmtSigned, (v) => {
+    state.simGrade00 = v;
+    syncDarkroomPrintUI();
+  });
+  bindRange("simGrade5Slider", "simGrade5Val", fmtSigned, (v) => {
+    state.simGrade5 = v;
+    syncDarkroomPrintUI();
+  });
+  bindRange("simPreflashSlider", "simPreflashVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.simPreflash = Math.max(0, Math.min(1, v / 100));
+    syncDarkroomPrintUI();
+  });
+  bindRange("simTonerShadowsSlider", "simTonerShadowsVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.tonerShadowsAmt = Math.max(0, Math.min(1, v / 100));
+    syncDarkroomPrintUI();
+  });
+  bindRange("simTonerHighlightsSlider", "simTonerHighlightsVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.tonerHighlightsAmt = Math.max(0, Math.min(1, v / 100));
+    syncDarkroomPrintUI();
+  });
+  bindRange("simFarmerBleachSlider", "simFarmerBleachVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.farmerBleach = Math.max(0, Math.min(1, v / 100));
+    syncDarkroomPrintUI();
   });
   bindRange("halationSlider", "halationVal", (v) => `${v.toFixed(1)}x`, (v) => {
     state.halation = v;
