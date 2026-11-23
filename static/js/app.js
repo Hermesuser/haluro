@@ -308,6 +308,9 @@ const state = {
   dryDownComp: 0.0,
   exportMaxDim: null,
   jpegQuality: 96,
+  upscaleFactor: 1.0,
+  upscaleMode: "ibp",
+  printDpi: 300,
 
   // Viewport & Light Table
   viewMode: "split", // 'split' | 'full' | 'original' | 'sheet' | 'teststrip'
@@ -7507,6 +7510,8 @@ function buildExportPrintOptions() {
     jpeg_quality: Number(state.jpegQuality || 96),
     write_xmp: Boolean(document.getElementById("writeXmpCheck")?.checked),
     digital_negative: Boolean(document.getElementById("digitalNegativeCheck")?.checked),
+    upscale_factor: Number(state.upscaleFactor || 1.0),
+    upscale_mode: state.upscaleMode || "ibp",
   };
 }
 
@@ -9788,6 +9793,144 @@ function initUIListeners() {
   });
   document.getElementById("addInterpretationBtn")?.addEventListener("click", createVirtualInterpretation);
   document.getElementById("exportPrintMapBtn")?.addEventListener("click", exportDarkroomPrintMap);
+
+  // Optical Upscaling, Print Size Calculator & 1:1 Inspection Loupe (Phase 1 v3.1.0)
+  const syncSuperResUI = () => {
+    const f = Number(state.upscaleFactor || 1.0);
+    const lbl = document.getElementById("upscaleFactorVal");
+    if (lbl) lbl.textContent = `${f === Math.round(f) ? f.toFixed(0) : f.toFixed(2)}×`;
+    const badge = document.getElementById("superResBadge");
+    if (badge) {
+      badge.textContent = f > 1.01 ? `${f === Math.round(f) ? f.toFixed(0) : f.toFixed(2)}× ${(state.upscaleMode || "ibp").toUpperCase()}` : "1× Original";
+      badge.classList.toggle("is-active", f > 1.01);
+    }
+    document.querySelectorAll("#upscaleFactorBar .zone-dev-btn").forEach((btn) => {
+      const active = Math.abs(Number(btn.dataset.scale) - f) < 0.05;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    const modeSel = document.getElementById("upscaleModeSelect");
+    if (modeSel) modeSel.value = state.upscaleMode || "ibp";
+
+    const tele = document.getElementById("superResTelemetry");
+    const resText = document.getElementById("statResolution")?.textContent || "";
+    const m = resText.match(/(\d+)\s*[×x]\s*(\d+)/);
+    if (tele) {
+      if (m) {
+        const sw = Number(m[1]);
+        const sh = Number(m[2]);
+        const ow = Math.min(16384, Math.round(sw * f));
+        const oh = Math.min(16384, Math.round(sh * f));
+        const mp = ((ow * oh) / 1e6).toFixed(1);
+        const dpi = Number(state.printDpi || 300);
+        const cmW = ((ow / dpi) * 2.54).toFixed(1);
+        const cmH = ((oh / dpi) * 2.54).toFixed(1);
+        tele.textContent =
+          f > 1.01
+            ? `${sw}×${sh} → ${ow}×${oh} px (${mp} MP · ${cmW}×${cmH} cm @ ${dpi} DPI)`
+            : `Original: ${sw}×${sh} px (${mp} MP · ${cmW}×${cmH} cm @ ${dpi} DPI)`;
+      } else {
+        tele.textContent = f > 1.01 ? `Ampliación activa: ${f.toFixed(2)}× al exportar` : "Salida: resolución original";
+      }
+    }
+  };
+
+  document.querySelectorAll("#upscaleFactorBar .zone-dev-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.upscaleFactor = Number(btn.dataset.scale) || 1.0;
+      const presetSel = document.getElementById("printSizePresetSelect");
+      if (presetSel) presetSel.value = "custom";
+      syncSuperResUI();
+      saveActiveFrameRecipe();
+    });
+  });
+  document.getElementById("upscaleModeSelect")?.addEventListener("change", (e) => {
+    state.upscaleMode = e.target.value || "ibp";
+    syncSuperResUI();
+    saveActiveFrameRecipe();
+  });
+  const applyPrintPreset = () => {
+    const presetVal = document.getElementById("printSizePresetSelect")?.value || "custom";
+    const dpi = Number(document.getElementById("printDpiSelect")?.value || 300);
+    state.printDpi = dpi;
+    if (presetVal !== "custom") {
+      const [a, b] = presetVal.split("x").map(Number);
+      const longCm = Math.max(a || 0, b || 0);
+      const resText = document.getElementById("statResolution")?.textContent || "";
+      const m = resText.match(/(\d+)\s*[×x]\s*(\d+)/);
+      if (m && longCm > 0) {
+        const srcLong = Math.max(Number(m[1]), Number(m[2]));
+        const targetLong = (longCm / 2.54) * dpi;
+        state.upscaleFactor = Math.max(1.0, Math.min(4.0, Number((targetLong / srcLong).toFixed(2))));
+      }
+    }
+    syncSuperResUI();
+  };
+  document.getElementById("printSizePresetSelect")?.addEventListener("change", applyPrintPreset);
+  document.getElementById("printDpiSelect")?.addEventListener("change", applyPrintPreset);
+  document.getElementById("resetSuperResBtn")?.addEventListener("click", () => {
+    state.upscaleFactor = 1.0;
+    state.upscaleMode = "ibp";
+    const presetSel = document.getElementById("printSizePresetSelect");
+    if (presetSel) presetSel.value = "custom";
+    syncSuperResUI();
+    saveActiveFrameRecipe();
+  });
+
+  const runInspectLoupe = async (cx = 0.5, cy = 0.5) => {
+    const activeFrame = state.frames[state.activeFrameIndex];
+    if (!activeFrame) return;
+    const btn = document.getElementById("runInspectLoupeBtn");
+    const box = document.getElementById("inspectLoupeBox");
+    const closeBtn = document.getElementById("closeInspectLoupeBtn");
+    const timeBadge = document.getElementById("inspectLoupeTime");
+    if (btn) btn.disabled = true;
+    if (timeBadge) timeBadge.textContent = "Calculando…";
+    try {
+      const basePayload = state.appMode === "negative" ? buildNegativePayload(false) : buildSimulationPayload();
+      const res = await fetch("/api/inspect_crop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: state.appMode,
+          filename: activeFrame.filename,
+          cx,
+          cy,
+          upscale_factor: Math.max(1.5, Number(state.upscaleFactor || 1.0)),
+          upscale_mode: state.upscaleMode || "ibp",
+          ...basePayload,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error en lupa 1:1");
+      const bImg = document.getElementById("inspectBeforeImg");
+      const aImg = document.getElementById("inspectAfterImg");
+      if (bImg) bImg.src = data.before;
+      if (aImg) aImg.src = data.after;
+      if (box) box.style.display = "flex";
+      if (closeBtn) closeBtn.style.display = "";
+      if (timeBadge) timeBadge.textContent = `${data.out_w}×${data.out_h} (${data.out_mp} MP) · ${Math.round(data.render_time * 1000)}ms`;
+    } catch (err) {
+      showToast("Error en lupa 1:1", err.message || "No se pudo inspeccionar el recorte.");
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+  document.getElementById("runInspectLoupeBtn")?.addEventListener("click", () => runInspectLoupe(0.5, 0.5));
+  document.getElementById("closeInspectLoupeBtn")?.addEventListener("click", () => {
+    const box = document.getElementById("inspectLoupeBox");
+    const closeBtn = document.getElementById("closeInspectLoupeBtn");
+    if (box) box.style.display = "none";
+    if (closeBtn) closeBtn.style.display = "none";
+  });
+  document.getElementById("inspectSplitSlider")?.addEventListener("input", (e) => {
+    const pct = Number(e.target.value || 50);
+    const aImg = document.getElementById("inspectAfterImg");
+    const div = document.getElementById("inspectDivider");
+    if (aImg) aImg.style.clipPath = `polygon(${pct}% 0, 100% 0, 100% 100%, ${pct}% 100%)`;
+    if (div) div.style.left = `${pct}%`;
+  });
+  syncSuperResUI();
   document.getElementById("simDevProcessSelect")?.addEventListener("change", (e) => {
     pushUndoSnapshotForFrame();
     state.devProcess = e.target.value || "standard";

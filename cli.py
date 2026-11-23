@@ -426,6 +426,8 @@ def _run_render_project(args) -> None:
                     toner_highlights=str(rec.get("toner_highlights") or "none"),
                     toner_highlights_amt=float(rec.get("toner_highlights_amt", 0.0) or 0.0),
                     farmer_bleach=float(rec.get("farmer_bleach", 0.0) or 0.0),
+                    upscale_factor=float(rec.get("upscale_factor", 1.0) or 1.0),
+                    upscale_mode=str(rec.get("upscale_mode") or "ibp"),
                     rotate=int(rec.get("rotate", 0) or 0),
                     flip_h=bool(rec.get("flip_h", False)),
                     flip_v=bool(rec.get("flip_v", False)),

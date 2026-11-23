@@ -155,6 +155,8 @@ def render_frame_thumbnail(
             _frame_val("toner_highlights_amt", common_params.get("toner_highlights_amt", 0.0)) or 0.0
         ),
         farmer_bleach=float(_frame_val("farmer_bleach", common_params.get("farmer_bleach", 0.0)) or 0.0),
+        upscale_factor=float(_frame_val("upscale_factor", common_params.get("upscale_factor", 1.0)) or 1.0),
+        upscale_mode=str(_frame_val("upscale_mode", common_params.get("upscale_mode", "ibp")) or "ibp"),
         denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
         denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
         defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),
@@ -272,6 +274,8 @@ def develop_one_full_res(
             _frame_val("toner_highlights_amt", common_params.get("toner_highlights_amt", 0.0)) or 0.0
         ),
         farmer_bleach=float(_frame_val("farmer_bleach", common_params.get("farmer_bleach", 0.0)) or 0.0),
+        upscale_factor=float(_frame_val("upscale_factor", common_params.get("upscale_factor", 1.0)) or 1.0),
+        upscale_mode=str(_frame_val("upscale_mode", common_params.get("upscale_mode", "ibp")) or "ibp"),
             denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
             denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
             defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),

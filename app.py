@@ -1422,6 +1422,20 @@ def _parse_grain_asa(value) -> str:
     return s if s in VALID_GRAIN_ASAS else "auto"
 
 
+def _parse_upscale_params(data: dict, fallback: dict | None = None) -> dict:
+    """Parse optical upscaling factor (1..4) and mode ('off'|'lanczos'|'ibp')."""
+    from engine.superres import VALID_UPSCALE_MODES
+
+    src = data if isinstance(data, dict) else {}
+    fb = fallback if isinstance(fallback, dict) else {}
+    raw_factor = src.get("upscale_factor", fb.get("upscale_factor", 1.0))
+    raw_mode = str(src.get("upscale_mode", fb.get("upscale_mode", "ibp")) or "ibp").strip().lower()
+    return {
+        "upscale_factor": _num({"v": raw_factor}, "v", 1.0, 1.0, 4.0),
+        "upscale_mode": raw_mode if raw_mode in VALID_UPSCALE_MODES else "ibp",
+    }
+
+
 def _parse_sim_look_params(data: dict, fallback: dict | None = None) -> dict:
     """Parse film strength, WB, B&W filter, Zone System N-2..N+2, enlarger head, B&W print, dual toner & Farmer."""
     src = data if isinstance(data, dict) else {}
@@ -1457,6 +1471,7 @@ def _parse_sim_look_params(data: dict, fallback: dict | None = None) -> dict:
             {"v": src.get("toner_highlights_amt", fb.get("toner_highlights_amt", 0.0))}, "v", 0.0, 0.0, 1.0
         ),
         "farmer_bleach": _num({"v": src.get("farmer_bleach", fb.get("farmer_bleach", 0.0))}, "v", 0.0, 0.0, 1.0),
+        **_parse_upscale_params(src, fb),
     }
 
 
@@ -1551,6 +1566,111 @@ def _format_ev_strip_label(delta_ev: float, is_third_step: bool) -> str:
             return f"{sign}{rem}/3 EV"
         return f"{sign}{whole} {rem}/3 EV"
     return f"{sign}{abs(delta_ev):.1f} EV"
+
+
+@app.route("/api/inspect_crop", methods=["POST"])
+def api_inspect_crop():
+    """Render a fast 1:1 optical inspection patch (Before vs. After upscaling/sharpen) around (cx, cy)."""
+    from engine.superres import compute_target_dimensions, upscale_float_rgb
+
+    data = request.json or {}
+    mode = "negative" if data.get("mode") == "negative" else "simulation"
+    default_sample = "SAMPLE_NEGATIVE.jpg" if mode == "negative" else "SAMPLE.CR2"
+    filename = data.get("filename", default_sample)
+    fpath = _resolve_source_file(filename, fallback_name=default_sample)
+    if not fpath:
+        return jsonify({"error": "Archivo de origen no encontrado"}), 404
+
+    cx = _num(data, "cx", 0.5, 0.0, 1.0)
+    cy = _num(data, "cy", 0.5, 0.0, 1.0)
+    up = _parse_upscale_params(data)
+    factor = float(up["upscale_factor"])
+    up_mode = str(up["upscale_mode"])
+    t0 = time.time()
+
+    # Load full-res linear source once, then slice a compact patch around (cx, cy) so 1:1 inspection runs in <250ms
+    geom = _parse_geometry_params(data)
+    lin_full = load_image_linear(fpath, max_dim=None, **geom)
+    full_h, full_w = lin_full.shape[:2]
+    out_w, out_h, eff_factor = compute_target_dimensions(full_w, full_h, upscale_factor=factor)
+
+    # Choose source patch size so the upscaled inspection patch is ~360x360 px
+    patch_out = 360
+    patch_src = max(72, min(360, int(round(patch_out / max(1.0, eff_factor)))))
+    half = patch_src // 2
+    px = int(round(cx * full_w))
+    py = int(round(cy * full_h))
+    x0 = max(0, min(full_w - patch_src, px - half))
+    y0 = max(0, min(full_h - patch_src, py - half))
+    x1 = min(full_w, x0 + patch_src)
+    y1 = min(full_h, y0 + patch_src)
+    lin_patch = lin_full[y0:y1, x0:x1, :].copy()
+
+    if mode == "negative":
+        params = _parse_negative_params(data)
+        strip_params = dict(params)
+        strip_params["rotate"] = 0
+        strip_params["flip_h"] = False
+        strip_params["flip_v"] = False
+        strip_params["straighten"] = 0.0
+        strip_params["keystone_v"] = 0.0
+        strip_params["keystone_h"] = 0.0
+        strip_params["crop_rect"] = None
+        strip_params["flat_field_path"] = None
+        _, base_f = process_negative_to_image(lin_patch, max_dim=None, return_float=True, **strip_params)
+    else:
+        film_key = _canonical_film_key(data.get("film", "portra400"))
+        sim_look = _parse_sim_look_params(data)
+        sim_look["upscale_factor"] = 1.0  # handle before/after explicitly below
+        optics = _parse_shared_optics_params(data)
+        _, base_f = develop_frame(
+            lin_patch,
+            film_key=film_key,
+            ev_adjust=_num(data, "ev", 0.0, -10.0, 10.0),
+            halation_mult=_num(data, "halation", 1.0, 0.0, 5.0),
+            grain_mult=0.0,  # clean pre-grain comparison for optical sharpness inspection
+            vignette_mult=0.0,
+            shadows=_num(data, "shadows", 0.0, -4.0, 4.0),
+            mids=_num(data, "mids", 0.0, -4.0, 4.0),
+            highlights=_num(data, "highlights", 0.0, -4.0, 4.0),
+            curve=_parse_curve(data.get("curve")),
+            dev_process=_parse_dev_process(data.get("dev_process")),
+            max_dim=None,
+            return_float=True,
+            **sim_look,
+            **optics,
+        )
+
+    tw = max(1, int(round(base_f.shape[1] * eff_factor)))
+    th = max(1, int(round(base_f.shape[0] * eff_factor)))
+
+    # "Before" reference: standard bilinear enlargement (what basic digital zoom looks like)
+    base_u8 = (np.clip(base_f, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+    before_pil = Image.fromarray(base_u8, mode="RGB").resize((tw, th), Image.Resampling.BILINEAR)
+
+    # "After" result: Haluro Optical Super-Resolution (IBP / Lanczos-3)
+    after_f = upscale_float_rgb(base_f, tw, th, mode=up_mode) if eff_factor > 1.01 and up_mode != "off" else base_f
+    after_u8 = (np.clip(after_f, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+    after_pil = Image.fromarray(after_u8, mode="RGB")
+
+    def _to_b64(im: Image.Image) -> str:
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=92, subsampling=0)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    return jsonify(
+        {
+            "before": _to_b64(before_pil),
+            "after": _to_b64(after_pil),
+            "src_w": full_w,
+            "src_h": full_h,
+            "out_w": out_w,
+            "out_h": out_h,
+            "effective_factor": eff_factor,
+            "out_mp": round((out_w * out_h) / 1_000_000.0, 1),
+            "render_time": round(time.time() - t0, 3),
+        }
+    )
 
 
 @app.route("/api/test_strip", methods=["POST"])
@@ -3186,6 +3306,8 @@ def _export_negative_common(data, target_path: Path, reveal: bool = False):
     params = _parse_negative_params(data)
     analog_meta = _parse_analog_meta(data)
     easel_border, dry_down_comp = _parse_print_options(data)
+    export_max_dim, jpeg_quality = _parse_export_profile(data)
+    up = _parse_upscale_params(data)
     profile_key = params["profile_key"]
     profile_info = MINILAB_PROFILES.get(profile_key, MINILAB_PROFILES["frontier"])
 
@@ -3195,11 +3317,15 @@ def _export_negative_common(data, target_path: Path, reveal: bool = False):
         pos_img,
         target_path,
         source_path=fpath,
-        quality=96,
+        quality=jpeg_quality,
         float_srgb=srgb_f,
         analog_meta=analog_meta,
         easel_border=easel_border,
         dry_down_comp=dry_down_comp,
+        export_max_dim=export_max_dim,
+        digital_negative=bool(data.get("digital_negative", False)),
+        upscale_factor=up["upscale_factor"],
+        upscale_mode=up["upscale_mode"],
     )
     if bool(data.get("write_xmp", False)):
         write_geometry_xmp_sidecar(

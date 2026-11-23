@@ -1393,12 +1393,29 @@ def save_output_image(
     dry_down_comp: float = 0.0,
     export_max_dim: int | None = None,
     digital_negative: bool = False,
+    upscale_factor: float = 1.0,
+    upscale_mode: str = "ibp",
 ):
     """Save developed image in JPG (4:4:4 + EXIF), PNG, or 16-bit (48-bit RGB) archival TIFF.
 
     The file is written to a temporary sibling and then moved into place, so an
     interrupted export can never leave a truncated master behind.
     """
+    if float(upscale_factor or 1.0) > 1.01 and str(upscale_mode or "ibp").lower() != "off":
+        from .superres import compute_target_dimensions, upscale_float_rgb
+
+        src_f = (
+            np.clip(np.asarray(float_srgb, dtype=np.float32), 0.0, 1.0)
+            if float_srgb is not None
+            else (np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0)
+        )
+        out_w, out_h, _ = compute_target_dimensions(
+            src_f.shape[1], src_f.shape[0], upscale_factor=float(upscale_factor)
+        )
+        if out_w > src_f.shape[1] or out_h > src_f.shape[0]:
+            float_srgb = upscale_float_rgb(src_f, out_w, out_h, mode=str(upscale_mode or "ibp"))
+            pil_img = Image.fromarray((np.clip(float_srgb, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8), mode="RGB")
+
     if export_max_dim and int(export_max_dim) > 0 and max(pil_img.size) > int(export_max_dim):
         scale = float(export_max_dim) / float(max(pil_img.size))
         new_w = max(1, int(round(pil_img.width * scale)))
@@ -2367,6 +2384,8 @@ def develop_frame(
     toner_highlights="none",
     toner_highlights_amt=0.0,
     farmer_bleach=0.0,
+    upscale_factor=1.0,
+    upscale_mode="ibp",
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     has_geom = bool(
@@ -2590,6 +2609,16 @@ def develop_frame(
     # 4b. User tone curve (display-referred: same space as a darkroom curve)
     if curve:
         display = apply_user_curves(display, curve)
+
+    # 4c. Pre-grain Optical Upscaling & Super-Resolution (only on full-res render, so grain renders at final res)
+    if max_dim is None and float(upscale_factor or 1.0) > 1.01 and str(upscale_mode or "ibp").lower() != "off":
+        from .superres import compute_target_dimensions, upscale_float_rgb
+
+        out_w, out_h, _ = compute_target_dimensions(
+            display.shape[1], display.shape[0], upscale_factor=float(upscale_factor)
+        )
+        if out_w > display.shape[1] or out_h > display.shape[0]:
+            display = upscale_float_rgb(display, out_w, out_h, mode=str(upscale_mode or "ibp"))
 
     # 5. Film Grain (modulated by developer, enlarger head Callier/Diffuser, and Pyro highlight stain)
     base_grain_amt, base_grain_size = resolve_grain_profile(film, grain_asa=grain_asa)

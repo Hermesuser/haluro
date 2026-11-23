@@ -50,6 +50,7 @@ hidden_imports = [
     "engine.platform_io",
     "engine.projects",
     "engine.presets",
+    "engine.superres",
     "scipy.ndimage",
     "PIL._tkinter_finder",
 ]

@@ -1896,6 +1896,96 @@
           </div>
         </details>
 
+        <!-- SHARED OPTICAL UPSCALING, SUPER-RESOLUTION & 1:1 LOUPE CARD (Phase 1 v3.1.0) -->
+        <details class="panel-card collapsible-panel shared-optics-card ui-adv-only" id="superResDetails">
+          <summary class="section-head collapsible-head">
+            <h3>Resolución y Ampliadora Óptica</h3>
+            <span class="mono-badge" id="superResBadge">1× Original</span>
+          </summary>
+          <div class="shared-optics-body">
+            <p class="helper-copy">Amplía resolución en 16-bit real con Retroproyección Iterativa (IBP) y re-síntesis de grano orgánico a tamaño final.</p>
+
+            <div class="control-group compact-top">
+              <div class="control-label">
+                <span>Factor de ampliación</span>
+                <span class="val-readout" id="upscaleFactorVal">1×</span>
+              </div>
+              <div class="zone-dev-bar" id="upscaleFactorBar" role="radiogroup"
+                aria-label="Factor de ampliación de resolución">
+                <button type="button" class="zone-dev-btn active" data-scale="1" aria-checked="true" role="radio">1×</button>
+                <button type="button" class="zone-dev-btn" data-scale="1.5" aria-checked="false" role="radio">1.5×</button>
+                <button type="button" class="zone-dev-btn" data-scale="2" aria-checked="false" role="radio">2×</button>
+                <button type="button" class="zone-dev-btn" data-scale="3" aria-checked="false" role="radio">3×</button>
+                <button type="button" class="zone-dev-btn" data-scale="4" aria-checked="false" role="radio">4×</button>
+              </div>
+            </div>
+
+            <div class="control-group compact-top">
+              <div class="control-label">
+                <label for="upscaleModeSelect">Motor de ampliación</label>
+              </div>
+              <select id="upscaleModeSelect" class="dark-select">
+                <option value="ibp" selected>Súper-Resolución Óptica (IBP bordes)</option>
+                <option value="lanczos">Lanczos-3 Suave (16-bit)</option>
+              </select>
+            </div>
+
+            <div class="print-calc-row">
+              <label class="print-finish-field">
+                <span>Tamaño físico (cm)</span>
+                <select id="printSizePresetSelect" class="dark-select">
+                  <option value="custom" selected>Según factor</option>
+                  <option value="20x30">20 × 30 cm</option>
+                  <option value="30x45">30 × 45 cm</option>
+                  <option value="40x60">40 × 60 cm</option>
+                  <option value="50x70">50 × 70 cm</option>
+                  <option value="60x90">60 × 90 cm</option>
+                </select>
+              </label>
+              <label class="print-finish-field">
+                <span>Resolución DPI</span>
+                <select id="printDpiSelect" class="dark-select">
+                  <option value="240">240 DPI</option>
+                  <option value="300" selected>300 DPI</option>
+                  <option value="360">360 DPI</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="superres-telemetry" id="superResTelemetry" aria-live="polite">
+              Salida: resolución original
+            </div>
+
+            <div class="shared-subblock">
+              <div class="dust-heal-head">
+                <span>Lupa óptica 1:1 (Antes / Después)</span>
+                <span class="mono-badge" id="inspectLoupeTime">—</span>
+              </div>
+              <div class="dust-heal-actions">
+                <button type="button" class="btn btn-outline btn-xs" id="runInspectLoupeBtn"
+                  title="Inspecciona un recorte 1:1 real con el escalado aplicado">Inspeccionar centro 1:1</button>
+                <button type="button" class="btn btn-ghost btn-xs" id="closeInspectLoupeBtn"
+                  style="display: none;">Ocultar lupa</button>
+              </div>
+              <div class="inspect-loupe-box" id="inspectLoupeBox" style="display: none;">
+                <div class="inspect-loupe-stage" id="inspectLoupeStage">
+                  <img id="inspectBeforeImg" class="inspect-img before" alt="Zoom estándar antes">
+                  <img id="inspectAfterImg" class="inspect-img after" alt="Súper-Resolución Haluro después">
+                  <div class="inspect-divider" id="inspectDivider"></div>
+                  <span class="inspect-tag tag-left">Zoom común</span>
+                  <span class="inspect-tag tag-right">Haluro IBP</span>
+                </div>
+                <input type="range" id="inspectSplitSlider" min="0" max="100" step="1" value="50"
+                  aria-label="Divisor Antes/Después en lupa 1:1">
+              </div>
+            </div>
+
+            <div class="geom-insp-footer">
+              <button type="button" class="reset-link" id="resetSuperResBtn">Restablecer a 1×</button>
+            </div>
+          </div>
+        </details>
+
         <!-- SHARED OPTICS, DENOISE, DUST HEAL & DODGE/BURN CARD: Works in both Emulation & Negative modes -->
         <details class="panel-card collapsible-panel shared-optics-card" id="sharedDarkroomToolsCard">
           <summary class="section-head collapsible-head">
