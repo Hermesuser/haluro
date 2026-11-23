@@ -2662,6 +2662,8 @@ function applyPreviewResult(data, origKey, requestedOriginal) {
     statRes.textContent = `${data.width}×${data.height}`;
     state.activePreviewWidth = data.width;
     state.activePreviewHeight = data.height;
+    syncSuperResUI();
+    renderInterpretationsUI();
   }
   if (statTime && data.render_time != null) {
     statTime.textContent = `${Math.round(data.render_time * 1000)} ms`;
@@ -5268,6 +5270,95 @@ function resetSimDarkroomPrintState() {
   state.tonerHighlightsAmt = 0.0;
   state.farmerBleach = 0.0;
   syncDarkroomPrintUI();
+}
+
+function syncSuperResUI() {
+  const f = Number(state.upscaleFactor || 1.0);
+  const lbl = document.getElementById("upscaleFactorVal");
+  if (lbl) lbl.textContent = `${f === Math.round(f) ? f.toFixed(0) : f.toFixed(2)}×`;
+  const badge = document.getElementById("superResBadge");
+  if (badge) {
+    badge.textContent =
+      f > 1.01
+        ? `${f === Math.round(f) ? f.toFixed(0) : f.toFixed(2)}× ${(state.upscaleMode || "ibp").toUpperCase()}`
+        : "1× Original";
+    badge.classList.toggle("is-active", f > 1.01);
+  }
+  document.querySelectorAll("#upscaleFactorBar .zone-dev-btn").forEach((btn) => {
+    const active = Math.abs(Number(btn.dataset.scale) - f) < 0.05;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-checked", active ? "true" : "false");
+  });
+  const modeSel = document.getElementById("upscaleModeSelect");
+  if (modeSel) modeSel.value = state.upscaleMode || "ibp";
+  const mediaSel = document.getElementById("outputSharpenMediaSelect");
+  if (mediaSel) mediaSel.value = state.outputSharpenMedia || "off";
+  const skinChk = document.getElementById("protectSkinCheck");
+  if (skinChk) skinChk.checked = Boolean(state.protectSkin);
+  setSliderSilent(
+    "deconvAmountSlider",
+    "deconvAmountVal",
+    Math.round((state.deconvAmount || 0) * 100),
+    `${Math.round((state.deconvAmount || 0) * 100)}%`
+  );
+  setSliderSilent(
+    "deconvRadiusSlider",
+    "deconvRadiusVal",
+    Number(state.deconvRadius || 1.0).toFixed(1),
+    `${Number(state.deconvRadius || 1.0).toFixed(1)} px`
+  );
+  setSliderSilent(
+    "claritySlider",
+    "clarityVal",
+    Math.round((state.clarity || 0) * 100),
+    `${(state.clarity || 0) > 0 ? "+" : ""}${Math.round((state.clarity || 0) * 100)}`
+  );
+  setSliderSilent(
+    "textureSlider",
+    "textureVal",
+    Math.round((state.texture || 0) * 100),
+    `${(state.texture || 0) > 0 ? "+" : ""}${Math.round((state.texture || 0) * 100)}`
+  );
+  setSliderSilent(
+    "dehazeSlider",
+    "dehazeVal",
+    Math.round((state.dehaze || 0) * 100),
+    `${(state.dehaze || 0) > 0 ? "+" : ""}${Math.round((state.dehaze || 0) * 100)}`
+  );
+  setSliderSilent(
+    "haloSuppressSlider",
+    "haloSuppressVal",
+    Math.round((state.haloSuppress ?? 0.5) * 100),
+    `${Math.round((state.haloSuppress ?? 0.5) * 100)}%`
+  );
+  setSliderSilent(
+    "dejpegSlider",
+    "dejpegVal",
+    Math.round((state.dejpeg || 0) * 100),
+    `${Math.round((state.dejpeg || 0) * 100)}%`
+  );
+
+  const tele = document.getElementById("superResTelemetry");
+  const resText = document.getElementById("statResolution")?.textContent || "";
+  const m = resText.match(/(\d+)\s*[×x]\s*(\d+)/);
+  if (tele) {
+    if (m) {
+      const sw = Number(m[1]);
+      const sh = Number(m[2]);
+      const ow = Math.min(16384, Math.round(sw * f));
+      const oh = Math.min(16384, Math.round(sh * f));
+      const mp = ((ow * oh) / 1e6).toFixed(1);
+      const dpi = Number(state.printDpi || 300);
+      const cmW = ((ow / dpi) * 2.54).toFixed(1);
+      const cmH = ((oh / dpi) * 2.54).toFixed(1);
+      tele.textContent =
+        f > 1.01
+          ? `${sw}×${sh} → ${ow}×${oh} px (${mp} MP · ${cmW}×${cmH} cm @ ${dpi} DPI)`
+          : `Original: ${sw}×${sh} px (${mp} MP · ${cmW}×${cmH} cm @ ${dpi} DPI)`;
+    } else {
+      tele.textContent = f > 1.01 ? `Ampliación activa: ${f.toFixed(2)}× al exportar` : "Salida: resolución original";
+    }
+  }
 }
 
 function setEvalSurround(mode) {
@@ -9837,58 +9928,7 @@ function initUIListeners() {
   document.getElementById("addInterpretationBtn")?.addEventListener("click", createVirtualInterpretation);
   document.getElementById("exportPrintMapBtn")?.addEventListener("click", exportDarkroomPrintMap);
 
-  // Optical Upscaling, Print Size Calculator & 1:1 Inspection Loupe (Phase 1 v3.1.0)
-  const syncSuperResUI = () => {
-    const f = Number(state.upscaleFactor || 1.0);
-    const lbl = document.getElementById("upscaleFactorVal");
-    if (lbl) lbl.textContent = `${f === Math.round(f) ? f.toFixed(0) : f.toFixed(2)}×`;
-    const badge = document.getElementById("superResBadge");
-    if (badge) {
-      badge.textContent = f > 1.01 ? `${f === Math.round(f) ? f.toFixed(0) : f.toFixed(2)}× ${(state.upscaleMode || "ibp").toUpperCase()}` : "1× Original";
-      badge.classList.toggle("is-active", f > 1.01);
-    }
-    document.querySelectorAll("#upscaleFactorBar .zone-dev-btn").forEach((btn) => {
-      const active = Math.abs(Number(btn.dataset.scale) - f) < 0.05;
-      btn.classList.toggle("active", active);
-      btn.setAttribute("aria-checked", active ? "true" : "false");
-    });
-    const modeSel = document.getElementById("upscaleModeSelect");
-    if (modeSel) modeSel.value = state.upscaleMode || "ibp";
-    const mediaSel = document.getElementById("outputSharpenMediaSelect");
-    if (mediaSel) mediaSel.value = state.outputSharpenMedia || "off";
-    const skinChk = document.getElementById("protectSkinCheck");
-    if (skinChk) skinChk.checked = Boolean(state.protectSkin);
-    setSliderSilent("deconvAmountSlider", "deconvAmountVal", Math.round((state.deconvAmount || 0) * 100), `${Math.round((state.deconvAmount || 0) * 100)}%`);
-    setSliderSilent("deconvRadiusSlider", "deconvRadiusVal", (state.deconvRadius || 1.0).toFixed(1), `${Number(state.deconvRadius || 1.0).toFixed(1)} px`);
-    setSliderSilent("claritySlider", "clarityVal", Math.round((state.clarity || 0) * 100), `${(state.clarity || 0) > 0 ? "+" : ""}${Math.round((state.clarity || 0) * 100)}`);
-    setSliderSilent("textureSlider", "textureVal", Math.round((state.texture || 0) * 100), `${(state.texture || 0) > 0 ? "+" : ""}${Math.round((state.texture || 0) * 100)}`);
-    setSliderSilent("dehazeSlider", "dehazeVal", Math.round((state.dehaze || 0) * 100), `${(state.dehaze || 0) > 0 ? "+" : ""}${Math.round((state.dehaze || 0) * 100)}`);
-    setSliderSilent("haloSuppressSlider", "haloSuppressVal", Math.round((state.haloSuppress ?? 0.5) * 100), `${Math.round((state.haloSuppress ?? 0.5) * 100)}%`);
-    setSliderSilent("dejpegSlider", "dejpegVal", Math.round((state.dejpeg || 0) * 100), `${Math.round((state.dejpeg || 0) * 100)}%`);
-
-    const tele = document.getElementById("superResTelemetry");
-    const resText = document.getElementById("statResolution")?.textContent || "";
-    const m = resText.match(/(\d+)\s*[×x]\s*(\d+)/);
-    if (tele) {
-      if (m) {
-        const sw = Number(m[1]);
-        const sh = Number(m[2]);
-        const ow = Math.min(16384, Math.round(sw * f));
-        const oh = Math.min(16384, Math.round(sh * f));
-        const mp = ((ow * oh) / 1e6).toFixed(1);
-        const dpi = Number(state.printDpi || 300);
-        const cmW = ((ow / dpi) * 2.54).toFixed(1);
-        const cmH = ((oh / dpi) * 2.54).toFixed(1);
-        tele.textContent =
-          f > 1.01
-            ? `${sw}×${sh} → ${ow}×${oh} px (${mp} MP · ${cmW}×${cmH} cm @ ${dpi} DPI)`
-            : `Original: ${sw}×${sh} px (${mp} MP · ${cmW}×${cmH} cm @ ${dpi} DPI)`;
-      } else {
-        tele.textContent = f > 1.01 ? `Ampliación activa: ${f.toFixed(2)}× al exportar` : "Salida: resolución original";
-      }
-    }
-  };
-
+  // Optical Upscaling, Print Size Calculator & 1:1 Inspection Loupe (Phase 1+2+3)
   document.querySelectorAll("#upscaleFactorBar .zone-dev-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.upscaleFactor = Number(btn.dataset.scale) || 1.0;
@@ -9941,22 +9981,6 @@ function initUIListeners() {
     saveActiveFrameRecipe();
     requestPreview(false);
   });
-
-  bindRange("deconvAmountSlider", "deconvAmountVal", (v) => `${Math.round(v)}%`, (v) => {
-    state.deconvAmount = Math.max(0, Math.min(1, v / 100));
-  });
-  bindRange("deconvRadiusSlider", "deconvRadiusVal", (v) => `${v.toFixed(1)} px`, (v) => {
-    state.deconvRadius = Math.max(0.5, Math.min(2.5, v));
-  });
-  bindRange("claritySlider", "clarityVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
-    state.clarity = Math.max(-1, Math.min(1, v / 100));
-  });
-  bindRange("textureSlider", "textureVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
-    state.texture = Math.max(-1, Math.min(1, v / 100));
-  });
-  bindRange("dehazeSlider", "dehazeVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
-    state.dehaze = Math.max(-0.5, Math.min(1, v / 100));
-  });
   document.getElementById("protectSkinCheck")?.addEventListener("change", (e) => {
     pushUndoSnapshotForFrame();
     state.protectSkin = Boolean(e.target.checked);
@@ -9968,12 +9992,6 @@ function initUIListeners() {
     state.outputSharpenMedia = e.target.value || "off";
     saveActiveFrameRecipe();
     requestPreview(false);
-  });
-  bindRange("haloSuppressSlider", "haloSuppressVal", (v) => `${Math.round(v)}%`, (v) => {
-    state.haloSuppress = Math.max(0, Math.min(1, v / 100));
-  });
-  bindRange("dejpegSlider", "dejpegVal", (v) => `${Math.round(v)}%`, (v) => {
-    state.dejpeg = Math.max(0, Math.min(1, v / 100));
   });
   const opticalPresets = {
     scan35: {
@@ -10263,6 +10281,27 @@ function initUIListeners() {
   bindRange("simFarmerBleachSlider", "simFarmerBleachVal", (v) => `${Math.round(v)}%`, (v) => {
     state.farmerBleach = Math.max(0, Math.min(1, v / 100));
     syncDarkroomPrintUI();
+  });
+  bindRange("deconvAmountSlider", "deconvAmountVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.deconvAmount = Math.max(0, Math.min(1, v / 100));
+  });
+  bindRange("deconvRadiusSlider", "deconvRadiusVal", (v) => `${v.toFixed(1)} px`, (v) => {
+    state.deconvRadius = Math.max(0.5, Math.min(2.5, v));
+  });
+  bindRange("claritySlider", "clarityVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
+    state.clarity = Math.max(-1, Math.min(1, v / 100));
+  });
+  bindRange("textureSlider", "textureVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
+    state.texture = Math.max(-1, Math.min(1, v / 100));
+  });
+  bindRange("dehazeSlider", "dehazeVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
+    state.dehaze = Math.max(-0.5, Math.min(1, v / 100));
+  });
+  bindRange("haloSuppressSlider", "haloSuppressVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.haloSuppress = Math.max(0, Math.min(1, v / 100));
+  });
+  bindRange("dejpegSlider", "dejpegVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.dejpeg = Math.max(0, Math.min(1, v / 100));
   });
   bindRange("halationSlider", "halationVal", (v) => `${v.toFixed(1)}x`, (v) => {
     state.halation = v;

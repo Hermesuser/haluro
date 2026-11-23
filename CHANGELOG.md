@@ -9,6 +9,15 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [3.1.1] — 2026-11-23
+
+### Corregido
+- **Arranque JS (`ReferenceError: Cannot access 'bindRange' before initialization`):** Se movieron las vinculaciones de deslizadores de Deconvolución, Claridad, Textura, Desneblina, Supresión de halos y De-JPEG después de la definición de `bindRange`, y se promovió `syncSuperResUI()` al ámbito global para sincronizar correctamente el panel de Resolución y Nitidez al cambiar de fotograma o cargar proyectos `.haluro`.
+- **Visualización inicial de Interpretaciones virtuales:** `Copia #1` aparece ahora de inmediato al cargar el primer fotograma.
+- **Diseño de barra del visor y panel derecho:** Se reubicó el selector de Entorno de Evaluación (`Oscuro / Gris 18% / Galería`) como píldora flotante en el lienzo, se compactó la barra de herramientas para evitar recortes horizontales y se hizo colapsable el bloque de opciones secundarias de exportación (*Opciones de copia y salida*) para dar mayor espacio vertical al inspector.
+
+---
+
 ## [3.1.0] — 2026-11-23
 
 ### Añadido — «Ampliadora Óptica y Súper-Resolución»

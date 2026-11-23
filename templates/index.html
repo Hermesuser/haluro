@@ -682,16 +682,6 @@
             title="Tira de prueba de cuarto oscuro en fracciones de paso (Tecla T)">Tira f-stop</button>
           <button class="mode-btn" id="abCompareBtn" aria-pressed="false"
             title="Comparación A/B: congela una instantánea A para compararla en vivo contra otro revelado B">A/B</button>
-          <span class="toolbar-sep" aria-hidden="true"></span>
-          <div class="eval-surround-group" id="evalSurroundGroup" role="group"
-            aria-label="Entorno de evaluación de copia (Tecla E)">
-            <button type="button" class="surround-btn active" data-surround="dark" aria-pressed="true"
-              title="Entorno Oscuro (Cuarto oscuro) — Tecla E para alternar"><span class="surround-dot dark"></span></button>
-            <button type="button" class="surround-btn" data-surround="gray18" aria-pressed="false"
-              title="Entorno Gris Neutro 18% (Evaluación de densidad sin engaño perceptual) — Tecla E"><span class="surround-dot gray18"></span></button>
-            <button type="button" class="surround-btn" data-surround="gallery" aria-pressed="false"
-              title="Entorno Pared Galería Blanca con paspartú virtual — Tecla E"><span class="surround-dot gallery"></span></button>
-          </div>
         </div>
 
         <!-- Geometry, Undo/Redo, Zoom & Recipe Sync Instruments -->
@@ -788,6 +778,15 @@
 
       <!-- Main Light Table Canvas -->
       <div class="canvas-container" id="canvasContainer">
+        <div class="eval-surround-group eval-surround-floating" id="evalSurroundGroup" role="group"
+          aria-label="Entorno de evaluación de copia (Tecla E)">
+          <button type="button" class="surround-btn active" data-surround="dark" aria-pressed="true"
+            title="Entorno Oscuro (Cuarto oscuro) — Tecla E para alternar"><span class="surround-dot dark"></span></button>
+          <button type="button" class="surround-btn" data-surround="gray18" aria-pressed="false"
+            title="Entorno Gris Neutro 18% (Evaluación de densidad sin engaño perceptual) — Tecla E"><span class="surround-dot gray18"></span></button>
+          <button type="button" class="surround-btn" data-surround="gallery" aria-pressed="false"
+            title="Entorno Pared Galería Blanca con paspartú virtual — Tecla E"><span class="surround-dot gallery"></span></button>
+        </div>
         <div class="split-slider-wrapper" id="splitWrapper">
           <div class="split-media-layer" id="splitMediaLayer">
             <img id="imgOriginal" class="split-image original" alt="Fotografía original sin procesar" draggable="false">
@@ -2412,45 +2411,63 @@
 
       <!-- Output Format & Archive Footer -->
       <div class="inspector-footer">
-        <div class="print-finish-footer" aria-label="Acabado de copia en cuarto oscuro">
-          <label class="print-finish-field">
-            <span>Marginador (Easel)</span>
-            <select id="easelBorderSelect" class="dark-select">
-              <option value="none">Sin margen</option>
-              <option value="white_thin">Blanco fino (Baritado)</option>
-              <option value="white_gallery">Blanco galería + filete</option>
-              <option value="gallery_caption">Galería + Pie analógico</option>
-              <option value="black_rebate">Reborde negro portanegativos</option>
-            </select>
-          </label>
-          <label class="print-finish-field" title="Compensa el oscurecimiento al secar del papel de cuarto oscuro">
-            <span>Dry-Down</span>
-            <select id="dryDownSelect" class="dark-select">
-              <option value="0.0">0% (Sin compens.)</option>
-              <option value="0.05">+5% RC Satin</option>
-              <option value="0.08">+8% Baritado</option>
-              <option value="0.12">+12% Alto contraste</option>
-            </select>
-          </label>
-        </div>
-        <div class="print-finish-footer" style="margin-top: 6px;" aria-label="Perfil de resolución y calidad">
-          <label class="print-finish-field" title="Lado mayor máximo al exportar (Original conserva la resolución nativa)">
-            <span>Salida (px)</span>
-            <select id="exportMaxDimSelect" class="dark-select">
-              <option value="" selected>Original</option>
-              <option value="3840">4K (3840 px)</option>
-              <option value="2048">Web HD (2048 px)</option>
-            </select>
-          </label>
-          <label class="print-finish-field" title="Calidad de compresión para archivos JPEG">
-            <span>Calidad JPG</span>
-            <select id="exportQualitySelect" class="dark-select">
-              <option value="96" selected>96% Archivo</option>
-              <option value="90">90% Alta</option>
-              <option value="82">82% Web</option>
-            </select>
-          </label>
-        </div>
+        <details class="export-options-details" id="exportOptionsDetails">
+          <summary class="export-options-summary">
+            <span>Opciones de copia y salida</span>
+            <span class="export-options-hint">Margen · Dry-Down · px · UV</span>
+          </summary>
+          <div class="export-options-body">
+            <div class="print-finish-footer" aria-label="Acabado de copia en cuarto oscuro">
+              <label class="print-finish-field">
+                <span>Marginador (Easel)</span>
+                <select id="easelBorderSelect" class="dark-select">
+                  <option value="none">Sin margen</option>
+                  <option value="white_thin">Blanco fino (Baritado)</option>
+                  <option value="white_gallery">Blanco galería + filete</option>
+                  <option value="gallery_caption">Galería + Pie analógico</option>
+                  <option value="black_rebate">Reborde negro portanegativos</option>
+                </select>
+              </label>
+              <label class="print-finish-field" title="Compensa el oscurecimiento al secar del papel de cuarto oscuro">
+                <span>Dry-Down</span>
+                <select id="dryDownSelect" class="dark-select">
+                  <option value="0.0">0% (Sin compens.)</option>
+                  <option value="0.05">+5% RC Satin</option>
+                  <option value="0.08">+8% Baritado</option>
+                  <option value="0.12">+12% Alto contraste</option>
+                </select>
+              </label>
+            </div>
+            <div class="print-finish-footer" style="margin-top: 6px;" aria-label="Perfil de resolución y calidad">
+              <label class="print-finish-field" title="Lado mayor máximo al exportar (Original conserva la resolución nativa)">
+                <span>Salida (px)</span>
+                <select id="exportMaxDimSelect" class="dark-select">
+                  <option value="" selected>Original</option>
+                  <option value="3840">4K (3840 px)</option>
+                  <option value="2048">Web HD (2048 px)</option>
+                </select>
+              </label>
+              <label class="print-finish-field" title="Calidad de compresión para archivos JPEG">
+                <span>Calidad JPG</span>
+                <select id="exportQualitySelect" class="dark-select">
+                  <option value="96" selected>96% Archivo</option>
+                  <option value="90">90% Alta</option>
+                  <option value="82">82% Web</option>
+                </select>
+              </label>
+            </div>
+            <label class="geom-check-label xmp-sidecar-toggle"
+              title="Guarda además un archivo .xmp no destructivo con el recorte, nivelado y orientación">
+              <input type="checkbox" id="writeXmpCheck">
+              <span>Guardar sidecar .XMP de geometría</span>
+            </label>
+            <label class="geom-check-label xmp-sidecar-toggle ui-adv-only"
+              title="Invierte a negativo B&N volteado horizontalmente con curva UV para cianotipia, platino/paladio o papel salado (Cap. 13)">
+              <input type="checkbox" id="digitalNegativeCheck">
+              <span>Negativo digital B&amp;N para contacto (UV)</span>
+            </label>
+          </div>
+        </details>
         <div class="format-row">
           <span class="format-label">Formato maestro</span>
           <div class="format-pills" id="outputFormatPills" role="radiogroup"
@@ -2468,16 +2485,6 @@
               title="Mantiene el formato de entrada (JPG/PNG/TIFF) o exporta Linear DNG 16-bit cuando la entrada es RAW">Original</button>
           </div>
           <div class="format-hint" id="outputFormatHint" aria-live="polite"></div>
-          <label class="geom-check-label xmp-sidecar-toggle"
-            title="Guarda además un archivo .xmp no destructivo con el recorte, nivelado y orientación">
-            <input type="checkbox" id="writeXmpCheck">
-            <span>Guardar sidecar .XMP de geometría</span>
-          </label>
-          <label class="geom-check-label xmp-sidecar-toggle ui-adv-only"
-            title="Invierte a negativo B&N volteado horizontalmente con curva UV para cianotipia, platino/paladio o papel salado (Cap. 13)">
-            <input type="checkbox" id="digitalNegativeCheck">
-            <span>Negativo digital B&amp;N para contacto (UV)</span>
-          </label>
         </div>
         <div class="footer-dual-actions">
           <button class="btn btn-outline btn-xs" id="exportPrintMapBtn"

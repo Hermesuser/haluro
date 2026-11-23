@@ -1,9 +1,9 @@
 {
-  "version": "3.1.0",
+  "version": "3.1.1",
   "release_date": "2026-11-23",
-  "name": "Haluro v3.1.0",
+  "name": "Haluro v3.1.1",
   "title": "Ampliadora Óptica, Súper-Resolución IBP, Deconvolución Richardson-Lucy y Claridad",
-  "description": "Haluro 3.1.0: escalado óptico y súper-resolución IBP en 16-bit (1.5x–4x) con re-síntesis de grano a resolución final y calculadora física de impresión (cm @ 240/300/360 DPI), lupa óptica 1:1 Antes/Después, deconvolución Richardson-Lucy amortiguada en luminancia, claridad multiescala, textura fina con protección de piel, desneblina óptica (Dehaze), nitidez de salida por soporte (Pantalla/Baritado/Mate) con supresión de halos, limpieza De-JPEG/Anti-Moiré, 3 presets ópticos rápidos y puente opcional a IA local GPU (realesrgan-ncnn-vulkan).",
+  "description": "Haluro 3.1.1: escalado óptico y súper-resolución IBP en 16-bit (1.5x–4x) con re-síntesis de grano a resolución final y calculadora física de impresión (cm @ 240/300/360 DPI), lupa óptica 1:1 Antes/Después, deconvolución Richardson-Lucy amortiguada en luminancia, claridad multiescala, textura fina con protección de piel, desneblina óptica (Dehaze), nitidez de salida por soporte (Pantalla/Baritado/Mate) con supresión de halos, limpieza De-JPEG/Anti-Moiré, 3 presets ópticos rápidos y puente opcional a IA local GPU (realesrgan-ncnn-vulkan).",
   "highlights": [
     "Ampliadora Óptica y Súper-Resolución IBP 16-bit (1.5×–4×) con tiling seguro, re-síntesis de grano final, calculadora cm/DPI y Lupa 1:1 Antes/Después",
     "Deconvolución Óptica Richardson-Lucy en luminancia, Claridad (microcontraste), Textura fina con protección de piel y Desneblina (Dehaze) en luz lineal",
@@ -11,10 +11,10 @@
     "Limpieza pre-escalado De-JPEG/Anti-Moiré, 3 presets rápidos (Escaneo 35mm, Galería 2×, Rescate foco) y puente opcional a Real-ESRGAN local"
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-3.1.0-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-3.1.0-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-Setup-3.1.0-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-Portable-3.1.0-Win11-x64.zip"
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.1/Haluro-3.1.1-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.1/Haluro-3.1.1-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.1/Haluro-Setup-3.1.1-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v3.1.1/Haluro-Portable-3.1.1-Win11-x64.zip"
   },
   "checksums": {
     "macos_arm64": "",
