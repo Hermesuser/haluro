@@ -1364,6 +1364,24 @@ def apply_darkroom_print_finishing(
     return out_pil, (arr_f if float_srgb is not None else None)
 
 
+def apply_digital_negative_contact(pil_img: Image.Image, float_srgb: np.ndarray | None = None):
+    """Convert a finished print into a horizontally flipped B&W contact negative with UV curve (Cap. 13)."""
+    if float_srgb is not None:
+        arr = np.clip(np.asarray(float_srgb, dtype=np.float32), 0.0, 1.0)
+    else:
+        arr = np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0
+
+    y = np.sum(arr * LUMA, axis=-1, keepdims=True)
+    # Invert positive -> negative and apply gentle UV contact-print compensation curve
+    inv = np.clip(1.0 - y, 0.0, 1.0)
+    uv_neg = np.power(inv, 0.88).astype(np.float32)
+    # Flip horizontally (emulsion-down contact against cyanotype / Pt-Pd / salt paper)
+    uv_neg = uv_neg[:, ::-1, :]
+    neg_rgb = np.repeat(uv_neg, 3, axis=-1)
+    neg_u8 = (np.clip(neg_rgb, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+    return Image.fromarray(neg_u8, mode="RGB"), neg_rgb
+
+
 def save_output_image(
     pil_img,
     target_path,
@@ -1374,6 +1392,7 @@ def save_output_image(
     easel_border: str = "none",
     dry_down_comp: float = 0.0,
     export_max_dim: int | None = None,
+    digital_negative: bool = False,
 ):
     """Save developed image in JPG (4:4:4 + EXIF), PNG, or 16-bit (48-bit RGB) archival TIFF.
 
@@ -1401,6 +1420,8 @@ def save_output_image(
         dry_down_comp=dry_down_comp,
         analog_meta=analog_meta,
     )
+    if digital_negative:
+        pil_img, float_srgb = apply_digital_negative_contact(pil_img, float_srgb=float_srgb)
     target_path = Path(target_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
     ext = target_path.suffix.lower()

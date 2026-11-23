@@ -2381,6 +2381,94 @@ input[type="range"]::-webkit-slider-thumb:hover {
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* Virtual Copies / Interpretations Bar (Phase C.1) */
+.interpretations-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.interpretations-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.interp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline-rule);
+  background: var(--chamber-black);
+  color: var(--pewter-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+  max-width: 120px;
+}
+
+.interp-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interp-pill:hover { color: var(--silver-text); border-color: rgba(255, 255, 255, 0.28); }
+.interp-pill.active {
+  color: var(--sodium-amber);
+  border-color: rgba(242, 169, 59, 0.55);
+  background: rgba(242, 169, 59, 0.12);
+}
+
+.interp-del {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.65;
+  padding: 0 2px;
+}
+.interp-del:hover { opacity: 1; color: #ff6961; }
+
+.interp-add-btn {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px dashed rgba(242, 169, 59, 0.4);
+  background: transparent;
+  color: var(--sodium-amber);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.interp-add-btn:hover { background: rgba(242, 169, 59, 0.12); }
+
+.test-strip-mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--pewter-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.test-strip-mode-btn.active {
+  background: rgba(242, 169, 59, 0.22);
+  color: var(--sodium-amber);
+}
+
+.footer-dual-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
 .zone-dev-btn {
   border: 1px solid transparent;
   border-radius: 3px;

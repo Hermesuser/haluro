@@ -312,6 +312,7 @@ const state = {
   // Viewport & Light Table
   viewMode: "split", // 'split' | 'full' | 'original' | 'sheet' | 'teststrip'
   prevViewMode: "split",
+  testStripMode: "exposure", // 'exposure' | 'contrast' | 'toner'
   testStripStepEv: 0.5,
   testStripSteps: [],
   holdingOriginal: false,
@@ -2537,12 +2538,14 @@ async function requestPreview(forceOriginal = false) {
             ? {
                 mode: "negative",
                 filename: activeFrame.filename,
+                strip_mode: state.testStripMode || "exposure",
                 step_ev: state.testStripStepEv,
                 ...buildNegativePayload(),
               }
             : {
                 mode: "simulation",
                 filename: activeFrame.filename,
+                strip_mode: state.testStripMode || "exposure",
                 step_ev: state.testStripStepEv,
                 ...buildSimulationPayload(),
               }
@@ -2947,6 +2950,7 @@ function saveActiveFrameRecipe() {
   } else {
     frame.simRecipe = snapshotSimRecipe();
   }
+  syncActiveInterpretationFromFrame(frame);
   updateActiveThumbEditedIndicator();
   saveStoredFrameRecipes();
   markProjectDirty();
@@ -3272,6 +3276,7 @@ function loadFrameRecipe(idx) {
     loaded = true;
   }
   updateUndoRedoButtons();
+  renderInterpretationsUI();
   return loaded;
 }
 
@@ -3371,6 +3376,8 @@ function applySyncRecipeToRoll(options = {}) {
   const prevRollBackup = state.frames.map((f) => ({
     simRecipe: f.simRecipe ? clonePlain(f.simRecipe) : null,
     negRecipe: f.negRecipe ? clonePlain(f.negRecipe) : null,
+    interpretations: Array.isArray(f.interpretations) ? clonePlain(f.interpretations) : null,
+    activeInterpretationId: f.activeInterpretationId || null,
   }));
 
   const NEG_PROFILE_TONE_KEYS = [
@@ -5530,16 +5537,17 @@ function renderTestStripCols(steps) {
   const colsEl = document.getElementById("testStripCols");
   if (!colsEl) return;
   colsEl.innerHTML = "";
+  const sMode = state.testStripMode || "exposure";
   (steps || []).forEach((step) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    const isCenter = Math.abs(Number(step.delta_ev) || 0) < 1e-3;
+    const isCenter = sMode === "exposure" ? Math.abs(Number(step.delta_ev) || 0) < 1e-3 : step.index === 2;
     btn.className = `test-strip-col${isCenter ? " is-center" : ""}`;
-    btn.title = `Aplicar exposición ${step.label}`;
+    btn.title = `Aplicar banda ${step.label}`;
     btn.setAttribute("aria-label", `Aplicar banda ${step.label}`);
     const badge = document.createElement("span");
     badge.className = "test-strip-badge";
-    badge.textContent = isCenter ? "Actual" : step.label;
+    badge.textContent = sMode === "exposure" && isCenter ? "Actual" : step.label;
     btn.appendChild(badge);
     btn.addEventListener("click", () => selectTestStripStep(step));
     colsEl.appendChild(btn);
@@ -5549,11 +5557,46 @@ function renderTestStripCols(steps) {
 function selectTestStripStep(step) {
   if (!step || state.frames.length === 0) return;
   pushUndoSnapshotForFrame();
+  const sMode = step.strip_mode || state.testStripMode || "exposure";
+  let toastDesc = `Exposición ajustada (${step.label}).`;
   if (state.appMode === "negative") {
-    const clamped = Math.max(-1.0, Math.min(1.0, Number(step.target_value) || 0));
-    negativeState.brightness = clamped;
-    const fmtS = `${clamped > 0 ? "+" : ""}${clamped.toFixed(2)}`;
-    setSliderSilent("negBrightnessSlider", "negBrightnessVal", clamped, fmtS);
+    if (sMode === "contrast") {
+      const clamped = Math.max(-1.0, Math.min(1.0, Number(step.target_value) || 0));
+      negativeState.contrast = clamped;
+      setSliderSilent("negContrastSlider", "negContrastVal", clamped, `${clamped > 0 ? "+" : ""}${clamped.toFixed(2)}`);
+      toastDesc = `Contraste aplicado (${step.label}).`;
+    } else if (sMode === "toner") {
+      const dil = Math.max(0, Math.min(1, Number(step.target_value) || 0));
+      if (!negativeState.bwToner || negativeState.bwToner === "neutral") {
+        negativeState.bwToner = "selenium";
+        const sel = document.getElementById("negBwTonerSelect");
+        if (sel) sel.value = "selenium";
+      }
+      negativeState.bwTonerStrength = dil;
+      setSliderSilent("negBwTonerStrengthSlider", "negBwTonerStrengthVal", Math.round(dil * 100), `${Math.round(dil * 100)}%`);
+      toastDesc = `Dilución de virado aplicada (${step.label}).`;
+    } else {
+      const clamped = Math.max(-1.0, Math.min(1.0, Number(step.target_value) || 0));
+      negativeState.brightness = clamped;
+      const fmtS = `${clamped > 0 ? "+" : ""}${clamped.toFixed(2)}`;
+      setSliderSilent("negBrightnessSlider", "negBrightnessVal", clamped, fmtS);
+    }
+  } else if (sMode === "contrast") {
+    state.zoneDev = String(step.target_value || "N");
+    syncZoneDevUI();
+    toastDesc = `Desarrollo Sistema de Zonas (${step.label}).`;
+  } else if (sMode === "toner") {
+    const dil = Math.max(0, Math.min(1, Number(step.target_value) || 0));
+    if (state.tonerShadows && state.tonerShadows !== "none") {
+      state.tonerShadowsAmt = dil;
+    } else if (state.tonerHighlights && state.tonerHighlights !== "none") {
+      state.tonerHighlightsAmt = dil;
+    } else {
+      state.tonerShadows = "selenium";
+      state.tonerShadowsAmt = dil;
+    }
+    syncDarkroomPrintUI();
+    toastDesc = `Dilución de virado aplicada (${step.label}).`;
   } else {
     const slider = document.getElementById("evSlider");
     const minEv = slider ? parseFloat(slider.min) : -2.0;
@@ -5566,7 +5609,7 @@ function selectTestStripStep(step) {
   saveUserPreferences();
   const returnMode = state.prevViewMode === "split" ? "split" : "full";
   setViewMode(returnMode);
-  showToast("Tira f-stop aplicada", `Exposición ajustada (${step.label}).`);
+  showToast("Tira de prueba aplicada", toastDesc);
 }
 
 function setViewMode(mode) {
@@ -7463,7 +7506,299 @@ function buildExportPrintOptions() {
     export_max_dim: state.exportMaxDim || null,
     jpeg_quality: Number(state.jpegQuality || 96),
     write_xmp: Boolean(document.getElementById("writeXmpCheck")?.checked),
+    digital_negative: Boolean(document.getElementById("digitalNegativeCheck")?.checked),
   };
+}
+
+// =============================================================
+// VIRTUAL COPIES / INTERPRETATIONS PER FRAME (Phase C.1)
+// =============================================================
+
+function ensureFrameInterpretations(frame) {
+  if (!frame) return [];
+  if (!Array.isArray(frame.interpretations) || frame.interpretations.length === 0) {
+    const id = "copia_1";
+    frame.interpretations = [
+      {
+        id,
+        name: "Copia #1",
+        simRecipe: frame.simRecipe ? clonePlain(frame.simRecipe) : snapshotSimRecipe(),
+        negRecipe: frame.negRecipe ? clonePlain(frame.negRecipe) : snapshotNegRecipe(),
+      },
+    ];
+    frame.activeInterpretationId = id;
+  }
+  if (!frame.activeInterpretationId) {
+    frame.activeInterpretationId = frame.interpretations[0].id;
+  }
+  return frame.interpretations;
+}
+
+function syncActiveInterpretationFromFrame(frame) {
+  if (!frame || !Array.isArray(frame.interpretations) || frame.interpretations.length === 0) return;
+  const active = frame.interpretations.find((it) => it.id === frame.activeInterpretationId) || frame.interpretations[0];
+  if (!active) return;
+  if (state.appMode === "negative") {
+    active.negRecipe = frame.negRecipe ? clonePlain(frame.negRecipe) : snapshotNegRecipe();
+  } else {
+    active.simRecipe = frame.simRecipe ? clonePlain(frame.simRecipe) : snapshotSimRecipe();
+  }
+}
+
+function renderInterpretationsUI() {
+  const listEl = document.getElementById("interpretationsList");
+  const barEl = document.getElementById("interpretationsBar");
+  if (!listEl || !barEl) return;
+  const frame = state.frames[state.activeFrameIndex];
+  if (!frame) {
+    barEl.style.display = "none";
+    return;
+  }
+  barEl.style.display = "flex";
+  const copies = ensureFrameInterpretations(frame);
+  listEl.innerHTML = "";
+  copies.forEach((copy) => {
+    const isActive = copy.id === frame.activeInterpretationId;
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = `interp-pill${isActive ? " active" : ""}`;
+    pill.title = `Cambiar a ${copy.name} (doble clic para renombrar)`;
+    const lbl = document.createElement("span");
+    lbl.textContent = copy.name;
+    pill.appendChild(lbl);
+    pill.addEventListener("click", () => switchInterpretation(copy.id));
+    pill.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      const nextName = window.prompt("Nombre de esta interpretación:", copy.name);
+      if (nextName && nextName.trim()) {
+        copy.name = nextName.trim().slice(0, 28);
+        renderInterpretationsUI();
+        markProjectDirty();
+      }
+    });
+    if (copies.length > 1) {
+      const del = document.createElement("span");
+      del.className = "interp-del";
+      del.textContent = "×";
+      del.title = `Eliminar ${copy.name}`;
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteInterpretation(copy.id);
+      });
+      pill.appendChild(del);
+    }
+    listEl.appendChild(pill);
+  });
+}
+
+function createVirtualInterpretation() {
+  const frame = state.frames[state.activeFrameIndex];
+  if (!frame) return;
+  saveActiveFrameRecipe();
+  const copies = ensureFrameInterpretations(frame);
+  if (copies.length >= 6) {
+    showToast("Límite alcanzado", "Máximo 6 interpretaciones virtuales por fotograma.");
+    return;
+  }
+  const num = copies.length + 1;
+  const newId = `copia_${Date.now().toString(36)}`;
+  copies.push({
+    id: newId,
+    name: `Copia #${num}`,
+    simRecipe: snapshotSimRecipe(),
+    negRecipe: snapshotNegRecipe(),
+  });
+  frame.activeInterpretationId = newId;
+  renderInterpretationsUI();
+  markProjectDirty();
+  showToast("Nueva interpretación creada", `Copia #${num} lista para experimentar sin tocar la copia anterior.`);
+}
+
+function switchInterpretation(interpId) {
+  const frame = state.frames[state.activeFrameIndex];
+  if (!frame) return;
+  const copies = ensureFrameInterpretations(frame);
+  if (frame.activeInterpretationId === interpId) return;
+  syncActiveInterpretationFromFrame(frame);
+  const target = copies.find((c) => c.id === interpId);
+  if (!target) return;
+  frame.activeInterpretationId = target.id;
+  if (state.appMode === "negative" && target.negRecipe) {
+    frame.negRecipe = clonePlain(target.negRecipe);
+    applyNegRecipeToUI(frame.negRecipe, false);
+  } else if (target.simRecipe) {
+    frame.simRecipe = clonePlain(target.simRecipe);
+    applySimRecipeToUI(frame.simRecipe);
+  }
+  renderInterpretationsUI();
+  state.lastOriginalKey = "";
+  requestPreview(true);
+}
+
+function deleteInterpretation(interpId) {
+  const frame = state.frames[state.activeFrameIndex];
+  if (!frame || !Array.isArray(frame.interpretations) || frame.interpretations.length <= 1) return;
+  const idx = frame.interpretations.findIndex((c) => c.id === interpId);
+  if (idx < 0) return;
+  frame.interpretations.splice(idx, 1);
+  if (frame.activeInterpretationId === interpId) {
+    const fallback = frame.interpretations[Math.max(0, idx - 1)];
+    frame.activeInterpretationId = fallback.id;
+    if (state.appMode === "negative" && fallback.negRecipe) {
+      applyNegRecipeToUI(clonePlain(fallback.negRecipe), false);
+    } else if (fallback.simRecipe) {
+      applySimRecipeToUI(clonePlain(fallback.simRecipe));
+    }
+    requestPreview(true);
+  }
+  renderInterpretationsUI();
+  markProjectDirty();
+}
+
+// =============================================================
+// PRINTABLE DARKROOM PRINT MAP (Phase C.3 — Ansel Adams / Barnbaum)
+// =============================================================
+
+function exportDarkroomPrintMap() {
+  const frame = state.frames[state.activeFrameIndex];
+  const imgDev = document.getElementById("imgDeveloped");
+  if (!frame || !imgDev || !imgDev.src) {
+    showToast("Sin fotografía", "Carga y revela un fotograma antes de generar su Mapa de Copia.");
+    return;
+  }
+
+  const esc = (s) =>
+    String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const filmName = document.getElementById("statFilm")?.textContent || state.selectedFilm;
+  const devProcText =
+    document.getElementById("simDevProcessSelect")?.selectedOptions?.[0]?.textContent || state.devProcess;
+  const paperDevText =
+    document.getElementById("simPaperDevSelect")?.selectedOptions?.[0]?.textContent || state.paperDev;
+  const paperBaseText =
+    document.getElementById("simPaperBaseSelect")?.selectedOptions?.[0]?.textContent || state.paperBase;
+  const headText =
+    { standard: "Estándar", condenser: "Condensador (Callier)", diffuser: "Difusor / Luz Fría" }[
+      state.enlargerHead || "standard"
+    ] || "Estándar";
+  const tonerShText =
+    state.tonerShadows !== "none" && state.tonerShadowsAmt > 0
+      ? `${document.getElementById("simTonerShadowsSelect")?.selectedOptions?.[0]?.textContent || state.tonerShadows} (${Math.round(state.tonerShadowsAmt * 100)}%)`
+      : "Ninguno";
+  const tonerHiText =
+    state.tonerHighlights !== "none" && state.tonerHighlightsAmt > 0
+      ? `${document.getElementById("simTonerHighlightsSelect")?.selectedOptions?.[0]?.textContent || state.tonerHighlights} (${Math.round(state.tonerHighlightsAmt * 100)}%)`
+      : "Ninguno";
+
+  // Build SVG overlay for Dodge & Burn / Farmer local masks
+  const masks = Array.isArray(state.localMasks) ? state.localMasks : [];
+  const maskSvgItems = masks
+    .map((m, i) => {
+      const isFarmer = m.mode === "farmer";
+      const label = isFarmer
+        ? `#${i + 1} Farmer ${Math.round(Math.min(100, (Math.abs(m.ev || 0) / 2.0) * 100))}%`
+        : `#${i + 1} ${Number(m.ev || 0) >= 0 ? "+" : ""}${Number(m.ev || 0).toFixed(1)} EV`;
+      const stroke = isFarmer ? "#f59e0b" : Number(m.ev || 0) >= 0 ? "#38bdf8" : "#ef4444";
+      if (m.type === "radial") {
+        const cx = (m.x1 || 0.5) * 100;
+        const cy = (m.y1 || 0.5) * 100;
+        const rx = Math.max(3, Math.abs((m.x2 || 0.75) - (m.x1 || 0.5)) * 100);
+        const ry = Math.max(3, Math.abs((m.y2 || 0.75) - (m.y1 || 0.5)) * 100);
+        return `<ellipse cx="${cx}%" cy="${cy}%" rx="${rx}%" ry="${ry}%" fill="none" stroke="${stroke}" stroke-width="2" stroke-dasharray="6 4"/>
+          <text x="${cx}%" y="${cy}%" fill="${stroke}" font-size="12" font-family="monospace" font-weight="700" text-anchor="middle" stroke="#000" stroke-width="3" paint-order="stroke">${esc(label)}</text>`;
+      }
+      const x1 = (m.x1 || 0.5) * 100;
+      const y1 = (m.y1 || 0.2) * 100;
+      const x2 = (m.x2 || 0.5) * 100;
+      const y2 = (m.y2 || 0.7) * 100;
+      return `<line x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%" stroke="${stroke}" stroke-width="2" stroke-dasharray="6 4"/>
+        <text x="${(x1 + x2) / 2}%" y="${(y1 + y2) / 2}%" fill="${stroke}" font-size="12" font-family="monospace" font-weight="700" text-anchor="middle" stroke="#000" stroke-width="3" paint-order="stroke">${esc(label)}</text>`;
+    })
+    .join("");
+
+  // Build 11-zone percentage distribution from current histogram bins
+  let zoneHtml = "";
+  if (curveHistBins && curveHistBins.yBins && curveHistBins.totalPixels) {
+    const counts = new Uint32Array(11);
+    for (let i = 0; i < 256; i++) counts[lumaToZoneIndex(i)] += curveHistBins.yBins[i];
+    zoneHtml = ZONE_ROMAN.map((r, z) => {
+      const p = ((counts[z] / curveHistBins.totalPixels) * 100).toFixed(1);
+      return `<div class="zcell"><strong>${r}</strong><span>${p}%</span></div>`;
+    }).join("");
+  }
+
+  const todayStr = new Date().toLocaleDateString("es-ES", { year: "numeric", month: "long", day: "numeric" });
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Mapa de Copia — ${esc(frame.name || frame.filename)}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f4ef; color: #1a1917; margin: 0; padding: 28px; }
+  .sheet { max-width: 880px; margin: 0 auto; background: #fff; border: 1px solid #d8d3c8; padding: 28px 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+  header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #1a1917; padding-bottom: 10px; margin-bottom: 18px; }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: 0.04em; text-transform: uppercase; }
+  header .meta { font-family: monospace; font-size: 12px; color: #555; }
+  .preview-wrap { position: relative; display: inline-block; width: 100%; text-align: center; background: #141416; padding: 12px; box-sizing: border-box; margin-bottom: 16px; }
+  .preview-inner { position: relative; display: inline-block; max-width: 100%; }
+  .preview-inner img { display: block; max-width: 100%; max-height: 440px; }
+  .preview-inner svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .zones { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; margin: 12px 0 18px; }
+  .zcell { border: 1px solid #d5d0c5; padding: 5px 2px; text-align: center; font-family: monospace; font-size: 11px; background: #faf8f4; }
+  .zcell strong { display: block; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 16px; }
+  th, td { border-bottom: 1px solid #e5e0d5; padding: 6px 8px; text-align: left; }
+  th { width: 32%; color: #555; font-weight: 600; }
+  .notes-box { border: 1px dashed #bdb6a7; padding: 10px 12px; min-height: 54px; font-size: 12px; color: #444; }
+  .actions { text-align: right; margin-top: 14px; }
+  .btn-print { background: #1a1917; color: #fff; border: none; padding: 8px 16px; font-size: 12px; cursor: pointer; border-radius: 4px; }
+  @media print { body { background: #fff; padding: 0; } .sheet { box-shadow: none; border: none; } .actions { display: none; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <h1>Haluro · Mapa de Copia de Cuarto Oscuro</h1>
+    <div class="meta">${esc(frame.name || frame.filename)} · ${esc(todayStr)}</div>
+  </header>
+  <div class="preview-wrap">
+    <div class="preview-inner">
+      <img src="${imgDev.src}" alt="Copia revelada">
+      ${maskSvgItems ? `<svg viewBox="0 0 1000 1000" preserveAspectRatio="none">${maskSvgItems}</svg>` : ""}
+    </div>
+  </div>
+  ${zoneHtml ? `<div class="zones">${zoneHtml}</div>` : ""}
+  <table>
+    <tr><th>Emulsión / Perfil</th><td>${esc(filmName)} (Intensidad ${Math.round((state.filmStrength ?? 1) * 100)}%)</td></tr>
+    <tr><th>Revelador de película</th><td>${esc(devProcText)} · Sistema de Zonas: <strong>${esc((state.zoneDev || "N").replace("-", "−"))}</strong></td></tr>
+    <tr><th>Cabezal de ampliadora</th><td>${esc(headText)}</td></tr>
+    <tr><th>Exposición y Zonas</th><td>EV ${state.ev >= 0 ? "+" : ""}${Number(state.ev || 0).toFixed(1)} · Sombras ${formatZoneEv(state.shadows)} · Medios ${formatZoneEv(state.mids)} · Luces ${formatZoneEv(state.highlights)}</td></tr>
+    <tr><th>Papel y Revelador de papel</th><td>${esc(paperDevText)} · Soporte: ${esc(paperBaseText)}</td></tr>
+    <tr><th>Split-Grade &amp; Pre-velado</th><td>Grado 00: ${Number(state.simGrade00 || 0).toFixed(2)} · Grado 5: ${Number(state.simGrade5 || 0).toFixed(2)} · Pre-flash: ${Math.round((state.simPreflash || 0) * 100)}%</td></tr>
+    <tr><th>Virado Dual Secuencial</th><td>Sombras: ${esc(tonerShText)} · Luces: ${esc(tonerHiText)}</td></tr>
+    <tr><th>Blanqueo Farmer's Reducer</th><td>Global: ${Math.round((state.farmerBleach || 0) * 100)}% · Reservas locales: ${masks.length}</td></tr>
+    <tr><th>Notas de cámara / autor</th><td>${esc([state.analogMeta?.camera_model, state.analogMeta?.lens, state.analogMeta?.photographer, state.analogMeta?.notes].filter(Boolean).join(" · ") || "—")}</td></tr>
+  </table>
+  <div class="notes-box"><strong>Notas de cuarto oscuro / edición:</strong></div>
+  <div class="actions"><button class="btn-print" onclick="window.print()">Imprimir / Guardar PDF</button></div>
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Mapa_de_Copia_${(frame.name || frame.filename).replace(/\.[^.]+$/, "")}.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  showToast("Mapa de Copia exportado", "Abre el archivo HTML descargado para imprimirlo o guardarlo como PDF.");
 }
 
 async function saveDirectToDownloads() {
@@ -8336,6 +8671,8 @@ function buildCurrentProjectPayload(name, notes, projectId = null) {
     pickStatus: f.pickStatus || null,
     simRecipe: f.simRecipe ? clonePlain(f.simRecipe) : null,
     negRecipe: f.negRecipe ? clonePlain(f.negRecipe) : null,
+    interpretations: Array.isArray(f.interpretations) ? clonePlain(f.interpretations) : null,
+    activeInterpretationId: f.activeInterpretationId || null,
   }));
 
   const payload = {
@@ -8637,6 +8974,10 @@ async function openSavedProject(projectId) {
       }
       if (f.negRecipe && typeof f.negRecipe === "object") {
         entry.negRecipe = clonePlain(f.negRecipe);
+      }
+      if (Array.isArray(f.interpretations) && f.interpretations.length > 0) {
+        entry.interpretations = clonePlain(f.interpretations);
+        entry.activeInterpretationId = f.activeInterpretationId || entry.interpretations[0].id;
       }
       ensureFrameHistory(entry);
       return entry;
@@ -9421,6 +9762,32 @@ function initUIListeners() {
 
   // Simulation controls
   document.getElementById("resetSimBtn")?.addEventListener("click", resetSimulationControls);
+  document.querySelectorAll("#testStripModeBar .test-strip-mode-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const next = btn.dataset.stripMode || "exposure";
+      if (state.testStripMode === next) return;
+      state.testStripMode = next;
+      document.querySelectorAll("#testStripModeBar .test-strip-mode-btn").forEach((b) => {
+        const active = b.dataset.stripMode === next;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      const evSteps = document.getElementById("testStripEvSteps");
+      if (evSteps) evSteps.style.display = next === "exposure" ? "" : "none";
+      const titleEl = document.getElementById("testStripTitle");
+      if (titleEl) {
+        titleEl.textContent =
+          next === "contrast"
+            ? "Tira de contraste · clic en una banda"
+            : next === "toner"
+            ? "Tira de virado · clic en una dilución"
+            : "Tira f-stop · clic en una banda";
+      }
+      if (state.viewMode === "teststrip") requestPreview(false);
+    });
+  });
+  document.getElementById("addInterpretationBtn")?.addEventListener("click", createVirtualInterpretation);
+  document.getElementById("exportPrintMapBtn")?.addEventListener("click", exportDarkroomPrintMap);
   document.getElementById("simDevProcessSelect")?.addEventListener("change", (e) => {
     pushUndoSnapshotForFrame();
     state.devProcess = e.target.value || "standard";

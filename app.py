@@ -1564,6 +1564,10 @@ def api_test_strip():
     if not file_path:
         return jsonify({"error": "Archivo de origen no encontrado"}), 404
 
+    strip_mode = str(data.get("strip_mode", "exposure") or "exposure").strip().lower()
+    if strip_mode not in ("exposure", "contrast", "toner"):
+        strip_mode = "exposure"
+
     step_ev = _num(data, "step_ev", 0.5, 0.15, 1.0)
     is_third = abs(step_ev - (1.0 / 3.0)) < 0.04 or abs(step_ev - 0.333) < 0.02
     if is_third:
@@ -1571,6 +1575,9 @@ def api_test_strip():
 
     t0 = time.time()
     offsets = [-2.0 * step_ev, -step_ev, 0.0, step_ev, 2.0 * step_ev]
+    contrast_zones = ["N-2", "N-1", "N", "N+1", "N+2"]
+    contrast_neg_deltas = [-0.40, -0.20, 0.0, 0.20, 0.40]
+    toner_dilutions = [0.0, 0.25, 0.50, 0.75, 1.0]
 
     if mode == "negative":
         params = _parse_negative_params(data)
@@ -1604,6 +1611,7 @@ def api_test_strip():
         highlights = _num(data, "highlights", 0.0, -4.0, 4.0)
         curve = _parse_curve(data.get("curve"))
         dev_process = _parse_dev_process(data.get("dev_process"))
+        sim_look = _parse_sim_look_params(data)
         add_date = bool(data.get("date", False))
         rotate = _int(data, "rotate", 0, 0, 360)
         flip_h = bool(data.get("flip_h", False))
@@ -1612,21 +1620,57 @@ def api_test_strip():
     h, w = lin_base.shape[:2]
     composite = np.zeros((h, w, 3), dtype=np.uint8)
     steps_meta = []
-    n_cols = len(offsets)
+    n_cols = 5
 
-    for idx, delta_ev in enumerate(offsets):
+    for idx in range(n_cols):
+        delta_ev = offsets[idx]
         x0 = int(round(idx * w / n_cols))
         x1 = int(round((idx + 1) * w / n_cols)) if idx < n_cols - 1 else w
         if mode == "negative":
-            target_val = float(np.clip(base_bright + delta_ev * 0.28, -1.0, 1.0))
-            step_params = dict(strip_params, brightness=target_val)
+            if strip_mode == "contrast":
+                target_val = float(np.clip(float(params["contrast"]) + contrast_neg_deltas[idx], -1.0, 1.0))
+                step_params = dict(strip_params, contrast=target_val)
+                label = f"Grado {idx + 1}"
+            elif strip_mode == "toner":
+                dil = toner_dilutions[idx]
+                active_toner = params.get("bw_toner", "neutral")
+                if active_toner == "neutral":
+                    active_toner = "selenium"
+                step_params = dict(strip_params, bw_toner=active_toner, bw_toner_strength=dil)
+                target_val = dil
+                label = f"{int(round(dil * 100))}%"
+            else:
+                target_val = float(np.clip(base_bright + delta_ev * 0.28, -1.0, 1.0))
+                step_params = dict(strip_params, brightness=target_val)
+                label = _format_ev_strip_label(delta_ev, is_third)
             col_img = process_negative_to_image(lin_base.copy(), max_dim=None, **step_params)
         else:
-            target_val = float(np.clip(ev_base + delta_ev, -10.0, 10.0))
+            step_look = dict(sim_look)
+            step_ev_val = ev_base
+            if strip_mode == "contrast":
+                zd = contrast_zones[idx]
+                step_look["zone_dev"] = zd
+                target_val = zd
+                label = zd.replace("-", "−")
+            elif strip_mode == "toner":
+                dil = toner_dilutions[idx]
+                if step_look["toner_shadows"] != "none":
+                    step_look["toner_shadows_amt"] = dil
+                elif step_look["toner_highlights"] != "none":
+                    step_look["toner_highlights_amt"] = dil
+                else:
+                    step_look["toner_shadows"] = "selenium"
+                    step_look["toner_shadows_amt"] = dil
+                target_val = dil
+                label = f"{int(round(dil * 100))}%"
+            else:
+                step_ev_val = float(np.clip(ev_base + delta_ev, -10.0, 10.0))
+                target_val = round(step_ev_val, 3)
+                label = _format_ev_strip_label(delta_ev, is_third)
             col_img = develop_frame(
                 lin_base.copy(),
                 film_key=film_key,
-                ev_adjust=target_val,
+                ev_adjust=step_ev_val,
                 halation_mult=halation,
                 grain_mult=grain,
                 grain_asa=grain_asa,
@@ -1640,6 +1684,7 @@ def api_test_strip():
                 rotate=0,
                 flip_h=False,
                 dev_process=dev_process,
+                **step_look,
             )
         col_arr = np.asarray(col_img.convert("RGB"), dtype=np.uint8)
         composite[:, x0:x1, :] = col_arr[:, x0:x1, :]
@@ -1647,9 +1692,10 @@ def api_test_strip():
             composite[:, max(0, x0 - 1) : x0 + 1, :] = 18
         steps_meta.append({
             "index": idx,
+            "strip_mode": strip_mode,
             "delta_ev": round(delta_ev, 4),
-            "label": _format_ev_strip_label(delta_ev, is_third),
-            "target_value": round(target_val, 3),
+            "label": label,
+            "target_value": target_val if isinstance(target_val, str) else round(float(target_val), 3),
         })
 
     strip_pil = Image.fromarray(composite)
@@ -1661,6 +1707,7 @@ def api_test_strip():
         "strip": strip_b64,
         "width": w,
         "height": h,
+        "strip_mode": strip_mode,
         "step_ev": round(step_ev, 4),
         "steps": steps_meta,
         "render_time": round(time.time() - t0, 3),
@@ -2094,6 +2141,7 @@ def api_export_single():
         easel_border=easel_border,
         dry_down_comp=dry_down_comp,
         export_max_dim=export_max_dim,
+        digital_negative=bool(data.get("digital_negative", False)),
     )
     if bool(data.get("write_xmp", False)):
         write_geometry_xmp_sidecar(
@@ -2255,6 +2303,7 @@ def api_save_direct_to_downloads():
         easel_border=easel_border,
         dry_down_comp=dry_down_comp,
         export_max_dim=export_max_dim,
+        digital_negative=bool(data.get("digital_negative", False)),
     )
     if bool(data.get("write_xmp", False)):
         write_geometry_xmp_sidecar(

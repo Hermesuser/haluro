@@ -804,8 +804,13 @@
               <div class="test-strip-cols" id="testStripCols" role="group" aria-label="Bandas de exposición f-stop">
               </div>
               <div class="test-strip-hud" id="testStripHud">
-                <span class="test-strip-title">Tira f-stop · clic en una banda</span>
-                <div class="test-strip-steps" role="group" aria-label="Fracción de paso">
+                <span class="test-strip-title" id="testStripTitle">Tira f-stop · clic en una banda</span>
+                <div class="test-strip-steps" id="testStripModeBar" role="group" aria-label="Tipo de tira de prueba">
+                  <button type="button" class="test-strip-mode-btn active" data-strip-mode="exposure" aria-pressed="true">f-stop</button>
+                  <button type="button" class="test-strip-mode-btn" data-strip-mode="contrast" aria-pressed="false">Contraste</button>
+                  <button type="button" class="test-strip-mode-btn" data-strip-mode="toner" aria-pressed="false">Virado</button>
+                </div>
+                <div class="test-strip-steps" id="testStripEvSteps" role="group" aria-label="Fracción de paso">
                   <button type="button" class="test-strip-step-btn" data-step="0.3333" aria-pressed="false">1/3
                     EV</button>
                   <button type="button" class="test-strip-step-btn active" data-step="0.5" aria-pressed="true">1/2
@@ -1103,6 +1108,11 @@
         <div class="active-stock-bar">
           <span class="stock-label-muted" id="statFilmLabel">Receta activa</span>
           <span class="stock-label-value" id="statFilm">Kodak Portra 400</span>
+        </div>
+        <div class="interpretations-bar" id="interpretationsBar" aria-label="Interpretaciones virtuales de este fotograma">
+          <div class="interpretations-list" id="interpretationsList"></div>
+          <button type="button" class="interp-add-btn" id="addInterpretationBtn"
+            title="Crear una nueva interpretación virtual de este mismo negativo (sin duplicar el RAW)">+ Copia</button>
         </div>
         <!-- Live Telemetry Status (vive en el densitómetro: la barra del visor queda libre de solapes) -->
         <div class="render-stats" id="renderStats" aria-live="off">
@@ -2283,10 +2293,21 @@
             <input type="checkbox" id="writeXmpCheck">
             <span>Guardar sidecar .XMP de geometría</span>
           </label>
+          <label class="geom-check-label xmp-sidecar-toggle ui-adv-only"
+            title="Invierte a negativo B&N volteado horizontalmente con curva UV para cianotipia, platino/paladio o papel salado (Cap. 13)">
+            <input type="checkbox" id="digitalNegativeCheck">
+            <span>Negativo digital B&amp;N para contacto (UV)</span>
+          </label>
         </div>
-        <button class="btn btn-ghost btn-block btn-xs" id="openFolderBtn">
-          Abrir carpeta interna de revelados
-        </button>
+        <div class="footer-dual-actions">
+          <button class="btn btn-outline btn-xs" id="exportPrintMapBtn"
+            title="Genera una ficha imprimible de cuarto oscuro (Mapa de Copia) con zonas, Dodge & Burn y receta química completa">
+            Mapa de copia
+          </button>
+          <button class="btn btn-ghost btn-xs" id="openFolderBtn">
+            Carpeta de revelados
+          </button>
+        </div>
       </div>
     </aside>
   </main>
