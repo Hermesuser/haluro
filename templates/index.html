@@ -1896,10 +1896,10 @@
           </div>
         </details>
 
-        <!-- SHARED OPTICAL UPSCALING, SUPER-RESOLUTION & 1:1 LOUPE CARD (Phase 1 v3.1.0) -->
+        <!-- SHARED OPTICAL UPSCALING, SUPER-RESOLUTION & 1:1 LOUPE CARD (Phase 1+2) -->
         <details class="panel-card collapsible-panel shared-optics-card ui-adv-only" id="superResDetails">
           <summary class="section-head collapsible-head">
-            <h3>Resolución y Ampliadora Óptica</h3>
+            <h3>Resolución, Nitidez Óptica y Claridad</h3>
             <span class="mono-badge" id="superResBadge">1× Original</span>
           </summary>
           <div class="shared-optics-body">
@@ -1954,6 +1954,77 @@
 
             <div class="superres-telemetry" id="superResTelemetry" aria-live="polite">
               Salida: resolución original
+            </div>
+
+            <!-- Optical Deconvolution, Clarity, Texture, Dehaze & Output Sharpen (Phase 2) -->
+            <div class="shared-subblock">
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblDeconvAmount">Deconvolución óptica (Foco)</span>
+                  <span class="control-val" id="deconvAmountVal">0%</span>
+                </div>
+                <input type="range" id="deconvAmountSlider" min="0" max="100" step="2" value="0" data-default="0"
+                  aria-labelledby="lblDeconvAmount" title="Richardson-Lucy amortiguada en luminancia: recupera foco real de lentes y escáneres">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblDeconvRadius">Radio óptico (PSF)</span>
+                  <span class="control-val" id="deconvRadiusVal">1.0 px</span>
+                </div>
+                <input type="range" id="deconvRadiusSlider" min="0.5" max="2.5" step="0.1" value="1.0" data-default="1.0"
+                  aria-labelledby="lblDeconvRadius">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblClarity">Claridad (Microcontraste)</span>
+                  <span class="control-val" id="clarityVal">0</span>
+                </div>
+                <input type="range" class="bipolar-range" id="claritySlider" min="-100" max="100" step="2" value="0"
+                  data-default="0" aria-labelledby="lblClarity">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblTexture">Textura fina</span>
+                  <span class="control-val" id="textureVal">0</span>
+                </div>
+                <input type="range" class="bipolar-range" id="textureSlider" min="-100" max="100" step="2" value="0"
+                  data-default="0" aria-labelledby="lblTexture">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblDehaze">Desneblina / Velo óptico</span>
+                  <span class="control-val" id="dehazeVal">0</span>
+                </div>
+                <input type="range" class="bipolar-range" id="dehazeSlider" min="-50" max="100" step="2" value="0"
+                  data-default="0" aria-labelledby="lblDehaze" title="Elimina velo óptico de lentes vintage o bruma atmosférica en luz lineal">
+              </div>
+              <label class="geom-check-label" style="margin-top: 4px;"
+                title="Atenúa Claridad y Textura en tonos de piel y cielos lisos para retratos naturales">
+                <input type="checkbox" id="protectSkinCheck">
+                <span>Proteger piel y cielos lisos</span>
+              </label>
+            </div>
+
+            <div class="shared-subblock">
+              <div class="control-group compact-top">
+                <div class="control-label">
+                  <label for="outputSharpenMediaSelect">Nitidez de salida por soporte</label>
+                </div>
+                <select id="outputSharpenMediaSelect" class="dark-select">
+                  <option value="off" selected>Apagada</option>
+                  <option value="screen">Pantalla / Web (sub-píxel fino)</option>
+                  <option value="glossy">Papel Baritado / Brillante</option>
+                  <option value="matte">Papel Mate / Algodón (dot-gain)</option>
+                </select>
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblHaloSuppress">Supresión de halos</span>
+                  <span class="control-val" id="haloSuppressVal">50%</span>
+                </div>
+                <input type="range" id="haloSuppressSlider" min="0" max="100" step="5" value="50" data-default="50"
+                  aria-labelledby="lblHaloSuppress">
+              </div>
             </div>
 
             <div class="shared-subblock">

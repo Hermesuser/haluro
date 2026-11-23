@@ -17,6 +17,7 @@ LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 MAX_UPSCALE_LONG_EDGE = 16384
 VALID_UPSCALE_MODES = ("off", "lanczos", "ibp")
 VALID_UPSCALE_FACTORS = (1.0, 1.5, 2.0, 3.0, 4.0)
+VALID_OUTPUT_SHARPEN_MEDIA = ("off", "screen", "glossy", "matte")
 
 
 def compute_target_dimensions(
@@ -209,3 +210,161 @@ def upscale_float_rgb(
             out[y0_out : y0_out + ch, x0_out : x0_out + cw, :] = crop
 
     return np.clip(out, 0.0, 1.0)
+
+
+def apply_richardson_lucy_deconv(
+    arr_f: np.ndarray,
+    radius: float = 1.0,
+    amount: float = 0.0,
+    coring: float = 0.012,
+) -> np.ndarray:
+    """Damped luminance-only Richardson-Lucy optical deconvolution (lens/scanner PSF recovery)."""
+    amt = float(np.clip(amount or 0.0, 0.0, 1.0))
+    if amt < 0.01:
+        return arr_f
+
+    arr = np.clip(np.asarray(arr_f, dtype=np.float32), 0.0, 1.0)
+    sigma = float(np.clip(radius or 1.0, 0.5, 2.5))
+    iters = max(2, int(round(3 + 7 * amt)))
+
+    y = np.sum(arr * LUMA, axis=-1)
+    est = np.maximum(y, 1e-4).copy()
+
+    for _ in range(iters):
+        conv = scipy.ndimage.gaussian_filter(est, sigma=sigma)
+        rel_blur = y / np.maximum(conv, 1e-4)
+        # Clamp extreme noise spikes before back-convolution
+        rel_blur = np.clip(rel_blur, 0.4, 2.2)
+        corr = scipy.ndimage.gaussian_filter(rel_blur, sigma=sigma)
+        est = np.clip(est * corr, 0.0, 1.0)
+
+    delta = est - y
+    # Noise coring gate protects smooth skies and deep shadow grain
+    thr = max(0.004, float(coring))
+    edge_gate = np.clip((np.abs(delta) - thr) / (thr * 2.5), 0.0, 1.0)
+    # Asymmetric halo guard: suppress harsh white overshoot more strictly than dark edge crispness
+    delta_clamped = np.clip(delta * edge_gate * amt, -0.18, 0.11)
+    y_out = np.clip(y + delta_clamped, 0.0, 1.0)
+
+    ratio = (y_out + 1e-4) / (y + 1e-4)
+    return np.clip(arr * ratio[..., None], 0.0, 1.0).astype(np.float32)
+
+
+def apply_optical_dehaze(lin_f: np.ndarray, amount: float = 0.0) -> np.ndarray:
+    """Dark-Channel Prior atmospheric dehaze / vintage lens veiling-flare removal in linear light."""
+    amt = float(np.clip(amount or 0.0, -0.5, 1.0))
+    if abs(amt) < 0.01:
+        return lin_f
+
+    x = np.maximum(np.asarray(lin_f, dtype=np.float32), 0.0)
+    if amt < 0.0:
+        # Negative dehaze adds subtle soft atmospheric mist/glow
+        mist = abs(amt) * 0.22
+        y = np.sum(x * LUMA, axis=-1, keepdims=True)
+        glow = scipy.ndimage.gaussian_filter(y[..., 0], sigma=max(6.0, min(x.shape[:2]) * 0.02))[..., None]
+        return np.maximum(0.0, x * (1.0 - 0.15 * mist) + (0.04 + 0.35 * glow) * mist)
+
+    # Dark channel (minimum across RGB channels in local neighborhood)
+    patch = max(5, min(21, int(min(x.shape[:2]) * 0.025) | 1))
+    min_rgb = np.min(x, axis=-1)
+    dark_raw = scipy.ndimage.minimum_filter(min_rgb, size=patch)
+    dark_smooth = scipy.ndimage.gaussian_filter(dark_raw, sigma=max(4.0, patch * 0.6))
+
+    # Estimate atmospheric veil color from top 0.5% brightest dark-channel pixels (capped safely)
+    flat_dark = dark_raw.ravel()
+    k = max(1, int(flat_dark.size * 0.005))
+    top_idx = np.argpartition(flat_dark, -k)[-k:]
+    flat_x = x.reshape(-1, 3)
+    airlight = np.clip(np.mean(flat_x[top_idx], axis=0), 0.35, 1.4).astype(np.float32)
+    air_min = float(np.min(airlight))
+
+    transmission = np.clip(1.0 - (0.78 * amt) * (dark_smooth / max(air_min, 0.25)), 0.28, 1.0)
+    recovered = (x - airlight[None, None, :]) / transmission[..., None] + airlight[None, None, :]
+    return np.maximum(0.0, recovered).astype(np.float32)
+
+
+def apply_clarity_and_texture(
+    arr_f: np.ndarray,
+    clarity: float = 0.0,
+    texture: float = 0.0,
+    protect_skin: bool = False,
+) -> np.ndarray:
+    """Multi-scale luminance local microcontrast (Clarity) and fine detail (Texture) without halos."""
+    cl = float(np.clip(clarity or 0.0, -1.0, 1.0))
+    tx = float(np.clip(texture or 0.0, -1.0, 1.0))
+    if abs(cl) < 0.01 and abs(tx) < 0.01:
+        return arr_f
+
+    arr = np.clip(np.asarray(arr_f, dtype=np.float32), 0.0, 1.0)
+    y = np.sum(arr * LUMA, axis=-1)
+    delta_y = np.zeros_like(y)
+
+    # Optional skin-tone & smooth-sky protection mask
+    prot_mask = 1.0
+    if protect_skin and (cl > 0.0 or tx > 0.0):
+        r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
+        skin = (
+            np.clip((r - g) / 0.14, 0.0, 1.0)
+            * np.clip((g - b) / 0.10, 0.0, 1.0)
+            * np.clip((r - 0.18) / 0.25, 0.0, 1.0)
+            * np.clip((0.92 - b) / 0.25, 0.0, 1.0)
+        )
+        skin_smooth = scipy.ndimage.gaussian_filter(skin, sigma=2.5)
+        prot_mask = 1.0 - 0.65 * np.clip(skin_smooth, 0.0, 1.0)
+
+    if abs(cl) >= 0.01:
+        sigma_mid = max(6.0, min(28.0, min(arr.shape[:2]) * 0.018))
+        y_mid = scipy.ndimage.gaussian_filter(y, sigma=sigma_mid)
+        mid_detail = y - y_mid
+        mid_bell = 4.0 * y * np.maximum(0.0, 1.0 - y)
+        cl_eff = cl * (prot_mask if cl > 0.0 else 1.0)
+        delta_y += np.clip(mid_detail * (0.48 * cl_eff) * (0.25 + 0.75 * mid_bell), -0.16, 0.14)
+
+    if abs(tx) >= 0.01:
+        y_fine = scipy.ndimage.gaussian_filter(y, sigma=1.2)
+        y_med = scipy.ndimage.gaussian_filter(y, sigma=3.6)
+        tex_band = y_fine - y_med
+        tx_eff = tx * (prot_mask if tx > 0.0 else 1.0)
+        delta_y += np.clip(tex_band * (0.75 * tx_eff), -0.12, 0.10)
+
+    y_out = np.clip(y + delta_y, 0.0, 1.0)
+    ratio = (y_out + 1e-4) / (y + 1e-4)
+    return np.clip(arr * ratio[..., None], 0.0, 1.0).astype(np.float32)
+
+
+def apply_output_sharpen_media(
+    arr_f: np.ndarray,
+    media: str = "off",
+    amount: float = 1.0,
+    halo_suppress: float = 0.5,
+) -> np.ndarray:
+    """Output sharpening calibrated for Screen Web, Glossy/Baryta Paper, or Matte Cotton Paper."""
+    key = str(media or "off").strip().lower()
+    amt = float(np.clip(amount or 0.0, 0.0, 2.0))
+    if key == "off" or key not in VALID_OUTPUT_SHARPEN_MEDIA or amt < 0.01:
+        return arr_f
+
+    # Calibrated radii & gains per physical output surface
+    specs = {
+        "screen": (0.65, 0.55),  # crisp sub-pixel web viewing
+        "glossy": (0.95, 0.78),  # fiber baryta / RC glossy print
+        "matte": (1.35, 1.05),   # cotton rag matte dot-gain compensation
+    }
+    sigma, base_gain = specs[key]
+    arr = np.clip(np.asarray(arr_f, dtype=np.float32), 0.0, 1.0)
+    y = np.sum(arr * LUMA, axis=-1)
+    detail = y - scipy.ndimage.gaussian_filter(y, sigma=sigma)
+
+    edge_gate = np.clip((np.abs(detail) - 0.008) / 0.020, 0.0, 1.0)
+    tonal_guard = 0.30 + 0.70 * (4.0 * y * np.maximum(0.0, 1.0 - y))
+    raw_delta = detail * edge_gate * tonal_guard * (base_gain * amt)
+
+    # Asymmetric halo suppression caps positive white rims strictly when halo_suppress -> 1.0
+    hs = float(np.clip(halo_suppress if halo_suppress is not None else 0.5, 0.0, 1.0))
+    pos_cap = 0.14 - 0.095 * hs  # 0.14 down to 0.045
+    neg_cap = -0.16 + 0.04 * hs
+    delta = np.clip(raw_delta, neg_cap, pos_cap)
+
+    y_out = np.clip(y + delta, 0.0, 1.0)
+    ratio = (y_out + 1e-4) / (y + 1e-4)
+    return np.clip(arr * ratio[..., None], 0.0, 1.0).astype(np.float32)

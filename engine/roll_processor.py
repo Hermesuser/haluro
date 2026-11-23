@@ -157,6 +157,16 @@ def render_frame_thumbnail(
         farmer_bleach=float(_frame_val("farmer_bleach", common_params.get("farmer_bleach", 0.0)) or 0.0),
         upscale_factor=float(_frame_val("upscale_factor", common_params.get("upscale_factor", 1.0)) or 1.0),
         upscale_mode=str(_frame_val("upscale_mode", common_params.get("upscale_mode", "ibp")) or "ibp"),
+        deconv_radius=float(_frame_val("deconv_radius", common_params.get("deconv_radius", 1.0)) or 1.0),
+        deconv_amount=float(_frame_val("deconv_amount", common_params.get("deconv_amount", 0.0)) or 0.0),
+        clarity=float(_frame_val("clarity", common_params.get("clarity", 0.0)) or 0.0),
+        texture=float(_frame_val("texture", common_params.get("texture", 0.0)) or 0.0),
+        dehaze=float(_frame_val("dehaze", common_params.get("dehaze", 0.0)) or 0.0),
+        protect_skin=bool(_frame_val("protect_skin", common_params.get("protect_skin", False))),
+        output_sharpen_media=str(
+            _frame_val("output_sharpen_media", common_params.get("output_sharpen_media", "off")) or "off"
+        ),
+        halo_suppress=float(_frame_val("halo_suppress", common_params.get("halo_suppress", 0.5)) or 0.5),
         denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
         denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
         defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),
@@ -276,6 +286,16 @@ def develop_one_full_res(
         farmer_bleach=float(_frame_val("farmer_bleach", common_params.get("farmer_bleach", 0.0)) or 0.0),
         upscale_factor=float(_frame_val("upscale_factor", common_params.get("upscale_factor", 1.0)) or 1.0),
         upscale_mode=str(_frame_val("upscale_mode", common_params.get("upscale_mode", "ibp")) or "ibp"),
+        deconv_radius=float(_frame_val("deconv_radius", common_params.get("deconv_radius", 1.0)) or 1.0),
+        deconv_amount=float(_frame_val("deconv_amount", common_params.get("deconv_amount", 0.0)) or 0.0),
+        clarity=float(_frame_val("clarity", common_params.get("clarity", 0.0)) or 0.0),
+        texture=float(_frame_val("texture", common_params.get("texture", 0.0)) or 0.0),
+        dehaze=float(_frame_val("dehaze", common_params.get("dehaze", 0.0)) or 0.0),
+        protect_skin=bool(_frame_val("protect_skin", common_params.get("protect_skin", False))),
+        output_sharpen_media=str(
+            _frame_val("output_sharpen_media", common_params.get("output_sharpen_media", "off")) or "off"
+        ),
+        halo_suppress=float(_frame_val("halo_suppress", common_params.get("halo_suppress", 0.5)) or 0.5),
             denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
             denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
             defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),

@@ -2386,6 +2386,14 @@ def develop_frame(
     farmer_bleach=0.0,
     upscale_factor=1.0,
     upscale_mode="ibp",
+    deconv_radius=1.0,
+    deconv_amount=0.0,
+    clarity=0.0,
+    texture=0.0,
+    dehaze=0.0,
+    protect_skin=False,
+    output_sharpen_media="off",
+    halo_suppress=0.5,
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     has_geom = bool(
@@ -2477,6 +2485,12 @@ def develop_frame(
         luma_scale = 0.2126 * r_gain + 0.7152 * g_gain + 0.0722 * b_gain
         wb_gains = np.array([r_gain, g_gain, b_gain], dtype=np.float32) / max(luma_scale, 1e-4)
         lin = np.maximum(0.0, lin * wb_gains)
+
+    # 1-dehaze. Atmospheric Dehaze / Vintage lens veiling-flare removal in linear light
+    if abs(float(dehaze or 0.0)) > 0.01:
+        from .superres import apply_optical_dehaze
+
+        lin = apply_optical_dehaze(lin, amount=float(dehaze))
 
     # 1a. Compensating developer highlight shoulder protection & shadow luminosity (D-23, Pyro, Windisch)
     if proc_spec["compensating"] > 0.01:
@@ -2610,6 +2624,25 @@ def develop_frame(
     if curve:
         display = apply_user_curves(display, curve)
 
+    # 4b-detail. Richardson-Lucy Optical Deconvolution + Multi-scale Clarity & Texture (pre-grain)
+    if float(deconv_amount or 0.0) > 0.01:
+        from .superres import apply_richardson_lucy_deconv
+
+        display = apply_richardson_lucy_deconv(
+            display,
+            radius=float(deconv_radius or 1.0),
+            amount=float(deconv_amount),
+        )
+    if abs(float(clarity or 0.0)) > 0.01 or abs(float(texture or 0.0)) > 0.01:
+        from .superres import apply_clarity_and_texture
+
+        display = apply_clarity_and_texture(
+            display,
+            clarity=float(clarity or 0.0),
+            texture=float(texture or 0.0),
+            protect_skin=bool(protect_skin),
+        )
+
     # 4c. Pre-grain Optical Upscaling & Super-Resolution (only on full-res render, so grain renders at final res)
     if max_dim is None and float(upscale_factor or 1.0) > 1.01 and str(upscale_mode or "ibp").lower() != "off":
         from .superres import compute_target_dimensions, upscale_float_rgb
@@ -2647,6 +2680,15 @@ def develop_frame(
 
     if sharpen_mode and sharpen_mode != "off" and float(sharpen_amount or 0.0) > 0.01:
         display = apply_optical_sharpen(display, mode=str(sharpen_mode), amount=float(sharpen_amount))
+    if output_sharpen_media and str(output_sharpen_media).strip().lower() != "off":
+        from .superres import apply_output_sharpen_media
+
+        display = apply_output_sharpen_media(
+            display,
+            media=str(output_sharpen_media),
+            amount=1.0,
+            halo_suppress=float(halo_suppress if halo_suppress is not None else 0.5),
+        )
 
     display_clamped = np.clip(display, 0.0, 1.0).astype(np.float32)
     # np.rint rounds to nearest; a plain astype(uint8) truncates and applies a

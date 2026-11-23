@@ -1423,16 +1423,27 @@ def _parse_grain_asa(value) -> str:
 
 
 def _parse_upscale_params(data: dict, fallback: dict | None = None) -> dict:
-    """Parse optical upscaling factor (1..4) and mode ('off'|'lanczos'|'ibp')."""
-    from engine.superres import VALID_UPSCALE_MODES
+    """Parse optical upscaling, Richardson-Lucy deconvolution, Clarity/Texture/Dehaze, and output sharpen media."""
+    from engine.superres import VALID_OUTPUT_SHARPEN_MEDIA, VALID_UPSCALE_MODES
 
     src = data if isinstance(data, dict) else {}
     fb = fallback if isinstance(fallback, dict) else {}
     raw_factor = src.get("upscale_factor", fb.get("upscale_factor", 1.0))
     raw_mode = str(src.get("upscale_mode", fb.get("upscale_mode", "ibp")) or "ibp").strip().lower()
+    raw_media = str(
+        src.get("output_sharpen_media", fb.get("output_sharpen_media", "off")) or "off"
+    ).strip().lower()
     return {
         "upscale_factor": _num({"v": raw_factor}, "v", 1.0, 1.0, 4.0),
         "upscale_mode": raw_mode if raw_mode in VALID_UPSCALE_MODES else "ibp",
+        "deconv_radius": _num({"v": src.get("deconv_radius", fb.get("deconv_radius", 1.0))}, "v", 1.0, 0.5, 2.5),
+        "deconv_amount": _num({"v": src.get("deconv_amount", fb.get("deconv_amount", 0.0))}, "v", 0.0, 0.0, 1.0),
+        "clarity": _num({"v": src.get("clarity", fb.get("clarity", 0.0))}, "v", 0.0, -1.0, 1.0),
+        "texture": _num({"v": src.get("texture", fb.get("texture", 0.0))}, "v", 0.0, -1.0, 1.0),
+        "dehaze": _num({"v": src.get("dehaze", fb.get("dehaze", 0.0))}, "v", 0.0, -0.5, 1.0),
+        "protect_skin": bool(src.get("protect_skin", fb.get("protect_skin", False))),
+        "output_sharpen_media": raw_media if raw_media in VALID_OUTPUT_SHARPEN_MEDIA else "off",
+        "halo_suppress": _num({"v": src.get("halo_suppress", fb.get("halo_suppress", 0.5))}, "v", 0.5, 0.0, 1.0),
     }
 
 

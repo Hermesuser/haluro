@@ -311,6 +311,14 @@ const state = {
   upscaleFactor: 1.0,
   upscaleMode: "ibp",
   printDpi: 300,
+  deconvRadius: 1.0,
+  deconvAmount: 0.0,
+  clarity: 0.0,
+  texture: 0.0,
+  dehaze: 0.0,
+  protectSkin: false,
+  outputSharpenMedia: "off",
+  haloSuppress: 0.5,
 
   // Viewport & Light Table
   viewMode: "split", // 'split' | 'full' | 'original' | 'sheet' | 'teststrip'
@@ -2721,6 +2729,16 @@ function buildSimulationPayload() {
     toner_highlights: state.tonerHighlights || "none",
     toner_highlights_amt: Number(state.tonerHighlightsAmt ?? 0.0),
     farmer_bleach: Number(state.farmerBleach ?? 0.0),
+    upscale_factor: Number(state.upscaleFactor ?? 1.0),
+    upscale_mode: state.upscaleMode || "ibp",
+    deconv_radius: Number(state.deconvRadius ?? 1.0),
+    deconv_amount: Number(state.deconvAmount ?? 0.0),
+    clarity: Number(state.clarity ?? 0.0),
+    texture: Number(state.texture ?? 0.0),
+    dehaze: Number(state.dehaze ?? 0.0),
+    protect_skin: Boolean(state.protectSkin),
+    output_sharpen_media: state.outputSharpenMedia || "off",
+    halo_suppress: Number(state.haloSuppress ?? 0.5),
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -2843,6 +2861,16 @@ function snapshotSimRecipe() {
     toner_highlights: state.tonerHighlights || "none",
     toner_highlights_amt: Number(state.tonerHighlightsAmt ?? 0.0),
     farmer_bleach: Number(state.farmerBleach ?? 0.0),
+    upscale_factor: Number(state.upscaleFactor ?? 1.0),
+    upscale_mode: state.upscaleMode || "ibp",
+    deconv_radius: Number(state.deconvRadius ?? 1.0),
+    deconv_amount: Number(state.deconvAmount ?? 0.0),
+    clarity: Number(state.clarity ?? 0.0),
+    texture: Number(state.texture ?? 0.0),
+    dehaze: Number(state.dehaze ?? 0.0),
+    protect_skin: Boolean(state.protectSkin),
+    output_sharpen_media: state.outputSharpenMedia || "off",
+    halo_suppress: Number(state.haloSuppress ?? 0.5),
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -2986,7 +3014,18 @@ function applySimRecipeToUI(rec) {
   state.tonerHighlights = rec.toner_highlights || "none";
   state.tonerHighlightsAmt = Number(rec.toner_highlights_amt ?? 0.0);
   state.farmerBleach = Number(rec.farmer_bleach ?? 0.0);
+  state.upscaleFactor = Number(rec.upscale_factor ?? 1.0);
+  state.upscaleMode = rec.upscale_mode || "ibp";
+  state.deconvRadius = Number(rec.deconv_radius ?? 1.0);
+  state.deconvAmount = Number(rec.deconv_amount ?? 0.0);
+  state.clarity = Number(rec.clarity ?? 0.0);
+  state.texture = Number(rec.texture ?? 0.0);
+  state.dehaze = Number(rec.dehaze ?? 0.0);
+  state.protectSkin = Boolean(rec.protect_skin);
+  state.outputSharpenMedia = rec.output_sharpen_media || "off";
+  state.haloSuppress = Number(rec.halo_suppress ?? 0.5);
   syncDarkroomPrintUI();
+  if (typeof syncSuperResUI === "function") syncSuperResUI();
   state.filmStrength = Number(rec.film_strength ?? 1.0);
   state.simTemp = Number(rec.sim_temp ?? 0.0);
   state.simTint = Number(rec.sim_tint ?? 0.0);
@@ -9811,6 +9850,16 @@ function initUIListeners() {
     });
     const modeSel = document.getElementById("upscaleModeSelect");
     if (modeSel) modeSel.value = state.upscaleMode || "ibp";
+    const mediaSel = document.getElementById("outputSharpenMediaSelect");
+    if (mediaSel) mediaSel.value = state.outputSharpenMedia || "off";
+    const skinChk = document.getElementById("protectSkinCheck");
+    if (skinChk) skinChk.checked = Boolean(state.protectSkin);
+    setSliderSilent("deconvAmountSlider", "deconvAmountVal", Math.round((state.deconvAmount || 0) * 100), `${Math.round((state.deconvAmount || 0) * 100)}%`);
+    setSliderSilent("deconvRadiusSlider", "deconvRadiusVal", (state.deconvRadius || 1.0).toFixed(1), `${Number(state.deconvRadius || 1.0).toFixed(1)} px`);
+    setSliderSilent("claritySlider", "clarityVal", Math.round((state.clarity || 0) * 100), `${(state.clarity || 0) > 0 ? "+" : ""}${Math.round((state.clarity || 0) * 100)}`);
+    setSliderSilent("textureSlider", "textureVal", Math.round((state.texture || 0) * 100), `${(state.texture || 0) > 0 ? "+" : ""}${Math.round((state.texture || 0) * 100)}`);
+    setSliderSilent("dehazeSlider", "dehazeVal", Math.round((state.dehaze || 0) * 100), `${(state.dehaze || 0) > 0 ? "+" : ""}${Math.round((state.dehaze || 0) * 100)}`);
+    setSliderSilent("haloSuppressSlider", "haloSuppressVal", Math.round((state.haloSuppress ?? 0.5) * 100), `${Math.round((state.haloSuppress ?? 0.5) * 100)}%`);
 
     const tele = document.getElementById("superResTelemetry");
     const resText = document.getElementById("statResolution")?.textContent || "";
@@ -9869,12 +9918,53 @@ function initUIListeners() {
   document.getElementById("printSizePresetSelect")?.addEventListener("change", applyPrintPreset);
   document.getElementById("printDpiSelect")?.addEventListener("change", applyPrintPreset);
   document.getElementById("resetSuperResBtn")?.addEventListener("click", () => {
+    pushUndoSnapshotForFrame();
     state.upscaleFactor = 1.0;
     state.upscaleMode = "ibp";
+    state.deconvRadius = 1.0;
+    state.deconvAmount = 0.0;
+    state.clarity = 0.0;
+    state.texture = 0.0;
+    state.dehaze = 0.0;
+    state.protectSkin = false;
+    state.outputSharpenMedia = "off";
+    state.haloSuppress = 0.5;
     const presetSel = document.getElementById("printSizePresetSelect");
     if (presetSel) presetSel.value = "custom";
     syncSuperResUI();
     saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+
+  bindRange("deconvAmountSlider", "deconvAmountVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.deconvAmount = Math.max(0, Math.min(1, v / 100));
+  });
+  bindRange("deconvRadiusSlider", "deconvRadiusVal", (v) => `${v.toFixed(1)} px`, (v) => {
+    state.deconvRadius = Math.max(0.5, Math.min(2.5, v));
+  });
+  bindRange("claritySlider", "clarityVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
+    state.clarity = Math.max(-1, Math.min(1, v / 100));
+  });
+  bindRange("textureSlider", "textureVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
+    state.texture = Math.max(-1, Math.min(1, v / 100));
+  });
+  bindRange("dehazeSlider", "dehazeVal", (v) => `${v > 0 ? "+" : ""}${Math.round(v)}`, (v) => {
+    state.dehaze = Math.max(-0.5, Math.min(1, v / 100));
+  });
+  document.getElementById("protectSkinCheck")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.protectSkin = Boolean(e.target.checked);
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  document.getElementById("outputSharpenMediaSelect")?.addEventListener("change", (e) => {
+    pushUndoSnapshotForFrame();
+    state.outputSharpenMedia = e.target.value || "off";
+    saveActiveFrameRecipe();
+    requestPreview(false);
+  });
+  bindRange("haloSuppressSlider", "haloSuppressVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.haloSuppress = Math.max(0, Math.min(1, v / 100));
   });
 
   const runInspectLoupe = async (cx = 0.5, cy = 0.5) => {

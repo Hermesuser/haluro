@@ -5,7 +5,14 @@ from PIL import Image
 
 from app import API_TOKEN, app
 from engine.pipeline import develop_frame, save_output_image
-from engine.superres import compute_target_dimensions, upscale_float_rgb
+from engine.superres import (
+    apply_clarity_and_texture,
+    apply_optical_dehaze,
+    apply_output_sharpen_media,
+    apply_richardson_lucy_deconv,
+    compute_target_dimensions,
+    upscale_float_rgb,
+)
 
 
 def test_compute_target_dimensions_factor_and_print_cm():
@@ -78,3 +85,48 @@ def test_api_inspect_crop_loupe_endpoint():
     assert body["after"].startswith("data:image/jpeg;base64,")
     assert body["out_w"] >= body["src_w"] * 1.9
     assert body["out_mp"] > 0
+
+
+def test_phase2_deconv_clarity_dehaze_and_output_sharpen():
+    import scipy.ndimage
+
+    # Build a slightly blurred edge for deconvolution recovery
+    sharp = np.zeros((48, 48, 3), dtype=np.float32)
+    sharp[12:36, 12:36, :] = 0.78
+    sharp[18:30, 18:30, :] = 0.22
+    blurred = np.stack([scipy.ndimage.gaussian_filter(sharp[..., c], sigma=1.2) for c in range(3)], axis=-1)
+
+    deconv = apply_richardson_lucy_deconv(blurred, radius=1.2, amount=0.8)
+    assert float(np.abs(np.diff(deconv[..., 0], axis=1)).max()) > float(
+        np.abs(np.diff(blurred[..., 0], axis=1)).max()
+    )
+
+    # Clarity & Texture increase local contrast without blowing out [0..1]
+    cl_out = apply_clarity_and_texture(blurred, clarity=0.6, texture=0.5, protect_skin=True)
+    assert cl_out.shape == blurred.shape and float(cl_out.min()) >= 0.0 and float(cl_out.max()) <= 1.0
+    assert cl_out.std() > blurred.std()
+
+    # Dehaze increases contrast on a hazy veiled linear image
+    hazy = 0.35 + 0.45 * sharp
+    dehazed = apply_optical_dehaze(hazy, amount=0.7)
+    assert float(dehazed.std()) > float(hazy.std())
+
+    # Output sharpen media (matte > screen > off) with halo suppression
+    s_matte = apply_output_sharpen_media(blurred, media="matte", amount=1.0, halo_suppress=0.8)
+    assert float(np.abs(np.diff(s_matte[..., 0], axis=1)).max()) > float(
+        np.abs(np.diff(blurred[..., 0], axis=1)).max()
+    )
+
+    # Full pipeline integration check
+    img = Image.fromarray((blurred * 255).astype(np.uint8), mode="RGB")
+    dev = develop_frame(
+        img,
+        film_key="trix400",
+        deconv_amount=0.5,
+        deconv_radius=1.1,
+        clarity=0.4,
+        texture=0.3,
+        dehaze=0.3,
+        output_sharpen_media="glossy",
+    )
+    assert dev.size == img.size
