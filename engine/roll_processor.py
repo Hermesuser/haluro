@@ -167,6 +167,7 @@ def render_frame_thumbnail(
             _frame_val("output_sharpen_media", common_params.get("output_sharpen_media", "off")) or "off"
         ),
         halo_suppress=float(_frame_val("halo_suppress", common_params.get("halo_suppress", 0.5)) or 0.5),
+        dejpeg=float(_frame_val("dejpeg", common_params.get("dejpeg", 0.0)) or 0.0),
         denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
         denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
         defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),
@@ -296,6 +297,7 @@ def develop_one_full_res(
             _frame_val("output_sharpen_media", common_params.get("output_sharpen_media", "off")) or "off"
         ),
         halo_suppress=float(_frame_val("halo_suppress", common_params.get("halo_suppress", 0.5)) or 0.5),
+        dejpeg=float(_frame_val("dejpeg", common_params.get("dejpeg", 0.0)) or 0.0),
             denoise_luma=float(_frame_val("denoise_luma", common_params.get("denoise_luma", 0.0)) or 0.0),
             denoise_chroma=float(_frame_val("denoise_chroma", common_params.get("denoise_chroma", 0.0)) or 0.0),
             defringe=float(_frame_val("defringe", common_params.get("defringe", 0.0)) or 0.0),

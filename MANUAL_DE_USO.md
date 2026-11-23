@@ -1,4 +1,4 @@
-# Haluro 3.0.0 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
+# Haluro 3.1.0 — Manual Oficial de Usuario y Guía de Cuarto Oscuro
 
 Bienvenido al manual oficial de **Haluro**, una estación de trabajo fotográfica concebida desde la práctica y los principios de la fotoquímica analógica. Esta guía detalla cada módulo, herramienta, atajo de teclado y proceso de calibración para obtener el máximo rendimiento tanto en la inversión de negativos digitalizados con cámara como en la emulación de emulsiones cinematográficas y fotográficas clásicas.
 
@@ -45,8 +45,8 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 | Arquitectura de Mac | Archivo a Descargar |
 | :--- | :--- |
-| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-3.0.0-macOS-arm64.dmg` |
-| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-3.0.0-macOS-x86_64.dmg` |
+| **Apple Silicon (M1, M2, M3, M4)** | `Haluro-3.1.0-macOS-arm64.dmg` |
+| **Procesadores Intel (Core i5, i7, i9, Xeon)** | `Haluro-3.1.0-macOS-x86_64.dmg` |
 
 #### Pasos de Instalación
 
@@ -70,7 +70,7 @@ Haluro cuenta con paquetes nativos optimizados para las dos arquitecturas de com
 
 ### Windows 11
 
-- **Archivo requerido:** `Haluro-Setup-3.0.0-Win11-x64.exe` (o la versión portátil `Haluro-Portable-3.0.0-Win11-x64.zip`).
+- **Archivo requerido:** `Haluro-Setup-3.1.0-Win11-x64.exe` (o la versión portátil `Haluro-Portable-3.1.0-Win11-x64.zip`).
 - **Instalación:** Ejecuta el instalador. No requiere permisos de administrador forzados (instalación limpia por usuario) y se integra automáticamente con el motor **Microsoft Edge WebView2** preinstalado en Windows 11.
 
 ---
@@ -444,9 +444,9 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-### Cuarto Oscuro Maestro (v3.0.0)
+### Cuarto Oscuro Maestro (v3.1.0)
 
-![Mapa Visual del Sistema de Zonas, Entorno Gris 18% y Cuarto de Copia B&N en Haluro 3.0.0](docs/images/12_cuarto_oscuro_maestro_zonas.png)
+![Mapa Visual del Sistema de Zonas, Entorno Gris 18% y Cuarto de Copia B&N en Haluro 3.1.0](docs/images/12_cuarto_oscuro_maestro_zonas.png)
 
 - **Sistema de Zonas visual (`M`) y Densitómetro de 11 Zonas (`0–X`):** pulsa `M` o el botón `Zonas` para alternar entre **Anclas III · V · VIII**, **Mapa completo 0–X** o aislar cualquier Zona haciendo clic sobre su celda en el densitómetro.
 - **Entorno de evaluación (`E`):** alterna el fondo de la mesa de luz entre **Oscuro**, **Gris Neutro 18%** y **Pared Galería Blanca con paspartú virtual**.
@@ -456,4 +456,4 @@ Haluro incluye un sistema inteligente y 100% privado de actualización. Cada vez
 
 ---
 
-*Haluro 3.0.0 — Desarrollado para fotógrafos que aman la ciencia y el arte.*
+*Haluro 3.1.0 — Desarrollado para fotógrafos que aman la ciencia y el arte.*

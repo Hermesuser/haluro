@@ -1444,6 +1444,7 @@ def _parse_upscale_params(data: dict, fallback: dict | None = None) -> dict:
         "protect_skin": bool(src.get("protect_skin", fb.get("protect_skin", False))),
         "output_sharpen_media": raw_media if raw_media in VALID_OUTPUT_SHARPEN_MEDIA else "off",
         "halo_suppress": _num({"v": src.get("halo_suppress", fb.get("halo_suppress", 0.5))}, "v", 0.5, 0.0, 1.0),
+        "dejpeg": _num({"v": src.get("dejpeg", fb.get("dejpeg", 0.0))}, "v", 0.0, 0.0, 1.0),
     }
 
 

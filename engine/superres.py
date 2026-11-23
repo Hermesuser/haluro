@@ -7,6 +7,11 @@ with automatic tiled execution to keep memory bounded on large 4x enlargements.
 from __future__ import annotations
 
 import math
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import scipy.ndimage
@@ -15,9 +20,79 @@ from PIL import Image
 LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
 MAX_UPSCALE_LONG_EDGE = 16384
-VALID_UPSCALE_MODES = ("off", "lanczos", "ibp")
+VALID_UPSCALE_MODES = ("off", "lanczos", "ibp", "ai_local")
 VALID_UPSCALE_FACTORS = (1.0, 1.5, 2.0, 3.0, 4.0)
 VALID_OUTPUT_SHARPEN_MEDIA = ("off", "screen", "glossy", "matte")
+
+
+def find_local_ai_upscaler() -> Path | None:
+    """Locate an optional user-installed realesrgan-ncnn-vulkan binary without bundling heavy ML runtimes."""
+    env_bin = os.environ.get("HALURO_REALESRGAN_BIN", "").strip()
+    if env_bin:
+        p = Path(env_bin).expanduser()
+        if p.is_file() and os.access(p, os.X_OK):
+            return p
+    found = shutil.which("realesrgan-ncnn-vulkan")
+    if found:
+        return Path(found)
+    return None
+
+
+def _upscale_with_local_ai(arr_f: np.ndarray, out_w: int, out_h: int) -> np.ndarray | None:
+    """Run optional local realesrgan-ncnn-vulkan binary via temp PNG; returns None on fallback."""
+    binary = find_local_ai_upscaler()
+    if not binary:
+        return None
+    src_h, src_w = arr_f.shape[:2]
+    req_scale = max(out_w / float(max(1, src_w)), out_h / float(max(1, src_h)))
+    ai_scale = 2 if req_scale <= 2.1 else (3 if req_scale <= 3.1 else 4)
+    try:
+        with tempfile.TemporaryDirectory(prefix="haluro_ai_") as tmpdir:
+            in_path = Path(tmpdir) / "in.png"
+            out_path = Path(tmpdir) / "out.png"
+            src_u8 = (np.clip(arr_f, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+            Image.fromarray(src_u8, mode="RGB").save(in_path, format="PNG")
+            proc = subprocess.run(
+                [str(binary), "-i", str(in_path), "-o", str(out_path), "-s", str(ai_scale)],
+                capture_output=True,
+                timeout=120,
+                check=False,
+            )
+            if proc.returncode != 0 or not out_path.is_file():
+                return None
+            out_im = Image.open(out_path).convert("RGB")
+            if out_im.size != (out_w, out_h):
+                out_im = out_im.resize((out_w, out_h), Image.Resampling.LANCZOS)
+            return np.clip(np.asarray(out_im, dtype=np.float32) / 255.0, 0.0, 1.0)
+    except Exception:
+        return None
+
+
+def apply_dejpeg_antimoire(lin_f: np.ndarray, strength: float = 0.0) -> np.ndarray:
+    """Suppress JPEG 8x8 block artifacts, chroma bleed, and scanner color moire before upscaling."""
+    amt = float(np.clip(strength or 0.0, 0.0, 1.0))
+    if amt < 0.01:
+        return lin_f
+
+    arr = np.maximum(np.asarray(lin_f, dtype=np.float32), 0.0)
+    y = np.sum(arr * LUMA, axis=-1, keepdims=True)
+    # 1. Chroma moire & JPEG 4:2:0 chroma block suppression (opponent color channels)
+    chroma = arr - y
+    c_sigma = 0.9 + 1.4 * amt
+    chroma_clean = np.stack(
+        [scipy.ndimage.gaussian_filter(chroma[..., c], sigma=c_sigma) for c in range(3)],
+        axis=-1,
+    )
+    chroma_out = chroma * (1.0 - 0.80 * amt) + chroma_clean * (0.80 * amt)
+
+    # 2. Edge-preserving flat-zone luminance deblocking
+    y2d = y[..., 0]
+    y_smooth = scipy.ndimage.gaussian_filter(y2d, sigma=0.75 + 0.65 * amt)
+    grad = np.abs(y2d - y_smooth)
+    flat_mask = np.clip(1.0 - grad / max(0.015, 0.045 * amt + 0.015), 0.0, 1.0)
+    y_out = y2d * (1.0 - 0.55 * amt * flat_mask) + y_smooth * (0.55 * amt * flat_mask)
+
+    return np.maximum(0.0, y_out[..., None] + chroma_out).astype(np.float32)
 
 
 def compute_target_dimensions(
@@ -173,6 +248,12 @@ def upscale_float_rgb(
     out_h = max(1, int(target_h))
     if out_w <= src_w and out_h <= src_h:
         return src
+
+    if m == "ai_local":
+        ai_res = _upscale_with_local_ai(src, out_w, out_h)
+        if ai_res is not None:
+            return ai_res
+        m = "ibp"
 
     if m == "lanczos" or (out_w * out_h <= 4096 * 4096):
         return _upscale_progressive_block(src, out_w, out_h, mode=m, detail_boost=detail_boost)

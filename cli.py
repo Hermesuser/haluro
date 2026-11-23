@@ -436,6 +436,7 @@ def _run_render_project(args) -> None:
                     protect_skin=bool(rec.get("protect_skin", False)),
                     output_sharpen_media=str(rec.get("output_sharpen_media") or "off"),
                     halo_suppress=float(rec.get("halo_suppress", 0.5) or 0.5),
+                    dejpeg=float(rec.get("dejpeg", 0.0) or 0.0),
                     rotate=int(rec.get("rotate", 0) or 0),
                     flip_h=bool(rec.get("flip_h", False)),
                     flip_v=bool(rec.get("flip_v", False)),

@@ -2394,6 +2394,7 @@ def develop_frame(
     protect_skin=False,
     output_sharpen_media="off",
     halo_suppress=0.5,
+    dejpeg=0.0,
 ):
     """Full development pipeline: image/path in -> developed PIL Image out."""
     has_geom = bool(
@@ -2451,9 +2452,13 @@ def develop_frame(
                 auto_crop_straighten=auto_crop_straighten,
             )
 
-    # 0. Pre-development digital cleanup (defringe, denoise, pinpoint dust heal, local dodge/burn)
+    # 0. Pre-development digital cleanup (defringe, denoise, de-JPEG/anti-moire, pinpoint dust heal, local dodge/burn)
     if float(defringe or 0.0) > 0.005:
         lin = apply_defringe(lin, strength=float(defringe))
+    if float(dejpeg or 0.0) > 0.01:
+        from .superres import apply_dejpeg_antimoire
+
+        lin = apply_dejpeg_antimoire(lin, strength=float(dejpeg))
     if float(denoise_luma or 0.0) > 0.005 or float(denoise_chroma or 0.0) > 0.005:
         lin = apply_digital_denoise(
             lin,

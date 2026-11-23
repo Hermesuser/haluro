@@ -1905,6 +1905,16 @@
           <div class="shared-optics-body">
             <p class="helper-copy">Amplía resolución en 16-bit real con Retroproyección Iterativa (IBP) y re-síntesis de grano orgánico a tamaño final.</p>
 
+            <div class="zone-dev-bar enlarger-head-bar" id="opticalPresetsBar" style="margin-bottom: 8px;"
+              role="group" aria-label="Presets ópticos rápidos">
+              <button type="button" class="zone-dev-btn" data-opt-preset="scan35"
+                title="Limpia De-JPEG/moiré, recupera foco suave y microcontraste para escaneos 35mm">Escaneo 35mm</button>
+              <button type="button" class="zone-dev-btn" data-opt-preset="gallery2x"
+                title="Ampliación 2× IBP con deconvolución suave y nitidez para papel baritado">Galería 2×</button>
+              <button type="button" class="zone-dev-btn" data-opt-preset="focus_rescue"
+                title="Deconvolución Richardson-Lucy intensa con supresión de halos para rescate de foco">Rescate foco</button>
+            </div>
+
             <div class="control-group compact-top">
               <div class="control-label">
                 <span>Factor de ampliación</span>
@@ -1927,6 +1937,7 @@
               <select id="upscaleModeSelect" class="dark-select">
                 <option value="ibp" selected>Súper-Resolución Óptica (IBP bordes)</option>
                 <option value="lanczos">Lanczos-3 Suave (16-bit)</option>
+                <option value="ai_local">IA Local GPU (Real-ESRGAN si instalado · fallback IBP)</option>
               </select>
             </div>
 
@@ -1997,6 +2008,14 @@
                 </div>
                 <input type="range" class="bipolar-range" id="dehazeSlider" min="-50" max="100" step="2" value="0"
                   data-default="0" aria-labelledby="lblDehaze" title="Elimina velo óptico de lentes vintage o bruma atmosférica en luz lineal">
+              </div>
+              <div class="control-group">
+                <div class="control-label">
+                  <span id="lblDejpeg">Limpieza De-JPEG / Anti-Moiré</span>
+                  <span class="control-val" id="dejpegVal">0%</span>
+                </div>
+                <input type="range" id="dejpegSlider" min="0" max="100" step="5" value="0" data-default="0"
+                  aria-labelledby="lblDejpeg" title="Suaviza bloques JPEG 8×8 y moiré de color antes de ampliar">
               </div>
               <label class="geom-check-label" style="margin-top: 4px;"
                 title="Atenúa Claridad y Textura en tonos de piel y cielos lisos para retratos naturales">

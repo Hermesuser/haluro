@@ -7,6 +7,7 @@ from app import API_TOKEN, app
 from engine.pipeline import develop_frame, save_output_image
 from engine.superres import (
     apply_clarity_and_texture,
+    apply_dejpeg_antimoire,
     apply_optical_dehaze,
     apply_output_sharpen_media,
     apply_richardson_lucy_deconv,
@@ -130,3 +131,19 @@ def test_phase2_deconv_clarity_dehaze_and_output_sharpen():
         output_sharpen_media="glossy",
     )
     assert dev.size == img.size
+
+
+def test_phase3_dejpeg_and_ai_local_graceful_fallback():
+    # Synthetic color moire pattern on flat luminance
+    arr = np.full((32, 32, 3), 0.5, dtype=np.float32)
+    arr[:, ::2, 0] += 0.12
+    arr[:, ::2, 2] -= 0.12
+    cleaned = apply_dejpeg_antimoire(arr, strength=0.8)
+    # Color ripple (R - B variance) should drop noticeably
+    orig_chroma_std = float((arr[..., 0] - arr[..., 2]).std())
+    clean_chroma_std = float((cleaned[..., 0] - cleaned[..., 2]).std())
+    assert clean_chroma_std < orig_chroma_std * 0.7
+
+    # ai_local falls back seamlessly to IBP when realesrgan-ncnn-vulkan is not installed
+    up = upscale_float_rgb(arr, 64, 64, mode="ai_local")
+    assert up.shape == (64, 64, 3) and up.dtype == np.float32

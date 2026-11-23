@@ -1,20 +1,20 @@
 {
-  "version": "3.0.0",
-  "release_date": "2026-11-22",
-  "name": "Haluro v3.0.0",
-  "title": "Cuarto Oscuro Maestro — Sistema de Zonas, Química Clásica, Virado Dual y Mapa de Copia",
-  "description": "Haluro 3.0.0: Mapa Visual del Sistema de Zonas (0–X, Anclas III·V·VIII, tecla M) + Densitómetro de 11 Zonas, Entorno de Evaluación (Oscuro / Gris 18% / Pared Galería Blanca, tecla E), Desarrollo N-2 a N+2, Reveladores clásicos (D-76 1:1, D-23 Dividido, PMK Pyro, Pyrocat-HD, Rodinal 1:50, Windisch), Cabezal Condensador/Difusor, Cuarto de Copia B&N (Papel, Split-Grade 00/5, Pre-velado), Virado Dual Secuencial (Selenio/Platino + Sepia/Oro GP-1), Blanqueo Farmer global y local, Interpretaciones virtuales por fotograma, Tira de prueba de Contraste/Virado, Mapa de Copia imprimible y Negativo Digital B&N para contacto UV.",
+  "version": "3.1.0",
+  "release_date": "2026-11-23",
+  "name": "Haluro v3.1.0",
+  "title": "Ampliadora Óptica, Súper-Resolución IBP, Deconvolución Richardson-Lucy y Claridad",
+  "description": "Haluro 3.1.0: escalado óptico y súper-resolución IBP en 16-bit (1.5x–4x) con re-síntesis de grano a resolución final y calculadora física de impresión (cm @ 240/300/360 DPI), lupa óptica 1:1 Antes/Después, deconvolución Richardson-Lucy amortiguada en luminancia, claridad multiescala, textura fina con protección de piel, desneblina óptica (Dehaze), nitidez de salida por soporte (Pantalla/Baritado/Mate) con supresión de halos, limpieza De-JPEG/Anti-Moiré, 3 presets ópticos rápidos y puente opcional a IA local GPU (realesrgan-ncnn-vulkan).",
   "highlights": [
-    "Sistema de Zonas de Ansel Adams: Mapa Visual (0–X y Anclas III·V·VIII, tecla M), Densitómetro de 11 Zonas, Entorno Gris 18%/Galería (tecla E) y desarrollo N-2 a N+2",
-    "Química de autor (Darkroom Cookbook): D-76 1:1, D-23 Dividido, PMK Pyro, Pyrocat-HD, Rodinal 1:50, Windisch y Cabezal Condensador (Callier) vs. Difusor",
-    "Cuarto de Copia B&N en Emulación: Revelador de papel (Amidol, Ansco 130, Dektol, Selectol), Soporte (Baritado/Marfil/Algodón), Split-Grade 00/5, Pre-velado, Virado Dual Secuencial y Blanqueo Farmer global/local",
-    "Interpretaciones virtuales por fotograma (.haluro), Tira de prueba de Contraste y Virado, Mapa de Copia imprimible (Print Map) y Negativo Digital B&N volteado para contacto UV"
+    "Ampliadora Óptica y Súper-Resolución IBP 16-bit (1.5×–4×) con tiling seguro, re-síntesis de grano final, calculadora cm/DPI y Lupa 1:1 Antes/Después",
+    "Deconvolución Óptica Richardson-Lucy en luminancia, Claridad (microcontraste), Textura fina con protección de piel y Desneblina (Dehaze) en luz lineal",
+    "Nitidez de salida calibrada por soporte (Pantalla Web, Papel Baritado/Brillante, Papel Mate/Algodón) con Supresión de Halos",
+    "Limpieza pre-escalado De-JPEG/Anti-Moiré, 3 presets rápidos (Escaneo 35mm, Galería 2×, Rescate foco) y puente opcional a Real-ESRGAN local"
   ],
   "download_urls": {
-    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-3.0.0-macOS-arm64.dmg",
-    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-3.0.0-macOS-x86_64.dmg",
-    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-Setup-3.0.0-Win11-x64.exe",
-    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v3.0.0/Haluro-Portable-3.0.0-Win11-x64.zip"
+    "macos_arm64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-3.1.0-macOS-arm64.dmg",
+    "macos_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-3.1.0-macOS-x86_64.dmg",
+    "windows_x86_64": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-Setup-3.1.0-Win11-x64.exe",
+    "windows_portable": "https://github.com/Hermesuser/haluro/releases/download/v3.1.0/Haluro-Portable-3.1.0-Win11-x64.zip"
   },
   "checksums": {
     "macos_arm64": "",

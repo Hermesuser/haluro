@@ -9,6 +9,16 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [3.1.0] — 2026-11-23
+
+### Añadido — «Ampliadora Óptica y Súper-Resolución»
+- **Escalado Óptico y Súper-Resolución IBP (`engine/superres.py`):** Ampliación `1.5×`, `2×`, `3×` y `4×` en `float32` (16-bit real) con Retroproyección Iterativa (IBP) dirigida por bordes, *tiling* automático para proteger la RAM (límite seguro `16 384 px`) y re-síntesis del grano orgánico a la resolución final de salida.
+- **Calculadora física de impresión (`cm @ DPI`) y Lupa Óptica 1:1 (`POST /api/inspect_crop`):** Presets físicos (`20×30` a `60×90 cm` @ `240/300/360 DPI`) con telemetría en vivo en MP y lupa 1:1 Antes/Después instantánea.
+- **Deconvolución Óptica Richardson-Lucy, Claridad, Textura y Desneblina (*Dehaze*):** Recuperación real de foco en luminancia con radio PSF (`0.5–2.5 px`) y *coring* de ruido; microcontraste multiescala (*Claridad*) y detalle fino (*Textura*) con opción **Proteger piel y cielos lisos**; *Dark Channel Prior* en luz lineal para eliminar velo óptico y bruma.
+- **Nitidez de Salida por Soporte, De-JPEG/Anti-Moiré, Presets Rápidos y Puente IA Local:** Perfiles calibrados (*Pantalla/Web*, *Papel Baritado/Brillante*, *Papel Mate/Algodón*) con **Supresión de halos**, limpieza pre-escalado **De-JPEG / Anti-Moiré**, 3 presets ópticos de un clic (*Escaneo 35mm*, *Galería 2×*, *Rescate foco*) y soporte opcional para `realesrgan-ncnn-vulkan` local con fallback automático a IBP.
+
+---
+
 ## [3.0.0] — 2026-11-22
 
 ### Añadido — «Cuarto Oscuro Maestro» (Sistema de Zonas, Química Clásica y Maestría de Copia)

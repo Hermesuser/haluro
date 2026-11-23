@@ -319,6 +319,7 @@ const state = {
   protectSkin: false,
   outputSharpenMedia: "off",
   haloSuppress: 0.5,
+  dejpeg: 0.0,
 
   // Viewport & Light Table
   viewMode: "split", // 'split' | 'full' | 'original' | 'sheet' | 'teststrip'
@@ -2739,6 +2740,7 @@ function buildSimulationPayload() {
     protect_skin: Boolean(state.protectSkin),
     output_sharpen_media: state.outputSharpenMedia || "off",
     halo_suppress: Number(state.haloSuppress ?? 0.5),
+    dejpeg: Number(state.dejpeg ?? 0.0),
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -2871,6 +2873,7 @@ function snapshotSimRecipe() {
     protect_skin: Boolean(state.protectSkin),
     output_sharpen_media: state.outputSharpenMedia || "off",
     halo_suppress: Number(state.haloSuppress ?? 0.5),
+    dejpeg: Number(state.dejpeg ?? 0.0),
     film_strength: Number(state.filmStrength ?? 1.0),
     sim_temp: Number(state.simTemp ?? 0.0),
     sim_tint: Number(state.simTint ?? 0.0),
@@ -3024,6 +3027,7 @@ function applySimRecipeToUI(rec) {
   state.protectSkin = Boolean(rec.protect_skin);
   state.outputSharpenMedia = rec.output_sharpen_media || "off";
   state.haloSuppress = Number(rec.halo_suppress ?? 0.5);
+  state.dejpeg = Number(rec.dejpeg ?? 0.0);
   syncDarkroomPrintUI();
   if (typeof syncSuperResUI === "function") syncSuperResUI();
   state.filmStrength = Number(rec.film_strength ?? 1.0);
@@ -9860,6 +9864,7 @@ function initUIListeners() {
     setSliderSilent("textureSlider", "textureVal", Math.round((state.texture || 0) * 100), `${(state.texture || 0) > 0 ? "+" : ""}${Math.round((state.texture || 0) * 100)}`);
     setSliderSilent("dehazeSlider", "dehazeVal", Math.round((state.dehaze || 0) * 100), `${(state.dehaze || 0) > 0 ? "+" : ""}${Math.round((state.dehaze || 0) * 100)}`);
     setSliderSilent("haloSuppressSlider", "haloSuppressVal", Math.round((state.haloSuppress ?? 0.5) * 100), `${Math.round((state.haloSuppress ?? 0.5) * 100)}%`);
+    setSliderSilent("dejpegSlider", "dejpegVal", Math.round((state.dejpeg || 0) * 100), `${Math.round((state.dejpeg || 0) * 100)}%`);
 
     const tele = document.getElementById("superResTelemetry");
     const resText = document.getElementById("statResolution")?.textContent || "";
@@ -9929,6 +9934,7 @@ function initUIListeners() {
     state.protectSkin = false;
     state.outputSharpenMedia = "off";
     state.haloSuppress = 0.5;
+    state.dejpeg = 0.0;
     const presetSel = document.getElementById("printSizePresetSelect");
     if (presetSel) presetSel.value = "custom";
     syncSuperResUI();
@@ -9965,6 +9971,62 @@ function initUIListeners() {
   });
   bindRange("haloSuppressSlider", "haloSuppressVal", (v) => `${Math.round(v)}%`, (v) => {
     state.haloSuppress = Math.max(0, Math.min(1, v / 100));
+  });
+  bindRange("dejpegSlider", "dejpegVal", (v) => `${Math.round(v)}%`, (v) => {
+    state.dejpeg = Math.max(0, Math.min(1, v / 100));
+  });
+  const opticalPresets = {
+    scan35: {
+      label: "Restaurar escaneo 35mm",
+      dejpeg: 0.45,
+      deconvAmount: 0.35,
+      deconvRadius: 1.0,
+      clarity: 0.18,
+      texture: 0.15,
+      dehaze: 0.12,
+      outputSharpenMedia: "screen",
+      haloSuppress: 0.6,
+    },
+    gallery2x: {
+      label: "Ampliación Galería 2×",
+      upscaleFactor: 2.0,
+      upscaleMode: "ibp",
+      deconvAmount: 0.25,
+      deconvRadius: 0.9,
+      clarity: 0.15,
+      outputSharpenMedia: "glossy",
+      haloSuppress: 0.65,
+    },
+    focus_rescue: {
+      label: "Rescate de foco suave",
+      deconvAmount: 0.72,
+      deconvRadius: 1.5,
+      clarity: 0.2,
+      texture: 0.25,
+      outputSharpenMedia: "screen",
+      haloSuppress: 0.7,
+    },
+  };
+  document.querySelectorAll("#opticalPresetsBar .zone-dev-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const p = opticalPresets[btn.dataset.optPreset];
+      if (!p) return;
+      pushUndoSnapshotForFrame();
+      if (p.upscaleFactor != null) state.upscaleFactor = p.upscaleFactor;
+      if (p.upscaleMode != null) state.upscaleMode = p.upscaleMode;
+      if (p.dejpeg != null) state.dejpeg = p.dejpeg;
+      if (p.deconvAmount != null) state.deconvAmount = p.deconvAmount;
+      if (p.deconvRadius != null) state.deconvRadius = p.deconvRadius;
+      if (p.clarity != null) state.clarity = p.clarity;
+      if (p.texture != null) state.texture = p.texture;
+      if (p.dehaze != null) state.dehaze = p.dehaze;
+      if (p.outputSharpenMedia != null) state.outputSharpenMedia = p.outputSharpenMedia;
+      if (p.haloSuppress != null) state.haloSuppress = p.haloSuppress;
+      syncSuperResUI();
+      saveActiveFrameRecipe();
+      requestPreview(false);
+      showToast("Preset óptico aplicado", p.label);
+    });
   });
 
   const runInspectLoupe = async (cx = 0.5, cy = 0.5) => {
