@@ -9,6 +9,19 @@ La versión vive en un único sitio: `engine/__init__.py`. Un guardián en la CI
 
 ---
 
+## [3.0.0] — 2026-11-22
+
+### Añadido — «Cuarto Oscuro Maestro» (Sistema de Zonas, Química Clásica y Maestría de Copia)
+- **Mapa Visual del Sistema de Zonas (0–X) y Densitómetro de 11 Zonas (`M`):** Superposición instantánea sobre el visor para ver las **Anclas III · V · VIII** (más D-max 0 y Papel X), el **Mapa completo 0–X**, o aislar cualquier Zona exacta haciendo clic sobre su celda en la barra de 11 Zonas del densitómetro.
+- **Entorno de Evaluación (`E`):** Selector de fondo de mesa de luz (**Oscuro**, **Gris Neutro 18%**, **Pared Galería Blanca** con paspartú virtual) para juzgar densidad y *D-max* sin engaño perceptual.
+- **Desarrollo por Sistema de Zonas (`N−2` a `N+2`):** Contracción y expansión controlada del hombro tonal en luz lineal manteniendo anclada la Zona III (*«exponer para las sombras, revelar para las luces»*).
+- **Reveladores clásicos de película (*The Darkroom Cookbook*):** `Kodak D-76 (1:1)`, `Kodak D-23 Dividido (Ansel Adams)`, `PMK Pyro (Gordon Hutchings)` y `Pyrocat-HD (Sandy King)` (con enmascaramiento proporcional de grano en luces y acutancia de bordes), `Rodinal 1:50` y `Windisch / POTA` (compensador extremo de 10+ pasos).
+- **Cabezal de Ampliadora (`Estándar` / `Condensador` / `Difusor`):** Simulación del **Efecto Callier** (microcontraste y grano cincelado) frente a **Difusor / Luz Fría** (*Cold Light*).
+- **Cuarto de Copia B&N en Emulación, Virado Dual Secuencial y Blanqueo *Farmer's Reducer*:** Panel colapsable en *Vista Completa* con separación de **Revelador de papel** (`Amidol`, `Ansco 130`, `Dektol`, `Selectol`) y **Soporte de papel** (`Baritado Blanco`, `Marfil`, `Algodón Mate`), **Split-Grade 00/5**, **Pre-velado** (*Pre-flash* McLean), **Virado Dual Secuencial** (sombras *abajo → arriba* Selenio/Platino/Hierro + luces *arriba → abajo* Sepia/Oro GP-1/Cobre/Té) y **Blanqueo *Farmer's Reducer*** global y local en *Dodge & Burn*.
+- **Copias Virtuales / Interpretaciones, Tira Multi-Modo, Mapa de Copia y Negativo Digital UV:** Hasta 6 interpretaciones virtuales por fotograma guardadas en `.haluro`, tira de prueba (`T`) en modos **f-stop**, **Contraste** y **Virado**, exportación de **Mapa de Copia imprimible (*Darkroom Print Map*)** en HTML y exportación de **Negativo Digital B&N volteado para contacto UV** (cianotipia, platino/paladio, papel salado).
+
+---
+
 ## [2.12.0] — 2026-11-22
 
 ### Añadido
